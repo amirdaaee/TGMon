@@ -121,8 +121,7 @@ func loginHandler(g *gin.Context) {
 		g.JSON(http.StatusOK, map[string]string{"token": config.Config().UserToken})
 		return
 	}
-	g.AbortWithStatus(http.StatusNotFound)
-
+	g.AbortWithStatus(http.StatusBadRequest)
 }
 func sessionHandler(g *gin.Context) {
 	g.JSON(http.StatusOK, map[string]string{"token": config.Config().UserToken})
