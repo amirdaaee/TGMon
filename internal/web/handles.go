@@ -117,7 +117,7 @@ func loginHandler(g *gin.Context) {
 		g.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
 		return
 	}
-	if cred.Username == config.Config().UserName && cred.Username == config.Config().UserPass {
+	if cred.Username == config.Config().UserName && cred.Password == config.Config().UserPass {
 		g.JSON(http.StatusOK, map[string]string{"token": config.Config().UserToken})
 		return
 	}
