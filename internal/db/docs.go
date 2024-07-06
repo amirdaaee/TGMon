@@ -14,4 +14,5 @@ type MediaFileDoc struct {
 	MessageID int                           `bson:"MessageID"`
 	Thumbnail []byte                        `bson:"Thumbnail"`
 	DateAdded int64                         `bson:"DateAdded"`
+	Duration  float64                       `bson:"Duration"`
 }

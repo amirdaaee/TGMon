@@ -66,10 +66,15 @@ func fileDocFromMessage(msg *types.Message) (*db.MediaFileDoc, error) {
 			fmt.Println(err.Error())
 			tmb = nil
 		}
+
 		var fileName string
+		var dur float64
 		for _, attribute := range document.Attributes {
-			if name, ok := attribute.(*tg.DocumentAttributeFilename); ok {
-				fileName = name.FileName
+			switch v := attribute.(type) {
+			case *tg.DocumentAttributeFilename:
+				fileName = v.FileName
+			case *tg.DocumentAttributeVideo:
+				dur = v.Duration
 			}
 		}
 		return &db.MediaFileDoc{
@@ -81,6 +86,7 @@ func fileDocFromMessage(msg *types.Message) (*db.MediaFileDoc, error) {
 			MessageID: msg.ID,
 			Thumbnail: tmb,
 			DateAdded: time.Now().Unix(),
+			Duration:  dur,
 		}, nil
 	}
 	return nil, fmt.Errorf("unexpected type %T", media)
