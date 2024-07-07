@@ -1,25 +1,21 @@
 package main
 
 import (
+	"flag"
+
 	"github.com/amirdaaee/TGMon/cmd"
-	"github.com/amirdaaee/TGMon/internal/bot"
-	"github.com/amirdaaee/TGMon/internal/web"
-	"go.uber.org/zap"
 )
 
 func init() {
 	cmd.Setup()
 }
 func main() {
-	ll := zap.L()
-	_, err := bot.StartWorkers(ll)
-	if err != nil {
-		ll.Sugar().Panic(err)
+	update := flag.Bool("update", false, "update metadata")
+	flag.Parse()
+	// ...
+	if *update {
+		cmd.UpdateMeta()
+	} else {
+		cmd.RunService()
 	}
-	mainBot, err := bot.StartMainBot(ll)
-	if err != nil {
-		ll.Sugar().Panic(err)
-	}
-	go web.Start()
-	mainBot.Idle()
 }

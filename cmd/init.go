@@ -20,3 +20,7 @@ func SetupLogger() {
 func Setup() {
 	SetupLogger()
 }
+
+func panpan(err error) {
+	zap.L().Sugar().Panic(err)
+}
