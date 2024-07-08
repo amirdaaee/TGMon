@@ -101,10 +101,11 @@ func deleteMediaHandler(g *gin.Context) {
 		return
 	}
 	worker := bot.GetNextWorker()
-	if err := bot.DeleteMessage(worker, mediaDoc.MessageID); err != nil {
-		errResp(g, err)
-		return
-	}
+	bot.DeleteMessage(worker, mediaDoc.MessageID)
+	// if err := bot.DeleteMessage(worker, mediaDoc.MessageID); err != nil {
+	// 	errResp(g, err)
+	// 	return
+	// }
 	if err := db.DelDocById(g, coll_, mediaDoc.ID); err != nil {
 		errResp(g, err)
 		return
