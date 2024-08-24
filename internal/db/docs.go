@@ -12,7 +12,7 @@ type MediaFileDoc struct {
 	MimeType  string                        `bson:"MimeType"`
 	FileID    int64                         `bson:"FileID"`
 	MessageID int                           `bson:"MessageID"`
-	Thumbnail []byte                        `bson:"Thumbnail"`
+	Thumbnail string                        `bson:"Thumbnail"`
 	DateAdded int64                         `bson:"DateAdded"`
 	Duration  float64                       `bson:"Duration"`
 }

@@ -18,11 +18,10 @@ func FileDocFromMessage(msg *types.Message) (*db.MediaFileDoc, error) {
 		if !ok {
 			return nil, fmt.Errorf("unexpected type %T", media)
 		}
-		tmbSize := document.Thumbs[0].(*tg.PhotoSize)
-		tmb, err := GetThumbnail(context.Background(), document.AsInputDocumentFileLocation(), tmbSize.Type, tmbSize.Size)
+		tmb, err := StoreThumbnail(context.Background(), document)
 		if err != nil {
 			fmt.Println(err.Error())
-			tmb = nil
+			tmb = ""
 		}
 		dbDoc := db.MediaFileDoc{
 			Location:  document.AsInputDocumentFileLocation(),

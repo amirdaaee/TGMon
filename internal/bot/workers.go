@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/amirdaaee/TGMon/config"
+	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/celestix/gotgproto"
 	"github.com/gotd/td/tg"
 	"go.uber.org/zap"
@@ -107,9 +109,11 @@ func DeleteMessage(w *Worker, msgID int) error {
 	return w.Client.CreateContext().DeleteMessages(config.Config().ChannelID, []int{msgID})
 }
 
-func GetThumbnail(ctx context.Context, loc *tg.InputDocumentFileLocation, size string, sizrB int) ([]byte, error) {
+func GetThumbnail(ctx context.Context, doc *tg.Document) ([]byte, error) {
+	tmb := doc.Thumbs[0].(*tg.PhotoSize)
+	size := tmb.Type
 	loc_ := tg.InputDocumentFileLocation{}
-	loc_.FillFrom(loc)
+	loc_.FillFrom(doc.AsInputDocumentFileLocation())
 	loc_.ThumbSize = size
 	req := &tg.UploadGetFileRequest{
 		Location: &loc_,
@@ -123,4 +127,15 @@ func GetThumbnail(ctx context.Context, loc *tg.InputDocumentFileLocation, size s
 	}
 	thumbFile := res.(*tg.UploadFile)
 	return thumbFile.Bytes, nil
+}
+func StoreThumbnail(ctx context.Context, doc *tg.Document) (string, error) {
+	tmb, err := GetThumbnail(ctx, doc)
+	if err != nil {
+		return "", fmt.Errorf("error gettings thumbnail: %s", err)
+	}
+	minioClient, err := db.NewMinioClient()
+	if err != nil {
+		return "", err
+	}
+	return minioClient.MinioAddFile(tmb, ctx)
 }

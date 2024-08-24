@@ -19,3 +19,5 @@
 sessions/
 
 storage/
+
+docker-compose.dev.yaml

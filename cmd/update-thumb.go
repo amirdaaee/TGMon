@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func UpdateMeta() {
+func UpdateThumb() {
 	ll := zap.L()
 	_, err := bot.StartWorkers(ll)
 	if err != nil {
@@ -40,11 +40,23 @@ func UpdateMeta() {
 	for c, m := range msgsCls {
 		switch msg := m.(type) {
 		case *tg.Message:
-			updateDoc := mediaList[c]
-			bot.FillDocMetadata(msg.Media.(*tg.MessageMediaDocument).Document.(*tg.Document), &updateDoc)
-			if err != nil {
-				panpan(err)
+			media, ok := msg.Media.(*tg.MessageMediaDocument)
+			if !ok {
+				ll.Sugar().Warnf("media type (%T) is not tg.MessageMediaDocument", msg.Media)
+				continue
 			}
+			document, ok := media.Document.AsNotEmpty()
+			if !ok {
+				ll.Sugar().Warnf("unexpected type %T", media)
+				continue
+			}
+			updateDoc := mediaList[c]
+			file, err := bot.StoreThumbnail(ctx, document)
+			if err != nil {
+				ll.Sugar().Error(err)
+				continue
+			}
+			updateDoc.Thumbnail = file
 			_filter, _ := db.FilterById(updateDoc.ID)
 			updateDoc.ID = ""
 			if _, err := coll_.ReplaceOne(ctx, _filter, updateDoc); err != nil {

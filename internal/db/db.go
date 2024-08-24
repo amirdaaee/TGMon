@@ -54,3 +54,13 @@ func DelDocById(ctx context.Context, collection *mongo.Collection, docID string)
 	_, err = collection.DeleteOne(ctx, filter)
 	return err
 }
+func GetDocAll(ctx context.Context, collection *mongo.Collection, result interface{}, opts ...*options.FindOptions) error {
+	cur_, err := collection.Find(ctx, bson.D{}, opts...)
+	if err != nil {
+		return err
+	}
+	if err = cur_.All(ctx, result); err != nil {
+		return err
+	}
+	return nil
+}

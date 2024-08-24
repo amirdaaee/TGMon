@@ -21,6 +21,12 @@ type configType struct {
 	UserName     string   `env:"USER_NAME,required"`
 	UserPass     string   `env:"USER_PASS,required"`
 	UserToken    string   `env:"USER_TOKEN,required"`
+	// ...
+	MinioEndpoint  string `env:"MINIO_ENDPOINT,required"`
+	MinioAccessKey string `env:"MINIO_ACCESS_KEY,required"`
+	MinioSecretKey string `env:"MINIO_SECRET_KEY,required"`
+	MinioBucket    string `env:"MINIO_BUCKET,required"`
+	MinioSecure    bool   `env:"MINIO_SECURE" envDefault:"true"`
 }
 
 func (t *ProxyUri) UnmarshalText(text []byte) error {

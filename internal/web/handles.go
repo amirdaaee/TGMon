@@ -64,18 +64,10 @@ func listMediaHandler(g *gin.Context) {
 		opts = opts.SetLimit(int64(listReq.PageSize))
 		opts = opts.SetSkip(int64(listReq.PageSize * (listReq.Page - 1)))
 	}
-	cur_, err := coll_.Find(g, bson.D{}, opts)
-	if err != nil {
+	mediaList := []db.MediaFileDoc{}
+	if err := db.GetDocAll(g, coll_, &mediaList, opts); err != nil {
 		errResp(g, err)
 		return
-	}
-	var mediaList []db.MediaFileDoc
-	if err = cur_.All(g, &mediaList); err != nil {
-		errResp(g, err)
-		return
-	}
-	if mediaList == nil {
-		mediaList = []db.MediaFileDoc{}
 	}
 	response := mediaListRes{
 		Media: mediaList,
