@@ -42,7 +42,7 @@ func (cl *MinioClient) CreateBucket(ctx context.Context) error {
 	}
 	return nil
 }
-func (cl *MinioClient) MinioAddFile(data []byte, ctx context.Context) (string, error) {
+func (cl *MinioClient) AddFile(data []byte, ctx context.Context) (string, error) {
 	fileName := fmt.Sprintf("%s.jpeg", uuid.NewString())
 	reader := bytes.NewReader(data)
 	_, err := cl.PutObject(ctx, cl.bucket, fileName, reader, reader.Size(), minio.PutObjectOptions{})
@@ -50,4 +50,11 @@ func (cl *MinioClient) MinioAddFile(data []byte, ctx context.Context) (string, e
 		return "", err
 	}
 	return fileName, nil
+}
+func (cl *MinioClient) RmFile(fileName string, ctx context.Context) error {
+	err := cl.RemoveObject(ctx, cl.bucket, fileName, minio.RemoveObjectOptions{ForceDelete: true})
+	if err != nil {
+		return fmt.Errorf("error removing object: %s", err)
+	}
+	return nil
 }

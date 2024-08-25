@@ -128,14 +128,15 @@ func GetThumbnail(ctx context.Context, doc *tg.Document) ([]byte, error) {
 	thumbFile := res.(*tg.UploadFile)
 	return thumbFile.Bytes, nil
 }
-func StoreThumbnail(ctx context.Context, doc *tg.Document) (string, error) {
+func StoreThumbnail(ctx context.Context, doc *tg.Document, minioCl *db.MinioClient) (string, error) {
 	tmb, err := GetThumbnail(ctx, doc)
 	if err != nil {
 		return "", fmt.Errorf("error gettings thumbnail: %s", err)
 	}
-	minioClient, err := db.NewMinioClient()
-	if err != nil {
-		return "", err
+	if minioCl == nil {
+		if minioCl, err = db.NewMinioClient(); err != nil {
+			return "", err
+		}
 	}
-	return minioClient.MinioAddFile(tmb, ctx)
+	return minioCl.AddFile(tmb, ctx)
 }

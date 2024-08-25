@@ -27,11 +27,16 @@ func UpdateThumb() {
 		panpan(err)
 	}
 	// ...
+	minioCl, err := db.NewMinioClient()
+	if err != nil {
+		panpan(err)
+	}
+	// ...
 	msgsIds := []tg.InputMessageClass{}
 	for _, m := range mediaList {
 		msgsIds = append(msgsIds, &tg.InputMessageID{ID: m.MessageID})
 	}
-
+	// ...
 	worker := bot.GetNextWorker()
 	msgsCls, err := worker.Client.CreateContext().GetMessages(config.Config().ChannelID, msgsIds)
 	if err != nil {
@@ -51,7 +56,13 @@ func UpdateThumb() {
 				continue
 			}
 			updateDoc := mediaList[c]
-			file, err := bot.StoreThumbnail(ctx, document)
+			if updateDoc.Thumbnail != "" {
+				if err := minioCl.RmFile(updateDoc.Thumbnail, ctx); err != nil {
+					ll.Sugar().Warn("can not remove old thumbnail: %s", err)
+				}
+				updateDoc.Thumbnail = ""
+			}
+			file, err := bot.StoreThumbnail(ctx, document, minioCl)
 			if err != nil {
 				ll.Sugar().Error(err)
 				continue

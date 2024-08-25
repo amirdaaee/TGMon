@@ -12,23 +12,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type streamReq struct {
-	ID string `uri:"mediaID" binding:"required"`
-}
-type mediaListReq struct {
-	Page     int `form:"page"`
-	PageSize int `form:"page_size"`
-}
-
-type mediaListRes struct {
-	Media []db.MediaFileDoc
-	Total int64
-}
-type loginReq struct {
-	Username string
-	Password string
-}
-
 func streamHandler(g *gin.Context) {
 	var media streamReq
 	if err := g.ShouldBindUri(&media); err != nil {
@@ -93,11 +76,7 @@ func deleteMediaHandler(g *gin.Context) {
 		return
 	}
 	worker := bot.GetNextWorker()
-	bot.DeleteMessage(worker, mediaDoc.MessageID)
-	// if err := bot.DeleteMessage(worker, mediaDoc.MessageID); err != nil {
-	// 	errResp(g, err)
-	// 	return
-	// }
+	go bot.DeleteMessage(worker, mediaDoc.MessageID)
 	if err := db.DelDocById(g, coll_, mediaDoc.ID); err != nil {
 		errResp(g, err)
 		return

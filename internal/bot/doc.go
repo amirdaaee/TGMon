@@ -18,7 +18,7 @@ func FileDocFromMessage(msg *types.Message) (*db.MediaFileDoc, error) {
 		if !ok {
 			return nil, fmt.Errorf("unexpected type %T", media)
 		}
-		tmb, err := StoreThumbnail(context.Background(), document)
+		tmb, err := StoreThumbnail(context.Background(), document, nil)
 		if err != nil {
 			fmt.Println(err.Error())
 			tmb = ""
