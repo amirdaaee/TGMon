@@ -38,6 +38,7 @@ func (r *TGReader) Read(p []byte) (n int, err error) {
 	if r.i >= int64(len(r.buffer)) {
 		r.buffer, err = r.next()
 		if err != nil {
+			logrus.WithError(err).Error("error getting next data")
 			return 0, err
 		}
 		if len(r.buffer) == 0 {

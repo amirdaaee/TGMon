@@ -43,7 +43,7 @@ func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.M
 		lr, _ := bot.NewTelegramReader(ctx, worker.Client, med.Location, metaData.start, metaData.end, metaData.contentLength, chunckSize)
 		written, err := io.CopyN(w, lr, metaData.contentLength)
 		if err != nil {
-			logrus.WithField("reader", lr).WithError(err).Errorf("error streaming after %d", written)
+			logrus.WithError(err).Errorf("error streaming after %d", written)
 			return err
 		}
 	}
