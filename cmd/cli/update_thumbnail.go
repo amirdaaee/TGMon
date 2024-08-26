@@ -7,7 +7,6 @@ import (
 	"github.com/amirdaaee/TGMon/internal/bot"
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/google/uuid"
-	"github.com/gotd/td/tg"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,51 +32,28 @@ func updateThumbnail() {
 	if err := mongo.DocGetAll(ctx, mongoColl, &mediaDocList, mongoCl); err != nil {
 		logrus.WithError(err).Fatal("error getting current records")
 	}
-	mediaDocInputMsgList := []tg.InputMessageClass{}
+	msgIdList := []int{}
+	mediaDocListUpdate := []db.MediaFileDoc{}
 	for _, MedDoc := range mediaDocList {
 		if MedDoc.Thumbnail == "" {
-			mediaDocInputMsgList = append(mediaDocInputMsgList, &tg.InputMessageID{ID: MedDoc.MessageID})
+			msgIdList = append(msgIdList, MedDoc.MessageID)
+			mediaDocListUpdate = append(mediaDocListUpdate, MedDoc)
 		}
 	}
-	if len(mediaDocInputMsgList) == 0 {
+	if len(msgIdList) == 0 {
 		logrus.Info("no document with empty thumbnail")
 		logrus.Exit(0)
 	}
 	// ...
-	w := wp.GetNextWorker()
-	chatList, err := w.Client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.TargetChannelId}})
+	allMsgs, err := wp.GetNextWorker().GetMessages(msgIdList, ctx)
 	if err != nil {
-		logrus.WithError(err).Fatal("can not get channel")
-	}
-	var channel tg.InputChannelClass
-	for _, cht := range chatList.GetChats() {
-		if cht.GetID() == w.TargetChannelId {
-			if chn, ok := cht.(*tg.Channel); !ok {
-				logrus.Fatal("target channel is not a channel!")
-			} else {
-				channel = chn.AsInput()
-				break
-			}
-		}
-	}
-	if channel == nil {
-		logrus.Fatal("target channel not found!")
-	}
-	logrus.WithField("channel", channel).Debug("found channel")
-	// ...
-	allMsgsCls, err := w.Client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: channel, ID: mediaDocInputMsgList})
-	if err != nil {
-		logrus.WithError(err).Fatal("can not get messages!")
-	}
-	allMsgs, ok := allMsgsCls.(*tg.MessagesChannelMessages)
-	if !ok {
-		logrus.Fatalf("allMsgsCls is %T!", allMsgsCls)
+		logrus.WithError(err).Fatal("can not get messages")
 	}
 	// ...
-	for c, medDoc := range mediaDocList {
+	for c, medDoc := range mediaDocListUpdate {
 		doc := bot.Document{}
 		doc.FromMessage(allMsgs.Messages[c])
-		thumb, err := w.GetThumbnail(&doc, ctx)
+		thumb, err := wp.GetNextWorker().GetThumbnail(&doc, ctx)
 		if err != nil {
 			logrus.WithError(err).Warn("can not get thumbnail")
 			continue

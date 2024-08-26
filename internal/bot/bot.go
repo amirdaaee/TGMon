@@ -18,6 +18,7 @@ import (
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/dcs"
 	"github.com/gotd/td/tg"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 	"golang.org/x/time/rate"
@@ -25,13 +26,82 @@ import (
 
 // ...
 type Worker struct {
-	Token           string
-	Client          *gotgproto.Client
-	TargetChannelId int64
+	Token            string
+	Client           *gotgproto.Client
+	TargetChannelId  int64
+	inputChannel     tg.InputChannelClass
+	inputChannelLock sync.Mutex
+	accCache         *lru.Cache[int64, int64]
+	accCacheLock     sync.Mutex
 }
 
 func (w *Worker) String() string {
 	return fmt.Sprintf("{Worker (%s|@%s)}", w.Token, w.Client.Self.Username)
+}
+func (w *Worker) GetChannel(ctx context.Context) (tg.InputChannelClass, error) {
+	w.inputChannelLock.Lock()
+	defer w.inputChannelLock.Unlock()
+	if w.inputChannel == nil {
+		chatList, err := w.Client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.TargetChannelId}})
+		if err != nil {
+			return nil, fmt.Errorf("can not get channel")
+		}
+		var channel tg.InputChannelClass
+		for _, cht := range chatList.GetChats() {
+			if cht.GetID() == w.TargetChannelId {
+				if chn, ok := cht.(*tg.Channel); !ok {
+					return nil, fmt.Errorf("target channel is not a channel")
+				} else {
+					channel = chn.AsInput()
+					break
+				}
+			}
+		}
+		if channel == nil {
+			return nil, fmt.Errorf("target channel not found")
+		}
+		w.inputChannel = channel
+	}
+	return w.inputChannel, nil
+}
+func (w *Worker) GetMessages(msgID []int, ctx context.Context) (*tg.MessagesChannelMessages, error) {
+	channel, err := w.GetChannel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("can not get channel: %s", err)
+	}
+	inputMsgList := []tg.InputMessageClass{}
+	for _, id := range msgID {
+		inputMsgList = append(inputMsgList, &tg.InputMessageID{ID: id})
+	}
+
+	allMsgsCls, err := w.Client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: channel, ID: inputMsgList})
+	if err != nil {
+		return nil, fmt.Errorf("can not get messages of channel: %s", err)
+	}
+	allMsgs, ok := allMsgsCls.(*tg.MessagesChannelMessages)
+	if !ok {
+		return nil, fmt.Errorf("class of messages is %T, not MessagesChannelMessages", allMsgsCls)
+	}
+	return allMsgs, nil
+}
+func (w *Worker) UpdateDocAccHash(doc *Document, ctx context.Context) error {
+	w.accCacheLock.Lock()
+	defer w.accCacheLock.Unlock()
+	accHash, ok := w.accCache.Get(doc.ID)
+	if !ok {
+		msg, err := w.GetMessages([]int{doc.MessageID}, ctx)
+		if err != nil {
+			return fmt.Errorf("error getting message of document: %s", err)
+		}
+		newDoc := Document{}
+		if err := newDoc.FromMessage(msg.Messages[0]); err != nil {
+			return fmt.Errorf("error getting document of message of document: %s", err)
+		}
+		accHash = newDoc.AccessHash
+		w.accCache.Add(doc.ID, accHash)
+	}
+	doc.AccessHash = accHash
+	return nil
 }
 func (w *Worker) DeleteMessages(msgID []int) error {
 	return w.Client.CreateContext().DeleteMessages(w.TargetChannelId, msgID)
@@ -40,6 +110,10 @@ func (w *Worker) GetThumbnail(doc *Document, ctx context.Context) ([]byte, error
 	thmb := doc.Thumbs[0].(*tg.PhotoSize)
 	size := thmb.Type
 	loc_ := tg.InputDocumentFileLocation{}
+	err := w.UpdateDocAccHash(doc, ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error updating access hash: %s", err)
+	}
 	loc_.FillFrom(doc.AsInputDocumentFileLocation())
 	loc_.ThumbSize = size
 	req := &tg.UploadGetFileRequest{
@@ -116,7 +190,12 @@ func NewWorkerPool(tokens []string, sessCfg *SessionConfig) (*WorkerPool, error)
 			}
 			wp.mut.Lock()
 			defer wp.mut.Unlock()
-			wp.Bots = append(wp.Bots, &Worker{Client: client, Token: _i, TargetChannelId: sessCfg.ChannelId})
+			accCache, err := lru.New[int64, int64](128)
+			if err != nil {
+				ll.WithError(err).Warn("can not create worker accCache")
+				return
+			}
+			wp.Bots = append(wp.Bots, &Worker{Client: client, Token: _i, TargetChannelId: sessCfg.ChannelId, accCache: accCache})
 			ll.Info("worker started")
 		}(tok)
 	}

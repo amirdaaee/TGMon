@@ -26,11 +26,11 @@ func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.M
 	w := ctx.Writer
 	r := ctx.Request
 	mediaID := mediaReq.ID
-	var med db.MediaFileDoc
-	if err := mongo.DocGetById(ctx, mediaID, &med, nil); err != nil {
+	var medDoc db.MediaFileDoc
+	if err := mongo.DocGetById(ctx, mediaID, &medDoc, nil); err != nil {
 		return err
 	}
-	metaData, err := getMetaData(ctx, med)
+	metaData, err := getMetaData(ctx, medDoc)
 	if err != nil {
 		return err
 	}
@@ -40,7 +40,13 @@ func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.M
 	//...
 	worker := wp.GetNextWorker()
 	if r.Method != "HEAD" {
-		lr, _ := bot.NewTelegramReader(ctx, worker.Client, med.Location, metaData.start, metaData.end, metaData.contentLength, chunckSize)
+		docMsg, err := worker.GetMessages([]int{medDoc.MessageID}, ctx)
+		if err != nil {
+			return err
+		}
+		doc := bot.Document{}
+		doc.FromMessage(docMsg.Messages[0])
+		lr, _ := bot.NewTelegramReader(ctx, worker, &doc, metaData.start, metaData.end, metaData.contentLength, chunckSize)
 		written, err := io.CopyN(w, lr, metaData.contentLength)
 		if err != nil {
 			logrus.WithError(err).Errorf("error streaming after %d", written)

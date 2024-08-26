@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/celestix/gotgproto"
 	"github.com/gotd/td/tg"
 	"github.com/sirupsen/logrus"
 )
@@ -13,8 +12,8 @@ import (
 // ...
 type TGReader struct {
 	ctx           context.Context
-	client        *gotgproto.Client
-	location      *tg.InputDocumentFileLocation
+	worker        *Worker
+	doc           *Document
 	start         int64
 	end           int64
 	next          func() ([]byte, error)
@@ -92,13 +91,14 @@ func (r *TGReader) partStreamerFactory() func() ([]byte, error) {
 }
 
 func (r *TGReader) getChunk(offset int64, limit int64) ([]byte, error) {
+
 	req := &tg.UploadGetFileRequest{
 		Offset:   offset,
 		Limit:    int(limit),
-		Location: r.location,
+		Location: r.doc.AsInputDocumentFileLocation(),
 	}
 	logrus.WithField("offset", offset).WithField("limit", limit).Debug("serving chunk")
-	res, err := r.client.API().UploadGetFile(r.ctx, req)
+	res, err := r.worker.Client.API().UploadGetFile(r.ctx, req)
 
 	if err != nil {
 		return nil, err
@@ -113,18 +113,20 @@ func (r *TGReader) getChunk(offset int64, limit int64) ([]byte, error) {
 }
 func NewTelegramReader(
 	ctx context.Context,
-	client *gotgproto.Client,
-	location *tg.InputDocumentFileLocation,
+	worker *Worker,
+	document *Document,
 	start int64,
 	end int64,
 	contentLength int64,
 	chunkSize int64,
 ) (io.ReadCloser, error) {
-
+	if err := worker.UpdateDocAccHash(document, ctx); err != nil {
+		return nil, fmt.Errorf("can not update access hash: %s", err)
+	}
 	r := &TGReader{
 		ctx:           ctx,
-		location:      location,
-		client:        client,
+		doc:           document,
+		worker:        worker,
 		start:         start,
 		end:           end,
 		chunkSize:     chunkSize,
