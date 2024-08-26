@@ -10,7 +10,6 @@ type configType struct {
 	ChannelID       int64    `env:"CHANNEL_ID,required"`
 	MongoDBUri      string   `env:"MONGODB_URI,required"`
 	MongoDBName     string   `env:"MONGODB_DB_NAME,required"`
-	ListenURL       string   `env:"LISTEN_URL" envDefault:"0.0.0.0:8081"`
 	UserName        string   `env:"USER_NAME,required"`
 	UserPass        string   `env:"USER_PASS,required"`
 	UserToken       string   `env:"USER_TOKEN,required"`

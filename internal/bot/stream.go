@@ -46,7 +46,6 @@ func (r *TGReader) Read(p []byte) (n int, err error) {
 			if err != nil {
 				return 0, err
 			}
-
 		}
 		r.i = 0
 	}

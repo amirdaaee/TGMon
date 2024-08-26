@@ -10,6 +10,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/gin-gonic/gin"
 	range_parser "github.com/quantumsheep/range-parser"
+	"github.com/sirupsen/logrus"
 )
 
 type mediaMetaData struct {
@@ -40,7 +41,11 @@ func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.M
 	worker := wp.GetNextWorker()
 	if r.Method != "HEAD" {
 		lr, _ := bot.NewTelegramReader(ctx, worker.Client, med.Location, metaData.start, metaData.end, metaData.contentLength, chunckSize)
-		io.CopyN(w, lr, metaData.contentLength)
+		written, err := io.CopyN(w, lr, metaData.contentLength)
+		if err != nil {
+			logrus.WithField("reader", lr).WithError(err).Errorf("error streaming after %d", written)
+			return err
+		}
 	}
 	return nil
 }
