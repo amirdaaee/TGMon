@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/amirdaaee/TGMon/internal/bot"
 	"github.com/amirdaaee/TGMon/internal/db"
@@ -18,6 +19,7 @@ func streamHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64)
 			g.AbortWithError(http.StatusBadRequest, err)
 			return
 		}
+		media.ID = strings.TrimSuffix(media.ID, ".m3u8")
 		err := steam(g, media, wp, mongo, chunckSize)
 		if err != nil {
 			g.AbortWithError(http.StatusBadRequest, err)
