@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/amirdaaee/TGMon/config"
-	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -15,16 +13,23 @@ type MinioClient struct {
 	*minio.Client
 	bucket string
 }
+type MinioConfig struct {
+	MinioEndpoint  string
+	MinioAccessKey string
+	MinioSecretKey string
+	MinioBucket    string
+	MinioSecure    bool
+}
 
-func NewMinioClient() (*MinioClient, error) {
-	minioClient, err := minio.New(config.Config().MinioEndpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(config.Config().MinioAccessKey, config.Config().MinioSecretKey, ""),
-		Secure: config.Config().MinioSecure,
+func NewMinioClient(minioCfg *MinioConfig) (*MinioClient, error) {
+	minioClient, err := minio.New(minioCfg.MinioEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(minioCfg.MinioAccessKey, minioCfg.MinioSecretKey, ""),
+		Secure: minioCfg.MinioSecure,
 	})
 	if err != nil {
 		return nil, err
 	}
-	cl := MinioClient{Client: minioClient, bucket: config.Config().MinioBucket}
+	cl := MinioClient{Client: minioClient, bucket: minioCfg.MinioBucket}
 	if err := cl.CreateBucket(context.TODO()); err != nil {
 		return nil, err
 	}
@@ -42,16 +47,15 @@ func (cl *MinioClient) CreateBucket(ctx context.Context) error {
 	}
 	return nil
 }
-func (cl *MinioClient) AddFile(data []byte, ctx context.Context) (string, error) {
-	fileName := fmt.Sprintf("%s.jpeg", uuid.NewString())
+func (cl *MinioClient) FileAdd(fileName string, data []byte, ctx context.Context) error {
 	reader := bytes.NewReader(data)
 	_, err := cl.PutObject(ctx, cl.bucket, fileName, reader, reader.Size(), minio.PutObjectOptions{})
 	if err != nil {
-		return "", err
+		return err
 	}
-	return fileName, nil
+	return nil
 }
-func (cl *MinioClient) RmFile(fileName string, ctx context.Context) error {
+func (cl *MinioClient) FileRm(fileName string, ctx context.Context) error {
 	err := cl.RemoveObject(ctx, cl.bucket, fileName, minio.RemoveObjectOptions{ForceDelete: true})
 	if err != nil {
 		return fmt.Errorf("error removing object: %s", err)

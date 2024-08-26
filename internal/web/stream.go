@@ -21,37 +21,28 @@ type mediaMetaData struct {
 	filename      string
 }
 
-func steam(ctx *gin.Context, mediaReq streamReq) {
+func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64) error {
 	w := ctx.Writer
 	r := ctx.Request
 	mediaID := mediaReq.ID
-	col_, cl_, err := db.GetFileCollection()
-	if err != nil {
-		streamErrResp(ctx, err)
-		return
-	}
-	defer cl_.Disconnect(ctx)
 	var med db.MediaFileDoc
-	if err := db.GetDocById(ctx, col_, mediaID, &med); err != nil {
-		streamErrResp(ctx, err)
-		return
+	if err := mongo.DocGetById(ctx, mediaID, &med, nil); err != nil {
+		return err
 	}
 	metaData, err := getMetaData(ctx, med)
 	if err != nil {
-		streamErrResp(ctx, err)
-		return
+		return err
 	}
-
 	if err := writeStramHeaders(ctx, metaData); err != nil {
-		streamErrResp(ctx, err)
-		return
+		return err
 	}
-
-	worker := bot.GetNextWorker()
+	//...
+	worker := wp.GetNextWorker()
 	if r.Method != "HEAD" {
-		lr, _ := bot.NewTelegramReader(ctx, worker.Client, med.Location, metaData.start, metaData.end, metaData.contentLength)
+		lr, _ := bot.NewTelegramReader(ctx, worker.Client, med.Location, metaData.start, metaData.end, metaData.contentLength, chunckSize)
 		io.CopyN(w, lr, metaData.contentLength)
 	}
+	return nil
 }
 func writeStramHeaders(ctx *gin.Context, meta *mediaMetaData) error {
 	r := ctx.Request
@@ -102,8 +93,4 @@ func getMetaData(ctx *gin.Context, media db.MediaFileDoc) (*mediaMetaData, error
 		metaData.mimeType = "application/octet-stream"
 	}
 	return &metaData, nil
-}
-
-func streamErrResp(g *gin.Context, err error) {
-	g.JSON(400, gin.H{"msg": err.Error()})
 }

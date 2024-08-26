@@ -1,48 +1,42 @@
 package bot
 
 import (
-	"context"
+	"fmt"
 
-	"github.com/amirdaaee/TGMon/config"
-	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/celestix/gotgproto/dispatcher"
 	"github.com/celestix/gotgproto/ext"
-	"go.uber.org/zap"
+	"github.com/sirupsen/logrus"
 )
 
-func addMediaDB(ctx *ext.Context, u *ext.Update) error {
-	l := zap.S()
-	l.Debug("new message")
+type Notifier struct {
+	DocNotifier *docNotifier
+}
+type docNotifier struct {
+	channelId int64
+	Chan      chan *Document
+}
+
+func (dn *docNotifier) handle(ctx *ext.Context, u *ext.Update) error {
 	chatId := u.EffectiveChat().GetID()
 	effMsg := u.EffectiveMessage
-	if chatId != config.Config().ChannelID {
-		l.Debug("message not in channel")
+	ll := logrus.WithField("chat-id", chatId).WithField("message-id", effMsg.ID)
+	ll.Debug("new message")
+	if chatId != dn.channelId {
+		ll.Debug("message not in channel")
 		return dispatcher.EndGroups
 	}
 	supported, err := SupportedMediaFilter(effMsg)
-	if err != nil {
-		return err
+	if err != nil && err != dispatcher.EndGroups {
+		return fmt.Errorf("can not filter supported media type: %s", err)
 	}
 	if !supported {
-		l.Debug("message not supported")
+		ll.Debug("message not supported")
 		return dispatcher.EndGroups
 	}
-	// ...
-	l.Debug("adding media to DB")
-	dbDoc, err := FileDocFromMessage(effMsg)
-	if err != nil {
-		return err
+	doc := Document{}
+	if err := doc.FromMessage(effMsg.Message); err != nil {
+		return fmt.Errorf("error getting document of message %s", err)
 	}
-	coll, cl_, err := db.GetFileCollection()
-	if err != nil {
-		return err
-	}
-	defer cl_.Disconnect(context.TODO())
-	_, err = db.AddDoc(ctx, coll, dbDoc)
-	if err != nil {
-		return err
-	}
-	l.Debug("file added to DB")
+	dn.Chan <- &doc
 	return nil
-	// TODO: dedup
 }

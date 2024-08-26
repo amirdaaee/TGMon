@@ -81,6 +81,7 @@ require (
 	github.com/gotd/contrib v0.20.0
 	github.com/minio/minio-go/v7 v7.0.75
 	github.com/quantumsheep/range-parser v1.1.0
+	github.com/sirupsen/logrus v1.9.3
 	go.mongodb.org/mongo-driver v1.15.1
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/time v0.5.0
