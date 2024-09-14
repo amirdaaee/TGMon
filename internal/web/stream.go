@@ -2,7 +2,6 @@ package web
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/gin-gonic/gin"
 	range_parser "github.com/quantumsheep/range-parser"
-	"github.com/sirupsen/logrus"
 )
 
 type mediaMetaData struct {
@@ -23,10 +21,10 @@ type mediaMetaData struct {
 }
 
 func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64) error {
-	w := ctx.Writer
 	r := ctx.Request
 	mediaID := mediaReq.ID
 	var medDoc db.MediaFileDoc
+	// ...
 	if err := mongo.DocGetById(ctx, mediaID, &medDoc, nil); err != nil {
 		return err
 	}
@@ -34,45 +32,52 @@ func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.M
 	if err != nil {
 		return err
 	}
-	if err := writeStramHeaders(ctx, metaData); err != nil {
+	status, headers := getStreamHeaders(ctx, metaData)
+	//...
+	if r.Method == "HEAD" {
+		ctx.Writer.WriteHeader(status)
+		for k, v := range headers {
+			ctx.Header(k, v)
+		}
+		return nil
+	}
+
+	worker := wp.GetNextWorker()
+	docMsg, err := worker.GetMessages([]int{medDoc.MessageID}, ctx)
+	if err != nil {
 		return err
 	}
-	//...
-	worker := wp.GetNextWorker()
-	if r.Method != "HEAD" {
-		docMsg, err := worker.GetMessages([]int{medDoc.MessageID}, ctx)
-		if err != nil {
-			return err
-		}
-		doc := bot.Document{}
-		doc.FromMessage(docMsg.Messages[0])
-		lr, _ := bot.NewTelegramReader(ctx, worker, &doc, metaData.start, metaData.end, metaData.contentLength, chunckSize)
-		written, err := io.CopyN(w, lr, metaData.contentLength)
-		if err != nil {
-			logrus.WithError(err).Errorf("error streaming after %d", written)
-			return err
-		}
+	doc := bot.Document{}
+	doc.FromMessage(docMsg.Messages[0])
+	lr, err := bot.NewTelegramReader(ctx, worker, &doc, metaData.start, metaData.end, metaData.contentLength, chunckSize)
+	if err != nil {
+		return err
 	}
+	go lr.StartReading()
+	// DONT return error after this
+	ctx.DataFromReader(status, metaData.contentLength, metaData.mimeType, lr, headers)
 	return nil
 }
-func writeStramHeaders(ctx *gin.Context, meta *mediaMetaData) error {
+func getStreamHeaders(ctx *gin.Context, meta *mediaMetaData) (int, map[string]string) {
 	r := ctx.Request
-	w := ctx.Writer
 	rangeHeader := r.Header.Get("Range")
+	head := map[string]string{}
+	var status int
 	if rangeHeader == "" {
-		w.WriteHeader(http.StatusOK)
+		status = http.StatusOK
 	} else {
-		ctx.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", meta.start, meta.end, meta.fileSize))
-		w.WriteHeader(http.StatusPartialContent)
+		status = http.StatusPartialContent
+		head["Content-Range"] = fmt.Sprintf("bytes %d-%d/%d", meta.start, meta.end, meta.fileSize)
 	}
-	ctx.Header("Content-Type", meta.mimeType)
-	ctx.Header("Content-Length", strconv.FormatInt(meta.contentLength, 10))
 	disposition := "inline"
 	if ctx.Query("d") == "true" {
 		disposition = "attachment"
 	}
-	ctx.Header("Content-Disposition", fmt.Sprintf("%s; filename=\"%s\"", disposition, meta.filename))
-	return nil
+	head["Content-Disposition"] = fmt.Sprintf("%s; filename=\"%s\"", disposition, meta.filename)
+	head["Content-Type"] = meta.mimeType
+	head["Content-Length"] = strconv.FormatInt(meta.contentLength, 10)
+
+	return status, head
 }
 func getMetaData(ctx *gin.Context, media db.MediaFileDoc) (*mediaMetaData, error) {
 	r := ctx.Request
@@ -89,7 +94,6 @@ func getMetaData(ctx *gin.Context, media db.MediaFileDoc) (*mediaMetaData, error
 		}
 		start = ranges[0].Start
 		end = ranges[0].End
-		ctx.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, media.FileSize))
 	}
 	contentLength := end - start + 1
 	metaData := mediaMetaData{

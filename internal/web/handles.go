@@ -19,7 +19,12 @@ func streamHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64)
 			g.AbortWithError(http.StatusBadRequest, err)
 			return
 		}
-		media.ID = strings.TrimSuffix(media.ID, ".m3u8")
+		// media.ID = strings.TrimSuffix(media.ID, ".m3u8")
+		media.ID = strings.TrimSuffix(media.ID, ".mp4")
+		if strings.Contains(media.ID, ".") {
+			g.AbortWithStatus(http.StatusNotFound)
+			return
+		}
 		err := steam(g, media, wp, mongo, chunckSize)
 		if err != nil {
 			g.AbortWithError(http.StatusBadRequest, err)
@@ -104,7 +109,7 @@ func loginHandlerFactory(username string, password string, sessToken string) fun
 			g.JSON(http.StatusOK, map[string]string{"token": sessToken})
 			return
 		}
-		g.AbortWithStatus(http.StatusBadRequest)
+		g.AbortWithStatus(http.StatusUnauthorized)
 	}
 }
 func sessionHandlerFactory(sessToken string) func(g *gin.Context) {
