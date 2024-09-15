@@ -2,7 +2,9 @@ package db
 
 import (
 	"context"
+	"sync"
 
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -73,7 +75,7 @@ func (m *Mongo) DocDelById(ctx context.Context, docID string, cl *mongo.Client) 
 	_, err = m.GetFileCollection(cl).DeleteOne(ctx, filter)
 	return err
 }
-func (m *Mongo) DocGetAll(ctx context.Context, collection *mongo.Collection, result interface{}, cl *mongo.Client, opts ...*options.FindOptions) error {
+func (m *Mongo) DocGetAll(ctx context.Context, result interface{}, cl *mongo.Client, opts ...*options.FindOptions) error {
 	cl, disc, err := m.assertClient(cl)
 	if err != nil {
 		return err
@@ -87,6 +89,37 @@ func (m *Mongo) DocGetAll(ctx context.Context, collection *mongo.Collection, res
 		return err
 	}
 	return nil
+}
+func (m *Mongo) DocGetNeighbour(ctx context.Context, mediaDoc MediaFileDoc, cl *mongo.Client) (*MediaFileDoc, *MediaFileDoc, error) {
+	ll := logrus.WithField("module", "DocGetNeighbour").WithField("target", mediaDoc.ID)
+	cl, disc, err := m.assertClient(cl)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer disc(ctx)
+	collection := m.GetFileCollection(cl)
+	// ...
+	prevOpts := options.FindOne().SetSort(bson.D{{Key: "DateAdded", Value: -1}, {Key: "FileID", Value: 1}})
+	nextOpts := options.FindOne().SetSort(bson.D{{Key: "DateAdded", Value: 1}, {Key: "FileID", Value: -1}})
+	prevFilter := bson.M{"DateAdded": bson.M{"$lt": mediaDoc.DateAdded}}
+	nextFilter := bson.M{"DateAdded": bson.M{"$gt": mediaDoc.DateAdded}}
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	var nextDoc, prevDoc MediaFileDoc
+	go func() {
+		defer wg.Done()
+		if err := collection.FindOne(ctx, prevFilter, prevOpts).Decode(&prevDoc); err != nil && err != mongo.ErrNoDocuments {
+			ll.WithError(err).Error("error getting previous doc")
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := collection.FindOne(ctx, nextFilter, nextOpts).Decode(&nextDoc); err != nil && err != mongo.ErrNoDocuments {
+			ll.WithError(err).Error("error getting next doc")
+		}
+	}()
+	wg.Wait()
+	return &prevDoc, &nextDoc, nil
 }
 
 // ...

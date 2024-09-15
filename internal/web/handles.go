@@ -8,6 +8,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/bot"
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -52,13 +53,13 @@ func listMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 			g.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
-		opts := options.Find().SetSort(bson.D{{Key: "DateAdded", Value: -1}})
+		opts := options.Find().SetSort(bson.D{{Key: "DateAdded", Value: -1}, {Key: "FileID", Value: 1}})
 		if listReq.PageSize > 0 {
 			opts = opts.SetLimit(int64(listReq.PageSize))
 			opts = opts.SetSkip(int64(listReq.PageSize * (listReq.Page - 1)))
 		}
 		mediaList := []db.MediaFileDoc{}
-		if err := mongo.DocGetAll(g, coll_, &mediaList, cl_, opts); err != nil {
+		if err := mongo.DocGetAll(g, &mediaList, cl_, opts); err != nil {
 			g.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
@@ -67,6 +68,44 @@ func listMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 			Total: count_,
 		}
 		g.JSON(http.StatusOK, response)
+	}
+}
+func infoMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
+	return func(g *gin.Context) {
+		var mediaReq streamReq
+		if err := g.ShouldBindUri(&mediaReq); err != nil {
+			g.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+		// ....
+		cl_, err := mongo.GetClient()
+		if err != nil {
+			g.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+		defer cl_.Disconnect(g)
+		// ...
+		var resData mediaInfoRes
+		var mediaDoc db.MediaFileDoc
+		if err := mongo.DocGetById(g, mediaReq.ID, &mediaDoc, cl_); err != nil {
+			g.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+		resData.Media = mediaDoc
+		// ...
+		backMediaDoc, nextMediaDoc, err := mongo.DocGetNeighbour(g, mediaDoc, cl_)
+		if err != nil {
+			logrus.WithError(err).Error("error getting Neighbour docs")
+		} else {
+			if backMediaDoc != nil {
+				resData.Back = *backMediaDoc
+			}
+			if nextMediaDoc != nil {
+				resData.Next = *nextMediaDoc
+			}
+		}
+		// ...
+		g.JSON(http.StatusOK, resData)
 	}
 }
 func deleteMediaHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, minio *db.MinioClient) func(g *gin.Context) {

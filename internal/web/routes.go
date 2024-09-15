@@ -10,8 +10,9 @@ import (
 func SetupRoutes(r *gin.Engine, wp *bot.WorkerPool, mongo *db.Mongo, minio *db.MinioClient, streamChunckSize int64) {
 	r.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", streamHandlerFactory(wp, mongo, streamChunckSize))
 	// ...
-	grpApi := r.Group("/api/media", tokenAuthMiddleware())
-	grpApi.GET("/", listMediaHandlerFactory(mongo))
+	grpApi := r.Group("/api/media")
+	grpApi.GET("/", tokenAuthMiddleware(), listMediaHandlerFactory(mongo))
+	grpApi.GET("/:mediaID", infoMediaHandlerFactory(mongo))
 	grpApi.DELETE("/:mediaID", deleteMediaHandlerFactory(wp, mongo, minio))
 	// ...
 	cfg := config.Config()
