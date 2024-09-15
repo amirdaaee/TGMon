@@ -29,7 +29,7 @@ func updateThumbnail() {
 	defer mongoCl.Disconnect(ctx)
 	mongoColl := mongo.GetFileCollection(mongoCl)
 	mediaDocList := []db.MediaFileDoc{}
-	if err := mongo.DocGetAll(ctx, mongoColl, &mediaDocList, mongoCl); err != nil {
+	if err := mongo.DocGetAll(ctx, &mediaDocList, mongoCl); err != nil {
 		logrus.WithError(err).Fatal("error getting current records")
 	}
 	msgIdList := []int{}
