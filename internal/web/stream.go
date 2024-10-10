@@ -20,7 +20,7 @@ type mediaMetaData struct {
 	filename      string
 }
 
-func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64) error {
+func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64, profileFile string) error {
 	r := ctx.Request
 	mediaID := mediaReq.ID
 	var medDoc db.MediaFileDoc
@@ -49,7 +49,7 @@ func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.M
 	}
 	doc := bot.Document{}
 	doc.FromMessage(docMsg.Messages[0])
-	lr, err := bot.NewTelegramReader(ctx, worker, &doc, metaData.start, metaData.end, metaData.contentLength, chunckSize)
+	lr, err := bot.NewTelegramReader(ctx, worker, &doc, metaData.start, metaData.end, metaData.contentLength, chunckSize, profileFile)
 	if err != nil {
 		return err
 	}

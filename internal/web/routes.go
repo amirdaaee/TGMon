@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.Engine, wp *bot.WorkerPool, mongo *db.Mongo, minio *db.MinioClient, streamChunckSize int64) {
-	r.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", streamHandlerFactory(wp, mongo, streamChunckSize))
+func SetupRoutes(r *gin.Engine, wp *bot.WorkerPool, mongo *db.Mongo, minio *db.MinioClient, streamChunckSize int64, profileFile string) {
+	r.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", streamHandlerFactory(wp, mongo, streamChunckSize, profileFile))
 	// ...
 	grpApi := r.Group("/api/media")
 	grpApi.GET("/", tokenAuthMiddleware(), listMediaHandlerFactory(mongo))

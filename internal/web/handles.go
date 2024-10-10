@@ -13,7 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func streamHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64) func(g *gin.Context) {
+func streamHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64, profileFile string) func(g *gin.Context) {
 	return func(g *gin.Context) {
 		var media streamReq
 		if err := g.ShouldBindUri(&media); err != nil {
@@ -26,7 +26,7 @@ func streamHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64)
 			g.AbortWithStatus(http.StatusNotFound)
 			return
 		}
-		err := steam(g, media, wp, mongo, chunckSize)
+		err := steam(g, media, wp, mongo, chunckSize, profileFile)
 		if err != nil {
 			g.AbortWithError(http.StatusBadRequest, err)
 			return

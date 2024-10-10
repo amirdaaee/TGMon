@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gotd/td/tg"
@@ -26,6 +27,7 @@ type TGReader struct {
 	DataChan chan []byte
 	ll       *logrus.Entry
 	buffer   *bytes.Buffer
+	pl       *botProfiler
 }
 
 func (r *TGReader) Close() error {
@@ -50,7 +52,9 @@ func (r *TGReader) StartReading() {
 				r.finilazeStream()
 				return
 			}
+			sTime := time.Now()
 			data, err := r.readMedia(offset, limit, r.rMeta.doc.AsInputDocumentFileLocation())
+			r.pl.record(sTime, fmt.Sprintf("read media (%d - %d)", limit, len(data)))
 			if err != nil {
 				if ctx.Err() == nil {
 					ll2.WithError(err).Error("error reading media from tg")
@@ -70,7 +74,9 @@ func (r *TGReader) Read(p []byte) (int, error) {
 	ll := r.ll.WithField("func", "reader")
 	if r.buffer.Len() == 0 {
 		ll.Debug("waiting for data channel")
+		sTime := time.Now()
 		data := <-r.DataChan
+		r.pl.record(sTime, "wait for data channel")
 		if data == nil {
 			ll.Debug("nil data received (EOF)")
 			return 0, io.EOF
@@ -134,15 +140,21 @@ func NewTelegramReader(
 	end int64,
 	contentLength int64,
 	chunkSize int64,
+	profileFile string,
 ) (*TGReader, error) {
+	pl := NewBotProfiler(profileFile, document.ID, worker.Token)
+	// ...
+	sTime := time.Now()
 	if err := worker.UpdateDocAccHash(document, ctx); err != nil {
 		return nil, fmt.Errorf("can not update access hash: %s", err)
 	}
+	pl.record(sTime, "update acc hash")
 	dChan := make(chan []byte, 4)
 	r := &TGReader{
 		ctx:      ctx,
 		worker:   worker,
 		ll:       logrus.WithField("doc id", document.ID),
+		pl:       pl,
 		DataChan: dChan,
 		buffer:   bytes.NewBuffer([]byte{}),
 		rMeta: &readMeta{
@@ -156,5 +168,7 @@ func NewTelegramReader(
 	return r, nil
 }
 func (r *TGReader) finilazeStream() {
+	sTime := time.Now()
 	close(r.DataChan)
+	r.pl.record(sTime, "finilaze stream")
 }
