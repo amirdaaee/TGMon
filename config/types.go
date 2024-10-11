@@ -1,6 +1,6 @@
 package config
 
-type configType struct {
+type ConfigType struct {
 	AppID             int      `env:"APP_ID,required"`
 	AppHash           string   `env:"APP_HASH,required"`
 	TGSocksProxy      string   `env:"TG_SOCKS_PROXY"`
@@ -26,4 +26,7 @@ type configType struct {
 	// ...
 	MongoDBUri  string `env:"MONGODB_URI,required"`
 	MongoDBName string `env:"MONGODB_DB_NAME,required"`
+	// ...
+	FFmpegImage string `env:"FFMPEG_IMAGE" envDefault:"linuxserver/ffmpeg"`
+	ServerURL   string `env:"SERVER_URL" envDefault:"http://127.0.0.1:8080"`
 }

@@ -10,9 +10,9 @@ import (
 )
 
 var lock = &sync.Mutex{}
-var configInstance *configType
+var configInstance *ConfigType
 
-func Config() *configType {
+func Config() *ConfigType {
 	if configInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
@@ -24,7 +24,7 @@ func Config() *configType {
 		} else {
 			zap.S().Info("no .env file found")
 		}
-		configInstance = &configType{}
+		configInstance = &ConfigType{}
 		if err := env.Parse(configInstance); err != nil {
 			panic(err)
 		}

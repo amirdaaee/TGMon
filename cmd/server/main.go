@@ -34,7 +34,7 @@ func main() {
 	}
 	// ...
 	r := gin.Default()
-	web.SetupRoutes(r, wp, mongo, minio, config.Config().StreamChunkSize, config.Config().WorkerProfileFile)
+	web.SetupRoutes(r, wp, mongo, minio, config.Config())
 	// ...
 	if err := r.Run(); err != nil {
 		logrus.WithError(err).Error("server terminated")

@@ -68,7 +68,7 @@ func generateThumbnail(cmd *cobra.Command, args []string) {
 		ll := logrus.WithField("media", m)
 		doc := new(db.MediaFileDoc)
 		if err := mongo.DocGetById(ctx, m, doc, mongoCl); err != nil {
-			ll.WithError(err).Error("error getting ,edia from db")
+			ll.WithError(err).Error("error getting media from db")
 			continue
 		}
 		var timeAt int

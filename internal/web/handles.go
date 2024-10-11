@@ -2,12 +2,15 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/amirdaaee/TGMon/internal/bot"
 	"github.com/amirdaaee/TGMon/internal/db"
+	"github.com/amirdaaee/TGMon/internal/ffmpeg"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -134,6 +137,68 @@ func deleteMediaHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, minio *db.Mi
 			g.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
+		g.JSON(http.StatusOK, "")
+	}
+}
+func createThumbnailHandlerFactory(mongo *db.Mongo, minio *db.MinioClient, ffimage string, server string) func(g *gin.Context) {
+	return func(g *gin.Context) {
+		var thumbReq thumbnailReq
+		if err := g.ShouldBindJSON(&thumbReq); err != nil {
+			g.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+		// ...
+		go func() {
+			ctx := context.Background()
+			l1 := logrus.WithField("module", "thumbnail_gen")
+			mongoCl, err := mongo.GetClient()
+			if err != nil {
+				l1.WithError(err).Error("can not connect to db")
+				return
+			}
+			defer mongoCl.Disconnect(g)
+			ffContainer, err := ffmpeg.NewFFmpegContainer(ffimage)
+			if err != nil {
+				l1.WithError(err).Error("can not create ffmpeg container")
+				return
+			}
+			defer ffContainer.Close()
+			for _, m := range thumbReq.MediaIDs {
+				l2 := l1.WithField("media", m)
+				doc := new(db.MediaFileDoc)
+				if err := mongo.DocGetById(ctx, m, doc, mongoCl); err != nil {
+					l2.WithError(err).Error("error getting media from db")
+					continue
+				}
+				timeAt := int(doc.Duration * 0.1)
+				data, err := ffmpeg.GenThumnail(ffContainer, fmt.Sprintf("%s/stream/%s", server, m), timeAt)
+				if err != nil {
+					l2.WithError(err).Error("can not generate thumbnail")
+					continue
+				}
+				filename := uuid.NewString() + ".jpeg"
+				if err := minio.FileAdd(filename, data, ctx); err != nil {
+					l2.WithError(err).Error("can not add new thumbnail to minio")
+					continue
+				}
+				// ...
+				updateDoc := doc
+				oldThumb := updateDoc.Thumbnail
+				updateDoc.Thumbnail = filename
+				_filter, _ := db.FilterById(updateDoc.ID)
+				updateDoc.ID = ""
+				if _, err := mongo.GetFileCollection(mongoCl).ReplaceOne(ctx, _filter, updateDoc); err != nil {
+					l2.WithError(err).Error("can not replace mongo record")
+					continue
+				}
+				if oldThumb != "" {
+					if err := minio.FileRm(oldThumb, ctx); err != nil {
+						l2.WithError(err).Warn("can not remove old thumbnail")
+					}
+				}
+				l2.Info("updated")
+			}
+		}()
 		g.JSON(http.StatusOK, "")
 	}
 }

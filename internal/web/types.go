@@ -9,6 +9,9 @@ type mediaListReq struct {
 	Page     int `form:"page"`
 	PageSize int `form:"page_size"`
 }
+type thumbnailReq struct {
+	MediaIDs []string `json:"media_ids" binding:"required"`
+}
 type loginReq struct {
 	Username string
 	Password string
