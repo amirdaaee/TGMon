@@ -1,22 +1,40 @@
-package main
+/*
+Copyright © 2024 NAME HERE <EMAIL ADDRESS>
+*/
+package cmd
 
 import (
 	"context"
 
-	"github.com/amirdaaee/TGMon/cmd"
+	ccmd "github.com/amirdaaee/TGMon/cmd"
 	"github.com/amirdaaee/TGMon/internal/bot"
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 )
 
+// updateThumbnailCmd represents the updateThumbnail command
+var updateThumbnailCmd = &cobra.Command{
+	Use:   "updateThumbnail",
+	Short: "",
+	Long:  "",
+	Run: func(cmd *cobra.Command, args []string) {
+		updateThumbnail()
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(updateThumbnailCmd)
+}
+
 func updateThumbnail() {
-	wp, err := cmd.GetWorkerPool()
+	wp, err := ccmd.GetWorkerPool()
 	if err != nil {
 		logrus.WithError(err).Fatal("can not start workers")
 	}
-	mongo := cmd.GetMongoDB()
-	minio, err := cmd.GetMinioDB()
+	mongo := ccmd.GetMongoDB()
+	minio, err := ccmd.GetMinioDB()
 	if err != nil {
 		logrus.WithError(err).Fatal("can not create minio client")
 	}
