@@ -16,3 +16,15 @@ type MediaFileDoc struct {
 	DateAdded int64                         `bson:"DateAdded"`
 	Duration  float64                       `bson:"Duration"`
 }
+type JobType string
+
+const (
+	THUMBNAILJobType JobType = "THUMBNAIL"
+	SPRITEJobType    JobType = "SPRITE"
+)
+
+type JobDoc struct {
+	ID      string  `bson:"_id,omitempty"`
+	MediaID string  `bson:"MediaID"`
+	Type    JobType `bson:"JobType"`
+}

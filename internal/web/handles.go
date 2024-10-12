@@ -17,6 +17,7 @@ import (
 )
 
 func streamHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64, profileFile string) func(g *gin.Context) {
+	medMongo := mongo.GetMediaMongo()
 	return func(g *gin.Context) {
 		var media streamReq
 		if err := g.ShouldBindUri(&media); err != nil {
@@ -29,7 +30,7 @@ func streamHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64,
 			g.AbortWithStatus(http.StatusNotFound)
 			return
 		}
-		err := steam(g, media, wp, mongo, chunckSize, profileFile)
+		err := steam(g, media, wp, medMongo, chunckSize, profileFile)
 		if err != nil {
 			g.AbortWithError(http.StatusBadRequest, err)
 			return
@@ -37,7 +38,9 @@ func streamHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64,
 	}
 }
 func listMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
+	medMongo := mongo.GetMediaMongo()
 	return func(g *gin.Context) {
+		ll := logrus.WithField("handler", "MediaHandlerFactory")
 		var listReq mediaListReq
 		if err := g.ShouldBind(&listReq); err != nil {
 			g.AbortWithError(http.StatusBadRequest, err)
@@ -45,14 +48,16 @@ func listMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 		}
 		cl_, err := mongo.GetClient()
 		if err != nil {
+			ll.WithError(err).Error("error get client")
 			g.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
 		defer cl_.Disconnect(g)
 		// ...
-		coll_ := mongo.GetFileCollection(cl_)
+		coll_ := medMongo.IMng.GetCollection(cl_)
 		count_, err := coll_.CountDocuments(g, bson.D{})
 		if err != nil {
+			ll.WithError(err).Error("error count")
 			g.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
@@ -62,7 +67,8 @@ func listMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 			opts = opts.SetSkip(int64(listReq.PageSize * (listReq.Page - 1)))
 		}
 		mediaList := []db.MediaFileDoc{}
-		if err := mongo.DocGetAll(g, &mediaList, cl_, opts); err != nil {
+		if err := medMongo.DocGetAll(g, &mediaList, cl_, opts); err != nil {
+			ll.WithError(err).Error("error get docs")
 			g.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
@@ -74,6 +80,7 @@ func listMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 	}
 }
 func infoMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
+	medMongo := mongo.GetMediaMongo()
 	return func(g *gin.Context) {
 		var mediaReq streamReq
 		if err := g.ShouldBindUri(&mediaReq); err != nil {
@@ -90,13 +97,13 @@ func infoMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 		// ...
 		var resData mediaInfoRes
 		var mediaDoc db.MediaFileDoc
-		if err := mongo.DocGetById(g, mediaReq.ID, &mediaDoc, cl_); err != nil {
+		if err := medMongo.DocGetById(g, mediaReq.ID, &mediaDoc, cl_); err != nil {
 			g.AbortWithError(http.StatusBadRequest, err)
 			return
 		}
 		resData.Media = mediaDoc
 		// ...
-		backMediaDoc, nextMediaDoc, err := mongo.DocGetNeighbour(g, mediaDoc, cl_)
+		backMediaDoc, nextMediaDoc, err := medMongo.DocGetNeighbour(g, mediaDoc, cl_)
 		if err != nil {
 			logrus.WithError(err).Error("error getting Neighbour docs")
 		} else {
@@ -112,6 +119,7 @@ func infoMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 	}
 }
 func deleteMediaHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, minio *db.MinioClient) func(g *gin.Context) {
+	medMongo := mongo.GetMediaMongo()
 	return func(g *gin.Context) {
 		var mediaReq streamReq
 		if err := g.ShouldBindUri(&mediaReq); err != nil {
@@ -127,13 +135,13 @@ func deleteMediaHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, minio *db.Mi
 		// ...
 		ctx := context.Background()
 		var mediaDoc db.MediaFileDoc
-		if err := mongo.DocGetById(ctx, mediaReq.ID, &mediaDoc, cl_); err != nil {
+		if err := medMongo.DocGetById(ctx, mediaReq.ID, &mediaDoc, cl_); err != nil {
 			g.AbortWithError(http.StatusBadRequest, err)
 			return
 		}
 		go wp.GetNextWorker().DeleteMessages([]int{mediaDoc.MessageID})
 		go minio.FileRm(mediaDoc.Thumbnail, ctx)
-		if err := mongo.DocDelById(g, mediaDoc.ID, cl_); err != nil {
+		if err := medMongo.DocDelById(g, mediaDoc.ID, cl_); err != nil {
 			g.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
@@ -141,6 +149,7 @@ func deleteMediaHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, minio *db.Mi
 	}
 }
 func createThumbnailHandlerFactory(mongo *db.Mongo, minio *db.MinioClient, ffimage string, server string) func(g *gin.Context) {
+	medMongo := mongo.GetMediaMongo()
 	return func(g *gin.Context) {
 		var thumbReq thumbnailReq
 		if err := g.ShouldBindJSON(&thumbReq); err != nil {
@@ -166,7 +175,7 @@ func createThumbnailHandlerFactory(mongo *db.Mongo, minio *db.MinioClient, ffima
 			for _, m := range thumbReq.MediaIDs {
 				l2 := l1.WithField("media", m)
 				doc := new(db.MediaFileDoc)
-				if err := mongo.DocGetById(ctx, m, doc, mongoCl); err != nil {
+				if err := medMongo.DocGetById(ctx, m, doc, mongoCl); err != nil {
 					l2.WithError(err).Error("error getting media from db")
 					continue
 				}
@@ -187,7 +196,7 @@ func createThumbnailHandlerFactory(mongo *db.Mongo, minio *db.MinioClient, ffima
 				updateDoc.Thumbnail = filename
 				_filter, _ := db.FilterById(updateDoc.ID)
 				updateDoc.ID = ""
-				if _, err := mongo.GetFileCollection(mongoCl).ReplaceOne(ctx, _filter, updateDoc); err != nil {
+				if _, err := medMongo.IMng.GetCollection(mongoCl).ReplaceOne(ctx, _filter, updateDoc); err != nil {
 					l2.WithError(err).Error("can not replace mongo record")
 					continue
 				}

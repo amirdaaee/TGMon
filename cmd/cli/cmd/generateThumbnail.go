@@ -93,7 +93,7 @@ func generateThumbnail(cmd *cobra.Command, args []string) {
 		updateDoc.Thumbnail = filename
 		_filter, _ := db.FilterById(updateDoc.ID)
 		updateDoc.ID = ""
-		if _, err := mongo.GetFileCollection(mongoCl).ReplaceOne(ctx, _filter, updateDoc); err != nil {
+		if _, err := mongo.GetMediaMongo().IMng.GetCollection(mongoCl).ReplaceOne(ctx, _filter, updateDoc); err != nil {
 			ll.WithError(err).Error("can not replace mongo record")
 			continue
 		}

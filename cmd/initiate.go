@@ -43,9 +43,9 @@ func GetMongoDB() *db.Mongo {
 	cfg := config.Config()
 
 	mongo := db.Mongo{
-		DBUri:          cfg.MongoDBUri,
-		DBName:         cfg.MongoDBName,
-		CollectionName: "files",
+		DBUri:               cfg.MongoDBUri,
+		DBName:              cfg.MongoDBName,
+		MediaCollectionName: "files",
 	}
 	return &mongo
 }

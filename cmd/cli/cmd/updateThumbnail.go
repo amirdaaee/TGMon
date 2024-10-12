@@ -45,7 +45,7 @@ func updateThumbnail() {
 		logrus.WithError(err).Fatal("can not create mongo client")
 	}
 	defer mongoCl.Disconnect(ctx)
-	mongoColl := mongo.GetFileCollection(mongoCl)
+	mongoColl := mongo.GetMediaMongo().IMng.GetCollection(mongoCl)
 	mediaDocList := []db.MediaFileDoc{}
 	if err := mongo.DocGetAll(ctx, &mediaDocList, mongoCl); err != nil {
 		logrus.WithError(err).Fatal("error getting current records")

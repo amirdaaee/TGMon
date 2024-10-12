@@ -26,11 +26,11 @@ func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.M
 	var medDoc db.MediaFileDoc
 	// ...
 	if err := mongo.DocGetById(ctx, mediaID, &medDoc, nil); err != nil {
-		return err
+		return fmt.Errorf("error DocGetById: %s", err)
 	}
 	metaData, err := getMetaData(ctx, medDoc)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getMetaData: %s", err)
 	}
 	status, headers := getStreamHeaders(ctx, metaData)
 	//...
@@ -45,13 +45,14 @@ func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.M
 	worker := wp.GetNextWorker()
 	docMsg, err := worker.GetMessages([]int{medDoc.MessageID}, ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("error GetMessages: %s", err)
 	}
 	doc := bot.Document{}
 	doc.FromMessage(docMsg.Messages[0])
 	lr, err := bot.NewTelegramReader(ctx, worker, &doc, metaData.start, metaData.end, metaData.contentLength, chunckSize, profileFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("error NewTelegramReader: %s", err)
+
 	}
 	go lr.StartReading()
 	// DONT return error after this

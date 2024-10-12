@@ -11,10 +11,14 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+type iMongo interface {
+	GetCollection(cl *mongo.Client) *mongo.Collection
+}
 type Mongo struct {
-	DBUri          string
-	DBName         string
-	CollectionName string
+	IMng                iMongo
+	DBUri               string
+	DBName              string
+	MediaCollectionName string
 }
 
 func (m *Mongo) GetClient() (*mongo.Client, error) {
@@ -26,6 +30,7 @@ func (m *Mongo) GetClient() (*mongo.Client, error) {
 	}
 	return cl, nil
 }
+
 func (m *Mongo) assertClient(cl *mongo.Client) (*mongo.Client, func(context.Context) error, error) {
 	if cl != nil {
 		return cl, func(context.Context) error { return nil }, nil
@@ -36,19 +41,13 @@ func (m *Mongo) assertClient(cl *mongo.Client) (*mongo.Client, func(context.Cont
 	}
 	return cl, cl.Disconnect, nil
 }
-
-func (m *Mongo) GetFileCollection(cl *mongo.Client) *mongo.Collection {
-	return cl.Database(m.DBName).Collection(m.CollectionName)
-}
-
-// ...
 func (m *Mongo) DocAdd(ctx context.Context, doc interface{}, cl *mongo.Client) (*mongo.InsertOneResult, error) {
 	cl, disc, err := m.assertClient(cl)
 	if err != nil {
 		return nil, err
 	}
 	defer disc(ctx)
-	return m.GetFileCollection(cl).InsertOne(ctx, doc)
+	return m.IMng.GetCollection(cl).InsertOne(ctx, doc)
 }
 func (m *Mongo) DocGetById(ctx context.Context, docID string, result interface{}, cl *mongo.Client) error {
 	cl, disc, err := m.assertClient(cl)
@@ -60,7 +59,7 @@ func (m *Mongo) DocGetById(ctx context.Context, docID string, result interface{}
 	if err != nil {
 		return err
 	}
-	return m.GetFileCollection(cl).FindOne(ctx, filter).Decode(result)
+	return m.IMng.GetCollection(cl).FindOne(ctx, filter).Decode(result)
 }
 func (m *Mongo) DocDelById(ctx context.Context, docID string, cl *mongo.Client) error {
 	cl, disc, err := m.assertClient(cl)
@@ -72,7 +71,7 @@ func (m *Mongo) DocDelById(ctx context.Context, docID string, cl *mongo.Client) 
 	if err != nil {
 		return err
 	}
-	_, err = m.GetFileCollection(cl).DeleteOne(ctx, filter)
+	_, err = m.IMng.GetCollection(cl).DeleteOne(ctx, filter)
 	return err
 }
 func (m *Mongo) DocGetAll(ctx context.Context, result interface{}, cl *mongo.Client, opts ...*options.FindOptions) error {
@@ -81,7 +80,7 @@ func (m *Mongo) DocGetAll(ctx context.Context, result interface{}, cl *mongo.Cli
 		return err
 	}
 	defer disc(ctx)
-	cur_, err := m.GetFileCollection(cl).Find(ctx, bson.D{}, opts...)
+	cur_, err := m.IMng.GetCollection(cl).Find(ctx, bson.D{}, opts...)
 	if err != nil {
 		return err
 	}
@@ -97,7 +96,7 @@ func (m *Mongo) DocGetNeighbour(ctx context.Context, mediaDoc MediaFileDoc, cl *
 		return nil, nil, err
 	}
 	defer disc(ctx)
-	collection := m.GetFileCollection(cl)
+	collection := m.IMng.GetCollection(cl)
 	// ...
 	prevOpts := options.FindOne().SetSort(bson.D{{Key: "DateAdded", Value: -1}, {Key: "FileID", Value: 1}})
 	nextOpts := options.FindOne().SetSort(bson.D{{Key: "DateAdded", Value: 1}, {Key: "FileID", Value: -1}})
@@ -120,6 +119,21 @@ func (m *Mongo) DocGetNeighbour(ctx context.Context, mediaDoc MediaFileDoc, cl *
 	}()
 	wg.Wait()
 	return &prevDoc, &nextDoc, nil
+}
+
+func (m *Mongo) GetMediaMongo() *Mongo {
+	mng := *m
+	mng.IMng = &mediaMongo{&mng}
+	return &mng
+}
+
+// ....
+type mediaMongo struct {
+	*Mongo
+}
+
+func (m *mediaMongo) GetCollection(cl *mongo.Client) *mongo.Collection {
+	return cl.Database(m.DBName).Collection(m.MediaCollectionName)
 }
 
 // ...
