@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -49,6 +50,14 @@ func (cl *MinioClient) CreateBucket(ctx context.Context) error {
 }
 func (cl *MinioClient) FileAdd(fileName string, data []byte, ctx context.Context) error {
 	reader := bytes.NewReader(data)
+	_, err := cl.PutObject(ctx, cl.bucket, fileName, reader, reader.Size(), minio.PutObjectOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (cl *MinioClient) FileAddStr(fileName string, data string, ctx context.Context) error {
+	reader := strings.NewReader(data)
 	_, err := cl.PutObject(ctx, cl.bucket, fileName, reader, reader.Size(), minio.PutObjectOptions{})
 	if err != nil {
 		return err

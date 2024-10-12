@@ -334,29 +334,37 @@ func putJobResultHandlerFactory(mongo *db.Mongo, minio *db.MinioClient) func(g *
 		} else {
 			switch jobDoc.Type {
 			case db.THUMBNAILJobType:
-				file, err := g.FormFile("file")
+				file, err := getFormFile(g, "file")
 				if err != nil {
-					ll.WithError(err).Error("can not get form file")
+					ll.WithError(err).Error("can not get file from request")
 					g.AbortWithError(http.StatusInternalServerError, err)
 					return
 				}
-				f, err := file.Open()
-				if err != nil {
-					ll.WithError(err).Error("can not open form file")
-					g.AbortWithError(http.StatusInternalServerError, err)
-					return
-				}
-				data, err := io.ReadAll(f)
-				if err != nil {
-					ll.WithError(err).Error("can not read form file")
-					g.AbortWithError(http.StatusInternalServerError, err)
-					return
-				}
-				if err := helper.UpdateMediaThumbnail(g, medMongo, minio, data, &medDoc, cl_); err != nil {
+				if err := helper.UpdateMediaThumbnail(g, medMongo, minio, file, &medDoc, cl_); err != nil {
 					ll.WithError(err).Error("can not replace thumbnail in db")
 					g.AbortWithError(http.StatusInternalServerError, err)
 					return
 				}
+			case db.SPRITEJobType:
+				file, err := getFormFile(g, "file")
+				if err != nil {
+					ll.WithError(err).Error("can not get file from request")
+					g.AbortWithError(http.StatusInternalServerError, err)
+					return
+				}
+				vttFile, err := getFormFile(g, "vtt")
+				if err != nil {
+					ll.WithError(err).Error("can not get vtt file from request")
+					g.AbortWithError(http.StatusInternalServerError, err)
+					return
+				}
+				if err := helper.UpdateMediaVtt(g, medMongo, minio, file, vttFile, &medDoc, cl_); err != nil {
+					ll.WithError(err).Error("can not replace vtt in db")
+					g.AbortWithError(http.StatusInternalServerError, err)
+					return
+				}
+			default:
+				ll.Warnf("job %s not undertood", jobDoc.Type)
 			}
 		}
 		if err := jobMongo.DocDelById(g, jobDoc.ID, cl_); err != nil {
@@ -366,4 +374,20 @@ func putJobResultHandlerFactory(mongo *db.Mongo, minio *db.MinioClient) func(g *
 		}
 		g.AbortWithStatus(http.StatusOK)
 	}
+}
+
+func getFormFile(g *gin.Context, name string) ([]byte, error) {
+	file, err := g.FormFile(name)
+	if err != nil {
+		return nil, fmt.Errorf("can not get form file: %s", err)
+	}
+	f, err := file.Open()
+	if err != nil {
+		return nil, fmt.Errorf("can not open form file: %s", err)
+	}
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("can not read form file: %s", err)
+	}
+	return data, nil
 }
