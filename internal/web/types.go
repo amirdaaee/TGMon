@@ -26,3 +26,15 @@ type mediaInfoRes struct {
 	Next  db.MediaFileDoc
 	Back  db.MediaFileDoc
 }
+
+// ...
+type createJobReq struct {
+	Job []db.JobDoc `json:"job" binding:"required"`
+}
+type putJobResultReq struct {
+	ID     string `uri:"jobID" binding:"required"`
+	Status int    `uri:"status" binding:"required"`
+}
+type listJobRes struct {
+	Job []db.JobDoc
+}

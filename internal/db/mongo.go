@@ -19,6 +19,7 @@ type Mongo struct {
 	DBUri               string
 	DBName              string
 	MediaCollectionName string
+	JobCollectionName   string
 }
 
 func (m *Mongo) GetClient() (*mongo.Client, error) {
@@ -48,6 +49,14 @@ func (m *Mongo) DocAdd(ctx context.Context, doc interface{}, cl *mongo.Client) (
 	}
 	defer disc(ctx)
 	return m.IMng.GetCollection(cl).InsertOne(ctx, doc)
+}
+func (m *Mongo) DocAddMany(ctx context.Context, doc []interface{}, cl *mongo.Client) (*mongo.InsertManyResult, error) {
+	cl, disc, err := m.assertClient(cl)
+	if err != nil {
+		return nil, err
+	}
+	defer disc(ctx)
+	return m.IMng.GetCollection(cl).InsertMany(ctx, doc)
 }
 func (m *Mongo) DocGetById(ctx context.Context, docID string, result interface{}, cl *mongo.Client) error {
 	cl, disc, err := m.assertClient(cl)
@@ -126,14 +135,25 @@ func (m *Mongo) GetMediaMongo() *Mongo {
 	mng.IMng = &mediaMongo{&mng}
 	return &mng
 }
+func (m *Mongo) GetJobMongo() *Mongo {
+	mng := *m
+	mng.IMng = &jobMongo{&mng}
+	return &mng
+}
 
 // ....
 type mediaMongo struct {
 	*Mongo
 }
+type jobMongo struct {
+	*Mongo
+}
 
 func (m *mediaMongo) GetCollection(cl *mongo.Client) *mongo.Collection {
 	return cl.Database(m.DBName).Collection(m.MediaCollectionName)
+}
+func (m *jobMongo) GetCollection(cl *mongo.Client) *mongo.Collection {
+	return cl.Database(m.DBName).Collection(m.JobCollectionName)
 }
 
 // ...

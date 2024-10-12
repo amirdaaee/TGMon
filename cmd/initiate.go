@@ -46,6 +46,7 @@ func GetMongoDB() *db.Mongo {
 		DBUri:               cfg.MongoDBUri,
 		DBName:              cfg.MongoDBName,
 		MediaCollectionName: "files",
+		JobCollectionName:   "jobs",
 	}
 	return &mongo
 }

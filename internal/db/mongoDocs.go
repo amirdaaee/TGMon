@@ -25,6 +25,6 @@ const (
 
 type JobDoc struct {
 	ID      string  `bson:"_id,omitempty"`
-	MediaID string  `bson:"MediaID"`
-	Type    JobType `bson:"JobType"`
+	MediaID string  `bson:"MediaID" json:"mediaID"`
+	Type    JobType `bson:"JobType" json:"type"`
 }

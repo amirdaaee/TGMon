@@ -10,11 +10,17 @@ import (
 func SetupRoutes(r *gin.Engine, wp *bot.WorkerPool, mongo *db.Mongo, minio *db.MinioClient, cfg *config.ConfigType) {
 	r.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", streamHandlerFactory(wp, mongo, cfg.StreamChunkSize, cfg.WorkerProfileFile))
 	// ...
-	grpApi := r.Group("/api/media")
-	grpApi.GET("/", tokenAuthMiddleware(), listMediaHandlerFactory(mongo))
-	grpApi.GET("/:mediaID", infoMediaHandlerFactory(mongo))
-	grpApi.DELETE("/:mediaID", deleteMediaHandlerFactory(wp, mongo, minio))
-	grpApi.POST("/thumbgen", tokenAuthMiddleware(), createThumbnailHandlerFactory(mongo, minio, cfg.FFmpegImage, cfg.ServerURL))
+	mediaApi := r.Group("/api/media")
+	mediaApi.GET("/", tokenAuthMiddleware(), listMediaHandlerFactory(mongo))
+	mediaApi.GET("/:mediaID", infoMediaHandlerFactory(mongo))
+	mediaApi.DELETE("/:mediaID", deleteMediaHandlerFactory(wp, mongo, minio))
+	mediaApi.POST("/thumbgen", tokenAuthMiddleware(), createThumbnailHandlerFactory(mongo, minio, cfg.FFmpegImage, cfg.ServerURL))
+	// ...
+	jobApi := r.Group("/api/job")
+	jobApi.GET("/", apiAuthMiddleware(), listJobsHandlerFactory(mongo))
+	jobApi.POST("/", tokenAuthMiddleware(), createJobsHandlerFactory(mongo))
+	jobApi.PUT("/result/:jobID/:status", apiAuthMiddleware(), putJobResultHandlerFactory(mongo, minio))
+
 	// ...
 	grpAuth := r.Group("/api/auth")
 	grpAuth.POST("/login", loginHandlerFactory(cfg.UserName, cfg.UserPass, cfg.UserToken))
