@@ -258,7 +258,7 @@ func listJobsHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 	}
 }
 func createJobsHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
-	medMongo := mongo.GetJobMongo()
+	jobMongo := mongo.GetJobMongo()
 	return func(g *gin.Context) {
 		ll := logrus.WithField("handler", "createJobsHandler")
 		var crJobReq createJobReq
@@ -272,12 +272,30 @@ func createJobsHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 			g.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
+		coll_ := jobMongo.IMng.GetCollection(cl_)
 		go func() {
 			ctx := context.Background()
 			defer cl_.Disconnect(ctx)
 			for _, j := range crJobReq.Job {
-				if _, err := medMongo.DocAdd(ctx, j, cl_); err != nil {
-					ll.WithError(err).Error("can not add job to db")
+				ll2 := ll.WithField("record", j)
+				jCopy := j
+				jCopy.ID = ""
+				filter, err := bson.Marshal(jCopy)
+				if err != nil {
+					ll2.WithError(err).Error("can not create lookup filter")
+					continue
+				}
+				res := coll_.FindOne(ctx, filter)
+				if res.Err() == nil {
+					ll2.Warn("record already exists")
+					continue
+				} else if res.Err() != mongoD.ErrNoDocuments {
+					ll2.WithError(res.Err()).Warn("error lookup job record")
+					continue
+				}
+				if _, err := jobMongo.DocAdd(ctx, j, cl_); err != nil {
+					ll2.WithError(err).Error("can not add job to db")
+					continue
 				}
 			}
 		}()
