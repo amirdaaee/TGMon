@@ -17,7 +17,7 @@ func SetupRoutes(r *gin.Engine, wp *bot.WorkerPool, mongo *db.Mongo, minio *db.M
 	mediaApi.POST("/thumbgen", tokenAuthMiddleware(), createThumbnailHandlerFactory(mongo, minio, cfg.FFmpegImage, cfg.ServerURL))
 	// ...
 	jobApi := r.Group("/api/job")
-	jobApi.GET("/", apiAuthMiddleware(), listJobsHandlerFactory(mongo))
+	jobApi.GET("/", anyAuthMiddleware(), listJobsHandlerFactory(mongo))
 	jobApi.POST("/", tokenAuthMiddleware(), createJobsHandlerFactory(mongo))
 	jobApi.PUT("/result/:jobID/:status", apiAuthMiddleware(), putJobResultHandlerFactory(mongo, minio))
 
