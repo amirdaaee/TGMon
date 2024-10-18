@@ -35,7 +35,6 @@ func (r *TGReader) Close() error {
 	return nil
 }
 func (r *TGReader) StartReading() {
-
 	ll := r.ll.WithField("func", "tgReader")
 	ctx := r.ctx
 	for {
@@ -47,6 +46,8 @@ func (r *TGReader) StartReading() {
 		default:
 			offset, limit := r.getBound()
 			ll2 := ll.WithField("offset", offset).WithField("limit", limit)
+
+			// end of file
 			if limit == 0 {
 				ll2.Debug("end of file reached")
 				r.finilazeStream()
@@ -62,9 +63,8 @@ func (r *TGReader) StartReading() {
 				r.finilazeStream()
 				return
 			}
-			ll2.WithField("size", len(data)).Debug("read success")
 			data = r.stripData(data, offset, limit)
-			ll2.WithField("size", len(data)).Trace("stripped")
+			ll2.WithField("size", len(data)).Debug("read success")
 			r.DataChan <- data
 			r.rMeta.i++
 		}
@@ -72,21 +72,24 @@ func (r *TGReader) StartReading() {
 }
 func (r *TGReader) Read(p []byte) (int, error) {
 	ll := r.ll.WithField("func", "reader")
+	// Read from buffer if it contains data
 	if r.buffer.Len() == 0 {
 		ll.Debug("waiting for data channel")
 		sTime := time.Now()
-		data := <-r.DataChan
+		data := <-r.DataChan // blocking
 		r.pl.record(sTime, "wait for data channel")
 		if data == nil {
 			ll.Debug("nil data received (EOF)")
 			return 0, io.EOF
 		}
+		// Write data into buffer
 		n, err := r.buffer.Write(data)
 		if err != nil {
 			return 0, fmt.Errorf("error appending buffer: %s", err)
 		}
 		ll.Debugf("wrote %d bytes to buffer", n)
 	}
+	// Read from buffer
 	n, err := r.buffer.Read(p)
 	if err != nil {
 		return 0, fmt.Errorf("error reading buffer: %s", err)
@@ -94,6 +97,7 @@ func (r *TGReader) Read(p []byte) (int, error) {
 	ll.Tracef("read %d bytes from buffer", n)
 	return n, nil
 }
+
 func (r *TGReader) readMedia(offset int64, limit int, loc *tg.InputDocumentFileLocation) ([]byte, error) {
 	req := &tg.UploadGetFileRequest{
 		Offset:   offset,
@@ -111,6 +115,7 @@ func (r *TGReader) readMedia(offset int64, limit int, loc *tg.InputDocumentFileL
 		return nil, fmt.Errorf("unexpected type %T", r)
 	}
 }
+
 func (r *TGReader) getBound() (int64, int) {
 	startChunk := r.rMeta.start - (r.rMeta.start % r.rMeta.chunkSize)
 	offsetByte := startChunk + r.rMeta.i*r.rMeta.chunkSize
