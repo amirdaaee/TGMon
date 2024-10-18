@@ -8,10 +8,10 @@ import (
 
 	ccmd "github.com/amirdaaee/TGMon/cmd"
 	"github.com/amirdaaee/TGMon/internal/db"
+	"github.com/amirdaaee/TGMon/internal/helper"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.mongodb.org/mongo-driver/bson"
-	mongoD "go.mongodb.org/mongo-driver/mongo"
 )
 
 // generateSprite represents the updateThumbnail command
@@ -29,9 +29,8 @@ func init() {
 }
 
 func genSprite() {
-	medMongo := ccmd.GetMongoDB().GetMediaMongo()
-	jobMongo := ccmd.GetMongoDB().GetJobMongo()
-	// ...
+	mongo := ccmd.GetMongoDB()
+	medMongo := mongo.GetMediaMongo()
 	ctx := context.TODO()
 	mongoCl, err := medMongo.GetClient()
 	if err != nil {
@@ -39,7 +38,6 @@ func genSprite() {
 	}
 	defer mongoCl.Disconnect(ctx)
 	mongoMedColl := medMongo.IMng.GetCollection(mongoCl)
-	mongoJobColl := jobMongo.IMng.GetCollection(mongoCl)
 	filter := bson.M{
 		"$or": []bson.M{
 			{"Vtt": bson.M{"$exists": false}},
@@ -52,7 +50,7 @@ func genSprite() {
 	if err != nil {
 		logrus.WithError(err).Fatal("can not get media docs")
 	}
-	var jobI []interface{}
+	var jobI []db.JobDoc
 	for cursor.Next(context.TODO()) {
 		var mediaDoc db.MediaFileDoc
 		err := cursor.Decode(&mediaDoc)
@@ -61,29 +59,16 @@ func genSprite() {
 			continue
 		}
 		j := db.JobDoc{MediaID: mediaDoc.ID, Type: db.SPRITEJobType}
-		filter, err := bson.Marshal(j)
-		if err != nil {
-			logrus.WithError(err).Error("can not create job lookup filter")
-			continue
-		}
-		jobRes := mongoJobColl.FindOne(ctx, filter)
-		if jobRes.Err() == nil {
-			continue
-		} else if jobRes.Err() != mongoD.ErrNoDocuments {
-			logrus.WithError(err).Error("rror lookup job record")
-			continue
-		}
 		jobI = append(jobI, j)
 		logrus.WithField("media", j.MediaID).Info("added")
 	}
 	if len(jobI) > 0 {
-		if _, err := mongoJobColl.InsertMany(ctx, jobI); err != nil {
-			logrus.WithError(err).Error("can not write jobs doc")
+		if err := helper.AddJob(ctx, mongo, jobI); err != nil {
+			logrus.WithError(err).Fatal("can not write jobs doc")
 		} else {
 			logrus.Info("finish")
 		}
 	} else {
 		logrus.Info("nothing to add")
 	}
-
 }

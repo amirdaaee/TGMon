@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -106,7 +105,7 @@ func infoMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 		// ...
 		backMediaDoc, nextMediaDoc, err := medMongo.DocGetNeighbour(g, mediaDoc, cl_)
 		if err != nil {
-			logrus.WithError(err).Error("error getting Neighbour docs")
+			logrus.WithError(err).Error("error getting neighbour docs")
 		} else {
 			if backMediaDoc != nil {
 				resData.Back = *backMediaDoc
@@ -120,29 +119,14 @@ func infoMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 	}
 }
 func deleteMediaHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, minio *db.MinioClient) func(g *gin.Context) {
-	medMongo := mongo.GetMediaMongo()
 	return func(g *gin.Context) {
 		var mediaReq streamReq
 		if err := g.ShouldBindUri(&mediaReq); err != nil {
 			g.AbortWithError(http.StatusBadRequest, err)
 			return
 		}
-		cl_, err := mongo.GetClient()
-		if err != nil {
-			g.AbortWithError(http.StatusInternalServerError, err)
-			return
-		}
-		defer cl_.Disconnect(g)
 		// ...
-		ctx := context.Background()
-		var mediaDoc db.MediaFileDoc
-		if err := medMongo.DocGetById(ctx, mediaReq.ID, &mediaDoc, cl_); err != nil {
-			g.AbortWithError(http.StatusBadRequest, err)
-			return
-		}
-		go wp.GetNextWorker().DeleteMessages([]int{mediaDoc.MessageID})
-		go minio.FileRm(mediaDoc.Thumbnail, ctx)
-		if err := medMongo.DocDelById(g, mediaDoc.ID, cl_); err != nil {
+		if err := helper.RmMedia(g, mongo, minio, mediaReq.ID, wp); err != nil {
 			g.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
@@ -193,48 +177,16 @@ func listJobsHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 	}
 }
 func createJobsHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
-	jobMongo := mongo.GetJobMongo()
 	return func(g *gin.Context) {
-		ll := logrus.WithField("handler", "createJobsHandler")
 		var crJobReq createJobReq
 		if err := g.ShouldBind(&crJobReq); err != nil {
 			g.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
 			return
 		}
-		cl_, err := mongo.GetClient()
-		if err != nil {
-			ll.WithError(err).Error("error get client")
-			g.AbortWithError(http.StatusInternalServerError, err)
+		if err := helper.AddJob(g, mongo, crJobReq.Job); err != nil {
+			g.JSON(http.StatusInternalServerError, gin.H{"msg": err.Error()})
 			return
 		}
-		coll_ := jobMongo.IMng.GetCollection(cl_)
-		go func() {
-			ctx := context.Background()
-			defer cl_.Disconnect(ctx)
-			for _, j := range crJobReq.Job {
-				ll2 := ll.WithField("record", j)
-				jCopy := j
-				jCopy.ID = ""
-				filter, err := bson.Marshal(jCopy)
-				if err != nil {
-					ll2.WithError(err).Error("can not create lookup filter")
-					continue
-				}
-				res := coll_.FindOne(ctx, filter)
-				if res.Err() == nil {
-					ll2.Warn("record already exists")
-					continue
-				} else if res.Err() != mongoD.ErrNoDocuments {
-					ll2.WithError(res.Err()).Warn("error lookup job record")
-					continue
-				}
-				if _, err := jobMongo.DocAdd(ctx, j, cl_); err != nil {
-					ll2.WithError(err).Error("can not add job to db")
-					continue
-				}
-			}
-		}()
-
 		g.AbortWithStatus(http.StatusOK)
 	}
 }
