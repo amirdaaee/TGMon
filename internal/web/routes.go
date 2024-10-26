@@ -12,6 +12,7 @@ func SetupRoutes(r *gin.Engine, wp *bot.WorkerPool, mongo *db.Mongo, minio *db.M
 	// ...
 	mediaApi := r.Group("/api/media")
 	mediaApi.GET("/", tokenAuthMiddleware(), listMediaHandlerFactory(mongo))
+	mediaApi.GET("/rand", tokenAuthMiddleware(), getRandomMedia(mongo))
 	mediaApi.GET("/:mediaID", infoMediaHandlerFactory(mongo))
 	mediaApi.DELETE("/:mediaID", deleteMediaHandlerFactory(wp, mongo, minio))
 	// ...

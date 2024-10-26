@@ -280,6 +280,36 @@ func putJobResultHandlerFactory(mongo *db.Mongo, minio *db.MinioClient) func(g *
 		g.AbortWithStatus(http.StatusOK)
 	}
 }
+func getRandomMedia(mongo *db.Mongo) func(g *gin.Context) {
+	medMongo := mongo.GetMediaMongo()
+	return func(g *gin.Context) {
+		ll := logrus.WithField("handler", "getRandomMedia")
+		cl_, err := mongo.GetClient()
+		if err != nil {
+			ll.WithError(err).Error("error get client")
+			g.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+		defer cl_.Disconnect(g)
+		medCollection := medMongo.IMng.GetCollection(cl_)
+		var medDoc db.MediaFileDoc
+		cur, err := medCollection.Aggregate(g, []bson.M{
+			{"$sample": bson.M{"size": 1}},
+		})
+		if err != nil {
+			ll.WithError(err).Error("error query db")
+			g.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+		cur.Next(g)
+		if err := cur.Decode(&medDoc); err != nil {
+			ll.WithError(err).Error("error decode result")
+			g.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+		g.JSON(http.StatusOK, medDoc)
+	}
+}
 
 func getFormFile(g *gin.Context, name string) ([]byte, error) {
 	file, err := g.FormFile(name)
