@@ -8,6 +8,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	mongoD "go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -26,7 +27,7 @@ func AddJob(ctx context.Context, mongo *db.Mongo, jobs []db.JobDoc) error {
 			defer wp.Done()
 			ll2 := logrus.WithField("record", j)
 			jCopy := j
-			jCopy.ID = ""
+			jCopy.SetID(primitive.NilObjectID)
 			filter, err := bson.Marshal(jCopy)
 			if err != nil {
 				ll2.WithError(err).Error("can not create lookup filter")

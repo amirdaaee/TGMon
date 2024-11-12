@@ -58,7 +58,7 @@ func genSprite() {
 			logrus.WithError(err).Error("can not decode doc")
 			continue
 		}
-		j := db.JobDoc{MediaID: mediaDoc.ID, Type: db.SPRITEJobType}
+		j := db.JobDoc{MediaID: mediaDoc.GetIDStr(), Type: db.SPRITEJobType}
 		jobI = append(jobI, j)
 		logrus.WithField("media", j.MediaID).Info("added")
 	}

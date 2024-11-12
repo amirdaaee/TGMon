@@ -64,7 +64,7 @@ func RmMedia(ctx context.Context, mongo *db.Mongo, minio *db.MinioClient, docID 
 	if err := medMongo.DocGetById(ctx, docID, &mediaDoc, nil); err != nil {
 		return fmt.Errorf("error get doc from db: %s", err)
 	}
-	if err := medMongo.DocDelById(ctx, mediaDoc.ID, nil); err != nil {
+	if err := medMongo.DocDelById(ctx, mediaDoc.GetIDStr(), nil); err != nil {
 		return fmt.Errorf("error remove doc from db: %s", err)
 	}
 	go func() {
@@ -79,7 +79,7 @@ func RmMedia(ctx context.Context, mongo *db.Mongo, minio *db.MinioClient, docID 
 				}
 			}
 		}
-		if err := RmMediaJob(ctx, mongo, mediaDoc.ID); err != nil {
+		if err := RmMediaJob(ctx, mongo, mediaDoc.GetIDStr()); err != nil {
 			logrus.WithError(err).Error("error removing jobs from db")
 		}
 	}()
@@ -95,8 +95,8 @@ func UpdateMediaThumbnail(ctx context.Context, mongo *db.Mongo, minio *db.MinioC
 	updateDoc := doc
 	oldThumb := updateDoc.Thumbnail
 	updateDoc.Thumbnail = filename
-	_filter, _ := db.FilterById(updateDoc.ID)
-	updateDoc.ID = ""
+	_filter, _ := db.FilterById(updateDoc.GetIDStr())
+	updateDoc.SetID(primitive.NilObjectID)
 	if _, err := mongo.IMng.GetCollection(cl_).ReplaceOne(ctx, _filter, updateDoc); err != nil {
 		return fmt.Errorf("can not replace mongo record: %s", err)
 	}
@@ -121,8 +121,8 @@ func UpdateMediaVtt(ctx context.Context, mongo *db.Mongo, minio *db.MinioClient,
 	oldSprite := updateDoc.Sprite
 	updateDoc.Vtt = vttName
 	updateDoc.Sprite = spriteName
-	_filter, _ := db.FilterById(updateDoc.ID)
-	updateDoc.ID = ""
+	_filter, _ := db.FilterById(updateDoc.GetIDStr())
+	updateDoc.SetID(primitive.NilObjectID)
 	if _, err := mongo.IMng.GetCollection(cl_).ReplaceOne(ctx, _filter, updateDoc); err != nil {
 		return fmt.Errorf("can not replace mongo record: %s", err)
 	}

@@ -224,7 +224,7 @@ func putJobResultHandlerFactory(mongo *db.Mongo, minio *db.MinioClient) func(g *
 			var stat int
 			if err == mongoD.ErrNoDocuments {
 				stat = http.StatusBadRequest
-				if err := jobMongo.DocDelById(g, jobDoc.ID, cl_); err != nil {
+				if err := jobMongo.DocDelById(g, jobDoc.GetIDStr(), cl_); err != nil {
 					ll.WithError(err).Error("can not remove job from mongo")
 				}
 			} else {
@@ -272,7 +272,7 @@ func putJobResultHandlerFactory(mongo *db.Mongo, minio *db.MinioClient) func(g *
 				ll.Warnf("job %s not undertood", jobDoc.Type)
 			}
 		}
-		if err := jobMongo.DocDelById(g, jobDoc.ID, cl_); err != nil {
+		if err := jobMongo.DocDelById(g, jobDoc.GetIDStr(), cl_); err != nil {
 			ll.WithError(err).Error("can not remove job from db")
 			g.AbortWithError(http.StatusInternalServerError, err)
 			return
