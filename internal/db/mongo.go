@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/amirdaaee/TGMon/internal/errs"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -163,4 +164,84 @@ func FilterById(docID string) (*bson.D, error) {
 		return nil, err
 	}
 	return &bson.D{{Key: "_id", Value: docId}}, err
+}
+
+// ---
+type DataStore[T IMongoDoc] struct {
+	DB         *Mongo
+	collection string
+}
+
+func (m *DataStore[T]) GetCollection(cl *mongo.Client) *mongo.Collection {
+	return cl.Database(m.DB.DBName).Collection(m.collection)
+}
+func (m *DataStore[T]) Create(ctx context.Context, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
+	res, err := m.GetCollection(cl).InsertOne(ctx, doc)
+	if err != nil {
+		return doc, errs.NewMongoOpErr(err)
+	}
+	id := res.InsertedID.(primitive.ObjectID)
+	doc.SetID(id)
+	return doc, nil
+}
+func (m *DataStore[T]) List(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]T, errs.IMongoErr) {
+	cursor, err := m.GetCollection(cl).Find(ctx, filter)
+	if err != nil {
+		return nil, errs.NewMongoOpErr(err)
+	}
+
+	res := []T{}
+	for cursor.Next(ctx) {
+		var r T
+		err := cursor.Decode(&r)
+		if err != nil {
+			return res, errs.NewMongoUnMarshalErr(err)
+		}
+		res = append(res, r)
+	}
+	return res, nil
+}
+func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr {
+	if res, err := m.GetCollection(cl).DeleteOne(ctx, filter); err != nil {
+		return errs.NewMongoOpErr(err)
+	} else if res.DeletedCount == 0 {
+		return errs.NewMongoObjectNotfound(*filter)
+	}
+	return nil
+}
+func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl *mongo.Client) (T, errs.IMongoErr) {
+	var res T
+	mongoRes := m.GetCollection(cl).FindOne(ctx, filter)
+	if mongoRes.Err() != nil {
+		return res, errs.NewMongoOpErr(mongoRes.Err())
+	}
+	if err := mongoRes.Decode(res); err != nil {
+		return res, errs.NewMongoUnMarshalErr(err)
+	}
+	return res, nil
+}
+func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
+	_, err := m.GetCollection(cl).ReplaceOne(ctx, filter, doc)
+	if err != nil {
+		return doc, err
+	}
+	return doc, nil
+}
+
+func (DB *Mongo) GetMediaDatastore() *DataStore[*MediaFileDoc] {
+	return &DataStore[*MediaFileDoc]{
+		DB:         DB,
+		collection: DB.MediaCollectionName,
+	}
+}
+func (DB *Mongo) GetJobDatastore() *DataStore[*JobDoc] {
+	return &DataStore[*JobDoc]{
+		DB:         DB,
+		collection: DB.JobCollectionName,
+	}
+}
+
+// ...
+func FilterByID(id primitive.ObjectID) bson.D {
+	return bson.D{{Key: "_id", Value: id}}
 }
