@@ -2,6 +2,7 @@ package facade
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/amirdaaee/TGMon/internal/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -13,6 +14,23 @@ type jobFacade struct {
 }
 
 func (f *jobFacade) Create(ctx context.Context, doc *db.JobDoc, cl *mongo.Client) (*db.JobDoc, error) {
+	ll := f.getLogger("create")
+	// check for exist
+	filter := doc
+	filter.SetID(primitive.NilObjectID)
+	filterD, err := f.getDatastore().MarshalOmitEmpty(filter)
+	if err != nil {
+		return nil, fmt.Errorf("can not marshal filter to find duplicates: %s", err)
+	}
+	res, err := f.baseRead(ctx, filterD, cl)
+	if err != nil {
+		return nil, fmt.Errorf("can not list jobs to find duplicates: %s", err)
+	}
+	if len(res) != 0 {
+		ll.Warn("job already exists")
+		return nil, nil
+	}
+	// ...
 	newDoc, err := f.baseCreate(ctx, doc, cl)
 	return newDoc, err
 }
@@ -27,6 +45,8 @@ func (f *jobFacade) Update(ctx context.Context, filter *primitive.D, doc *db.Job
 func (f *jobFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) error {
 	return f.baseDelete(ctx, filter, cl)
 }
+
+// Todo: job done facade
 
 func NewJobFacade(mongo *db.Mongo) *jobFacade {
 	return &jobFacade{
