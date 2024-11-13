@@ -220,7 +220,7 @@ func putJobResultHandlerFactory(mongo *db.Mongo, minio *db.MinioClient) func(g *
 			g.AbortWithError(stat, err)
 			return
 		}
-		if err := medMongo.DocGetById(g, jobDoc.MediaID, &medDoc, cl_); err != nil {
+		if err := medMongo.DocGetById(g, jobDoc.MediaID.Hex(), &medDoc, cl_); err != nil {
 			var stat int
 			if err == mongoD.ErrNoDocuments {
 				stat = http.StatusBadRequest

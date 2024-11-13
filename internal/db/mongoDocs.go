@@ -55,8 +55,8 @@ const (
 
 type JobDoc struct {
 	baseMongoDoc `bson:"inline"`
-	MediaID      string  `bson:"MediaID" json:"mediaID"`
-	Type         JobType `bson:"JobType" json:"type"`
+	MediaID      primitive.ObjectID `bson:"MediaID" json:"mediaID"`
+	Type         JobType            `bson:"JobType" json:"type"`
 }
 
 func getID(v *baseMongoDoc) primitive.ObjectID {

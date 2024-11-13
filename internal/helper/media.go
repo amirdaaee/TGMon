@@ -50,7 +50,7 @@ func AddMedia(ctx context.Context, mongo *db.Mongo, minio *db.MinioClient, doc *
 	crResID := crRes.InsertedID.(primitive.ObjectID)
 	go func() {
 		ctx := context.Background()
-		if err := AddJob(ctx, mongo, []db.JobDoc{{MediaID: crResID.Hex(), Type: db.SPRITEJobType}}); err != nil {
+		if err := AddJob(ctx, mongo, []db.JobDoc{{MediaID: crResID, Type: db.SPRITEJobType}}); err != nil {
 			logrus.WithError(err).Error("can not create sprite generation job")
 		} else {
 			logrus.Debug("created sprite generation job")
