@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"reflect"
 	"sync"
 
 	"github.com/amirdaaee/TGMon/internal/errs"
@@ -209,6 +210,14 @@ func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl *mong
 	}
 	return nil
 }
+func (m *DataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr {
+	if res, err := m.GetCollection(cl).DeleteMany(ctx, filter); err != nil {
+		return errs.NewMongoOpErr(err)
+	} else if res.DeletedCount == 0 {
+		return errs.NewMongoObjectNotfound(*filter)
+	}
+	return nil
+}
 func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl *mongo.Client) (T, errs.IMongoErr) {
 	var res T
 	mongoRes := m.GetCollection(cl).FindOne(ctx, filter)
@@ -232,6 +241,25 @@ func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, 
 }
 func (m *DataStore[T]) GetIDFilter(id primitive.ObjectID) *primitive.D {
 	return &bson.D{{Key: "_id", Value: id}}
+}
+func (m *DataStore[T]) MarshalOmitEmpty(doc T) (*primitive.D, errs.IMongoErr) {
+	var filteredData = make(map[string]interface{})
+	v := reflect.ValueOf(doc)
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if !field.IsZero() {
+			filteredData[v.Type().Field(i).Tag.Get("bson")] = field.Interface()
+		}
+	}
+	marsh, err := bson.Marshal(filteredData)
+	if err != nil {
+		return nil, errs.NewMongoMarshalErr(err)
+	}
+	unmarsh := new(bson.D)
+	if err := bson.Unmarshal(marsh, unmarsh); err != nil {
+		return nil, errs.NewMongoUnMarshalErr(err)
+	}
+	return unmarsh, nil
 }
 func (DB *Mongo) GetMediaDatastore() *DataStore[*MediaFileDoc] {
 	return &DataStore[*MediaFileDoc]{
