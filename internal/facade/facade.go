@@ -12,7 +12,7 @@ import (
 
 type baseFacade[T db.IMongoDoc] struct {
 	name   string
-	mongo  db.Mongo
+	mongo  *db.Mongo
 	dsName db.DatastoreEnum
 }
 

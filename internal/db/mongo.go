@@ -221,13 +221,18 @@ func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl *mongo.
 	return res, nil
 }
 func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
-	_, err := m.GetCollection(cl).ReplaceOne(ctx, filter, doc)
+	res, err := m.GetCollection(cl).ReplaceOne(ctx, filter, doc)
 	if err != nil {
 		return doc, err
 	}
+	if res.MatchedCount == 0 {
+		return doc, errs.NewMongoObjectNotfound(*filter)
+	}
 	return doc, nil
 }
-
+func (m *DataStore[T]) GetIDFilter(id primitive.ObjectID) *primitive.D {
+	return &bson.D{{Key: "_id", Value: id}}
+}
 func (DB *Mongo) GetMediaDatastore() *DataStore[*MediaFileDoc] {
 	return &DataStore[*MediaFileDoc]{
 		DB:         DB,

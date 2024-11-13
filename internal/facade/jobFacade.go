@@ -32,7 +32,7 @@ func NewJobFacade(mongo *db.Mongo) *jobFacade {
 	return &jobFacade{
 		baseFacade: baseFacade[*db.JobDoc]{
 			name:   "job",
-			mongo:  *mongo,
+			mongo:  mongo,
 			dsName: db.JOB_DS,
 		},
 	}
