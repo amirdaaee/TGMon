@@ -21,6 +21,9 @@ type mediaFacade struct {
 	minio *db.MinioClient
 }
 
+// create new media doc
+// + set thumbnail
+// + generate sprite job
 func (f *mediaFacade) Create(ctx context.Context, data *FullMediaData, cl *mongo.Client) (*db.MediaFileDoc, error) {
 	newDoc, err := f.baseCreate(ctx, data.doc, cl)
 	go func() {
@@ -49,8 +52,12 @@ func (f *mediaFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.C
 	docs, err := f.baseRead(ctx, filter, cl)
 	return docs, err
 }
+
+// delete new media doc
+// + delete minio files
+// + delete all related jobs
 func (f *mediaFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) error {
-	doc, err := f.getDatastore().Get(ctx, filter, cl)
+	doc, err := f.getDatastore().Find(ctx, filter, cl)
 	if err != nil {
 		return err
 	}
