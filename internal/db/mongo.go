@@ -241,6 +241,24 @@ func (DB *Mongo) GetJobDatastore() *DataStore[*JobDoc] {
 	}
 }
 
+type DatastoreEnum int
+
+const (
+	MEDIA_DS DatastoreEnum = iota
+	JOB_DS
+)
+
+func (DB *Mongo) GetDatastore(name DatastoreEnum) *DataStore[IMongoDoc] {
+	ds := new(DataStore[IMongoDoc])
+	switch name {
+	case MEDIA_DS:
+		ds = (*DataStore[IMongoDoc])(DB.GetMediaDatastore())
+	case JOB_DS:
+		ds = (*DataStore[IMongoDoc])(DB.GetJobDatastore())
+	}
+	return ds
+}
+
 // ...
 func FilterByID(id primitive.ObjectID) bson.D {
 	return bson.D{{Key: "_id", Value: id}}
