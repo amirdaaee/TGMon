@@ -185,6 +185,19 @@ func (m *DataStore[T]) Create(ctx context.Context, doc T, cl *mongo.Client) (T, 
 	doc.SetID(id)
 	return doc, nil
 }
+func (m *DataStore[T]) Get(ctx context.Context, filter *primitive.D, cl *mongo.Client) (T, errs.IMongoErr) {
+	docs, err := m.List(ctx, filter, cl)
+	if err != nil {
+		return *new(T), errs.NewMongoOpErr(err)
+	}
+	if len(docs) == 0 {
+		return *new(T), errs.NewMongoObjectNotfound(*filter)
+	}
+	if len(docs) > 1 {
+		return *new(T), errs.NewMongoMultipleObjectfound(*filter)
+	}
+	return docs[0], nil
+}
 func (m *DataStore[T]) List(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]T, errs.IMongoErr) {
 	cursor, err := m.GetCollection(cl).Find(ctx, filter)
 	if err != nil {

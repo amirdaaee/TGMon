@@ -43,3 +43,6 @@ func NewMongoUnMarshalErr(e error) IMongoErr {
 func NewMongoObjectNotfound(q bson.D) IMongoErr {
 	return MongoClientErr{&baseMongoErr{message: "requested object not found", txt: fmt.Sprintf("filter: %+v", q)}}
 }
+func NewMongoMultipleObjectfound(q bson.D) IMongoErr {
+	return MongoClientErr{&baseMongoErr{message: "multiple object found for query", txt: fmt.Sprintf("filter: %+v", q)}}
+}

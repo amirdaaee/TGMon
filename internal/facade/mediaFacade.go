@@ -50,8 +50,7 @@ func (f *mediaFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.C
 	return docs, err
 }
 func (f *mediaFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) error {
-	docs, err := f.baseRead(ctx, filter, cl)
-	doc := docs[0]
+	doc, err := f.getDatastore().Get(ctx, filter, cl)
 	if err != nil {
 		return err
 	}
