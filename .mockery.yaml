@@ -3,4 +3,4 @@ packages:
   github.com/amirdaaee/TGMon/internal/db:
     config:
       all: true
-      dir: mocks/{{.InterfaceDirRelative}}
+      dir: mocks/{{ .PackageName }}
