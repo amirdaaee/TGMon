@@ -118,7 +118,7 @@ func infoMediaHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 		g.JSON(http.StatusOK, resData)
 	}
 }
-func deleteMediaHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, minio *db.MinioClient) func(g *gin.Context) {
+func deleteMediaHandlerFactory(wp *bot.WorkerPool, mongo *db.Mongo, minio db.IMinioClient) func(g *gin.Context) {
 	return func(g *gin.Context) {
 		var mediaReq streamReq
 		if err := g.ShouldBindUri(&mediaReq); err != nil {
@@ -190,7 +190,7 @@ func createJobsHandlerFactory(mongo *db.Mongo) func(g *gin.Context) {
 		g.AbortWithStatus(http.StatusOK)
 	}
 }
-func putJobResultHandlerFactory(mongo *db.Mongo, minio *db.MinioClient) func(g *gin.Context) {
+func putJobResultHandlerFactory(mongo *db.Mongo, minio db.IMinioClient) func(g *gin.Context) {
 	jobMongo := mongo.GetJobMongo()
 	medMongo := mongo.GetMediaMongo()
 	return func(g *gin.Context) {

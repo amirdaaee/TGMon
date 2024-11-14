@@ -10,6 +10,12 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+type IMinioClient interface {
+	CreateBucket(ctx context.Context) error
+	FileAdd(fileName string, data []byte, ctx context.Context) error
+	FileAddStr(fileName string, data string, ctx context.Context) error
+	FileRm(fileName string, ctx context.Context) error
+}
 type MinioClient struct {
 	*minio.Client
 	bucket string
@@ -22,7 +28,7 @@ type MinioConfig struct {
 	MinioSecure    bool
 }
 
-func NewMinioClient(minioCfg *MinioConfig) (*MinioClient, error) {
+func NewMinioClient(minioCfg *MinioConfig) (IMinioClient, error) {
 	minioClient, err := minio.New(minioCfg.MinioEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(minioCfg.MinioAccessKey, minioCfg.MinioSecretKey, ""),
 		Secure: minioCfg.MinioSecure,

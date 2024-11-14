@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.Engine, wp *bot.WorkerPool, mongo *db.Mongo, minio *db.MinioClient, cfg *config.ConfigType) {
+func SetupRoutes(r *gin.Engine, wp *bot.WorkerPool, mongo *db.Mongo, minio db.IMinioClient, cfg *config.ConfigType) {
 	r.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", streamHandlerFactory(wp, mongo, cfg.StreamChunkSize, cfg.WorkerProfileFile))
 	// ...
 	mediaApi := r.Group("/api/media")

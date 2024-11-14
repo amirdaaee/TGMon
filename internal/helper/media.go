@@ -14,7 +14,7 @@ import (
 	mongoD "go.mongodb.org/mongo-driver/mongo"
 )
 
-func AddMedia(ctx context.Context, mongo *db.Mongo, minio *db.MinioClient, doc *bot.Document, wp *bot.WorkerPool) error {
+func AddMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, doc *bot.Document, wp *bot.WorkerPool) error {
 	ll := logrus.WithField("message-id", doc.MessageID)
 	ll.Debug("started processing")
 	docMeta := doc.GetMetadata()
@@ -58,7 +58,7 @@ func AddMedia(ctx context.Context, mongo *db.Mongo, minio *db.MinioClient, doc *
 	}()
 	return nil
 }
-func RmMedia(ctx context.Context, mongo *db.Mongo, minio *db.MinioClient, docID string, wp *bot.WorkerPool) error {
+func RmMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, docID string, wp *bot.WorkerPool) error {
 	medMongo := mongo.GetMediaMongo()
 	var mediaDoc db.MediaFileDoc
 	if err := medMongo.DocGetById(ctx, docID, &mediaDoc, nil); err != nil {
@@ -87,7 +87,7 @@ func RmMedia(ctx context.Context, mongo *db.Mongo, minio *db.MinioClient, docID 
 	return nil
 }
 
-func UpdateMediaThumbnail(ctx context.Context, mongo *db.Mongo, minio *db.MinioClient, data []byte, doc *db.MediaFileDoc, cl_ *mongoD.Client) error {
+func UpdateMediaThumbnail(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, data []byte, doc *db.MediaFileDoc, cl_ *mongoD.Client) error {
 	filename := uuid.NewString() + ".jpeg"
 	if err := minio.FileAdd(filename, data, ctx); err != nil {
 		return fmt.Errorf("error adding file to minio: %s", err)
@@ -105,7 +105,7 @@ func UpdateMediaThumbnail(ctx context.Context, mongo *db.Mongo, minio *db.MinioC
 	}
 	return nil
 }
-func UpdateMediaVtt(ctx context.Context, mongo *db.Mongo, minio *db.MinioClient, image []byte, vtt []byte, doc *db.MediaFileDoc, cl_ *mongoD.Client) error {
+func UpdateMediaVtt(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, image []byte, vtt []byte, doc *db.MediaFileDoc, cl_ *mongoD.Client) error {
 	u := uuid.NewString()
 	spriteName := u + ".jpeg"
 	vttName := u + ".vtt"

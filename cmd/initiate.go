@@ -50,7 +50,7 @@ func GetMongoDB() *db.Mongo {
 	}
 	return &mongo
 }
-func GetMinioDB() (*db.MinioClient, error) {
+func GetMinioDB() (db.IMinioClient, error) {
 	cfg := config.Config()
 	MinioConfig := db.MinioConfig{
 		MinioEndpoint:  cfg.MinioEndpoint,
