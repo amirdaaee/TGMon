@@ -168,6 +168,18 @@ func FilterById(docID string) (*bson.D, error) {
 }
 
 // ---
+type IDataStore[T IMongoDoc] interface {
+	GetCollection(cl *mongo.Client) *mongo.Collection
+	Create(ctx context.Context, doc T, cl *mongo.Client) (T, errs.IMongoErr)
+	List(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]T, errs.IMongoErr)
+	Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr
+	DeleteMany(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr
+	Find(ctx context.Context, filter *primitive.D, cl *mongo.Client) (T, errs.IMongoErr)
+	Replace(ctx context.Context, filter *primitive.D, doc T, cl *mongo.Client) (T, errs.IMongoErr)
+	MarshalOmitEmpty(doc T) (*primitive.D, errs.IMongoErr)
+	GetIDFilter(id primitive.ObjectID) *primitive.D
+}
+
 type DataStore[T IMongoDoc] struct {
 	DB         *Mongo
 	collection string
@@ -284,7 +296,7 @@ const (
 	JOB_DS
 )
 
-func (DB *Mongo) GetDatastore(name DatastoreEnum) *DataStore[IMongoDoc] {
+func (DB *Mongo) GetDatastore(name DatastoreEnum) IDataStore[IMongoDoc] {
 	ds := new(DataStore[IMongoDoc])
 	switch name {
 	case MEDIA_DS:

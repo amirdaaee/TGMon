@@ -19,9 +19,9 @@ type baseFacade[T db.IMongoDoc] struct {
 func (f *baseFacade[T]) getLogger(fn string) *logrus.Entry {
 	return logrus.WithField("facade", f.name).WithField("func", fn)
 }
-func (f *baseFacade[T]) getDatastore() *db.DataStore[T] {
-	ds := f.mongo.GetDatastore(f.dsName)
-	return (*db.DataStore[T])(ds)
+func (f *baseFacade[T]) getDatastore() db.IDataStore[T] {
+	ds := f.mongo.GetDatastore(f.dsName).(db.IDataStore[T])
+	return ds
 }
 func (f *baseFacade[T]) baseCreate(ctx context.Context, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
 	ds := f.getDatastore()
