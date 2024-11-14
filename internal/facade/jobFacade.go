@@ -10,12 +10,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type jobFacade struct {
+type JobFacade struct {
 	baseFacade[*db.JobDoc]
 }
 
 // create new job if not exist and omit creation if doesn't
-func (f *jobFacade) Create(ctx context.Context, doc *db.JobDoc, cl *mongo.Client) (*db.JobDoc, error) {
+func (f *JobFacade) Create(ctx context.Context, doc *db.JobDoc, cl *mongo.Client) (*db.JobDoc, error) {
 	ll := f.getLogger("create")
 	// check for exist
 	filter := doc
@@ -36,22 +36,22 @@ func (f *jobFacade) Create(ctx context.Context, doc *db.JobDoc, cl *mongo.Client
 	newDoc, err := f.baseCreate(ctx, doc, cl)
 	return newDoc, err
 }
-func (f *jobFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]*db.JobDoc, error) {
+func (f *JobFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]*db.JobDoc, error) {
 	docs, err := f.baseRead(ctx, filter, cl)
 	return docs, err
 }
-func (f *jobFacade) Update(ctx context.Context, filter *primitive.D, doc *db.JobDoc, cl *mongo.Client) (*db.JobDoc, error) {
+func (f *JobFacade) Update(ctx context.Context, filter *primitive.D, doc *db.JobDoc, cl *mongo.Client) (*db.JobDoc, error) {
 	newDoc, err := f.baseUpdate(ctx, filter, doc, cl)
 	return newDoc, err
 }
-func (f *jobFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) error {
+func (f *JobFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) error {
 	return f.baseDelete(ctx, filter, cl)
 }
 
 // update media based on job result and delete job itself
 //
 // job is kept only if provided data are not constistant
-func (f *jobFacade) Done(ctx context.Context, id primitive.ObjectID, cl *mongo.Client, data *mediaMinioFile) error {
+func (f *JobFacade) Done(ctx context.Context, id primitive.ObjectID, cl *mongo.Client, data *mediaMinioFile) error {
 	ll := f.getLogger("done")
 	ds := f.jobDS
 	jobDoc, err := ds.Find(ctx, ds.GetIDFilter(id), cl)
@@ -88,8 +88,8 @@ func (f *jobFacade) Done(ctx context.Context, id primitive.ObjectID, cl *mongo.C
 	return nil
 }
 
-func NewJobFacade(mongo db.IMongo, minio db.IMinioClient, jobDS db.IDataStore[*db.JobDoc], mediaDS db.IDataStore[*db.MediaFileDoc]) *jobFacade {
-	return &jobFacade{
+func NewJobFacade(mongo db.IMongo, minio db.IMinioClient, jobDS db.IDataStore[*db.JobDoc], mediaDS db.IDataStore[*db.MediaFileDoc]) *JobFacade {
+	return &JobFacade{
 		baseFacade: baseFacade[*db.JobDoc]{
 			name:    "job",
 			mongo:   mongo,

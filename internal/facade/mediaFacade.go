@@ -16,14 +16,22 @@ type FullMediaData struct {
 	doc   *db.MediaFileDoc
 	thumb []byte
 }
-type mediaFacade struct {
+
+func NewFullMediaData(doc *db.MediaFileDoc, thumb []byte) *FullMediaData {
+	return &FullMediaData{
+		doc:   doc,
+		thumb: thumb,
+	}
+}
+
+type MediaFacade struct {
 	baseFacade[*db.MediaFileDoc]
 }
 
 // create new media doc
 // + set thumbnail
 // + generate sprite job
-func (f *mediaFacade) Create(ctx context.Context, data *FullMediaData, cl *mongo.Client) (*db.MediaFileDoc, error) {
+func (f *MediaFacade) Create(ctx context.Context, data *FullMediaData, cl *mongo.Client) (*db.MediaFileDoc, error) {
 	newDoc, err := f.baseCreate(ctx, data.doc, cl)
 	go func() {
 		ll := f.getLogger("create:side-effect")
@@ -47,7 +55,7 @@ func (f *mediaFacade) Create(ctx context.Context, data *FullMediaData, cl *mongo
 	}()
 	return newDoc, err
 }
-func (f *mediaFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]*db.MediaFileDoc, error) {
+func (f *MediaFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]*db.MediaFileDoc, error) {
 	docs, err := f.baseRead(ctx, filter, cl)
 	return docs, err
 }
@@ -55,7 +63,7 @@ func (f *mediaFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.C
 // delete new media doc
 // + delete minio files
 // + delete all related jobs
-func (f *mediaFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) error {
+func (f *MediaFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) error {
 	doc, err := f.mediaDS.Find(ctx, filter, cl)
 	if err != nil {
 		return err
@@ -82,8 +90,8 @@ func (f *mediaFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo
 	return nil
 }
 
-func NewMediaFacade(mongo db.IMongo, minio db.IMinioClient, jobDS db.IDataStore[*db.JobDoc], mediaDS db.IDataStore[*db.MediaFileDoc]) *mediaFacade {
-	return &mediaFacade{
+func NewMediaFacade(mongo db.IMongo, minio db.IMinioClient, jobDS db.IDataStore[*db.JobDoc], mediaDS db.IDataStore[*db.MediaFileDoc]) *MediaFacade {
+	return &MediaFacade{
 		baseFacade: baseFacade[*db.MediaFileDoc]{
 			name:    "media",
 			mongo:   mongo,
