@@ -33,6 +33,9 @@ type MediaFacade struct {
 // + generate sprite job
 func (f *MediaFacade) Create(ctx context.Context, data *FullMediaData, cl *mongo.Client) (*db.MediaFileDoc, error) {
 	newDoc, err := f.baseCreate(ctx, data.doc, cl)
+	if err != nil {
+		return nil, err
+	}
 	go func() {
 		ll := f.getLogger("create:side-effect")
 		innerCtx := context.Background()
