@@ -11,17 +11,28 @@ import (
 )
 
 type baseFacade[T db.IMongoDoc] struct {
-	name   string
-	mongo  *db.Mongo
-	dsName db.DatastoreEnum
+	name    string
+	mongo   db.IMongo
+	dsName  db.DatastoreEnum
+	jobDS   db.IDataStore[*db.JobDoc]
+	mediaDS db.IDataStore[*db.MediaFileDoc]
+	minio   db.IMinioClient
 }
 
 func (f *baseFacade[T]) getLogger(fn string) *logrus.Entry {
 	return logrus.WithField("facade", f.name).WithField("func", fn)
 }
 func (f *baseFacade[T]) getDatastore() db.IDataStore[T] {
-	ds := f.mongo.GetDatastore(f.dsName).(db.IDataStore[T])
-	return ds
+	ds := new(db.IDataStore[T])
+	switch f.dsName {
+	case db.JOB_DS:
+		*ds = f.jobDS.(db.IDataStore[T])
+	case db.MEDIA_DS:
+		*ds = f.mediaDS.(db.IDataStore[T])
+	default:
+		logrus.Panicf("unknown ds %d", f.dsName)
+	}
+	return *ds
 }
 func (f *baseFacade[T]) baseCreate(ctx context.Context, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
 	ds := f.getDatastore()

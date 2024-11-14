@@ -18,7 +18,6 @@ type FullMediaData struct {
 }
 type mediaFacade struct {
 	baseFacade[*db.MediaFileDoc]
-	minio *db.MinioClient
 }
 
 // create new media doc
@@ -36,12 +35,12 @@ func (f *mediaFacade) Create(ctx context.Context, data *FullMediaData, cl *mongo
 		}
 		defer innerCl.Disconnect(innerCtx)
 		// ...
-		if err := createMediaJob(innerCtx, *newDoc, f.mongo, innerCl, db.THUMBNAILJobType); err != nil {
+		if err := createMediaJob(innerCtx, *newDoc, f.jobDS, innerCl, db.THUMBNAILJobType); err != nil {
 			ll.WithError(err).Error("can not create sprite job")
 		}
 		// ...
 		if data.thumb != nil {
-			if err := updateMediaMinioFiles(innerCtx, newDoc, f.minio, f.mongo, innerCl, &mediaMinioFile{thumbData: data.thumb}); err != nil {
+			if err := updateMediaMinioFiles(innerCtx, newDoc, f.minio, f.mediaDS, innerCl, &mediaMinioFile{thumbData: data.thumb}); err != nil {
 				ll.WithError(err).Error("can not process thumbnail")
 			}
 		}
@@ -57,7 +56,7 @@ func (f *mediaFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.C
 // + delete minio files
 // + delete all related jobs
 func (f *mediaFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) error {
-	doc, err := f.getDatastore().Find(ctx, filter, cl)
+	doc, err := f.mediaDS.Find(ctx, filter, cl)
 	if err != nil {
 		return err
 	}
@@ -74,7 +73,7 @@ func (f *mediaFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo
 		}
 		defer innerCl.Disconnect(innerCtx)
 		// ...
-		if err := deleteMediaAllJobs(innerCtx, doc, f.mongo, innerCl); err != nil {
+		if err := deleteMediaAllJobs(innerCtx, doc, f.jobDS, innerCl); err != nil {
 			ll.WithError(err).Error("can not delete jobs of doc")
 		}
 		// ...
@@ -83,35 +82,35 @@ func (f *mediaFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo
 	return nil
 }
 
-func NewMediaFacade(mongo *db.Mongo, minio *db.MinioClient) *mediaFacade {
+func NewMediaFacade(mongo db.IMongo, minio db.IMinioClient, jobDS db.IDataStore[*db.JobDoc], mediaDS db.IDataStore[*db.MediaFileDoc]) *mediaFacade {
 	return &mediaFacade{
 		baseFacade: baseFacade[*db.MediaFileDoc]{
-			name:   "media",
-			mongo:  mongo,
-			dsName: db.MEDIA_DS,
+			name:    "media",
+			mongo:   mongo,
+			dsName:  db.MEDIA_DS,
+			jobDS:   jobDS,
+			mediaDS: mediaDS,
+			minio:   minio,
 		},
-		minio: minio,
 	}
 }
 
 // ...
-func createMediaJob(ctx context.Context, doc db.MediaFileDoc, mongo *db.Mongo, cl *mongo.Client, jType db.JobType) error {
+func createMediaJob(ctx context.Context, doc db.MediaFileDoc, jobDs db.IDataStore[*db.JobDoc], cl *mongo.Client, jType db.JobType) error {
 	jobDoc := db.JobDoc{
 		MediaID: doc.GetID(),
 		Type:    jType,
 	}
-	jobDs := mongo.GetJobDatastore()
 	if _, err := jobDs.Create(ctx, &jobDoc, cl); err != nil {
 		return err
 	}
 	return nil
 }
-func deleteMediaAllJobs(ctx context.Context, doc *db.MediaFileDoc, mongo *db.Mongo, cl *mongo.Client) error {
+func deleteMediaAllJobs(ctx context.Context, doc *db.MediaFileDoc, jobDs db.IDataStore[*db.JobDoc], cl *mongo.Client) error {
 	ll := logrus.WithField("func", "deleteMediaAllJobs")
 	jobFilter := db.JobDoc{
 		MediaID: doc.GetID(),
 	}
-	jobDs := mongo.GetJobDatastore()
 	jobFilterD, err := jobDs.MarshalOmitEmpty(&jobFilter)
 	if err != nil {
 		return fmt.Errorf("can not create filter: %s", err)
@@ -132,7 +131,7 @@ type mediaMinioFile struct {
 	spriteData []byte
 }
 
-func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio *db.MinioClient, mongo *db.Mongo, cl *mongo.Client, data *mediaMinioFile) error {
+func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.IMinioClient, mediaDs db.IDataStore[*db.MediaFileDoc], cl *mongo.Client, data *mediaMinioFile) error {
 	ll := logrus.WithField("func", "updateMediaMinioFiles")
 	updatedMedia := doc
 	if data.thumbData != nil {
@@ -165,7 +164,6 @@ func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio *db.
 	changed = changed || updatedMedia.Sprite != doc.Sprite
 
 	if changed {
-		mediaDs := mongo.GetMediaDatastore()
 		filter := mediaDs.GetIDFilter(doc.GetID())
 		_, err := mediaDs.Replace(ctx, filter, updatedMedia, cl)
 		if err != nil {
@@ -191,7 +189,7 @@ func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio *db.
 	}
 	return nil
 }
-func deleteMediaAllMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio *db.MinioClient) {
+func deleteMediaAllMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.IMinioClient) {
 	ll := logrus.WithField("func", "deleteMediaAllMinioFiles")
 	if doc.Thumbnail != "" {
 		if err := _rmMinioFile(ctx, minio, doc.Thumbnail); err != nil {
@@ -209,6 +207,6 @@ func deleteMediaAllMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio *
 		}
 	}
 }
-func _rmMinioFile(ctx context.Context, minio *db.MinioClient, fname string) error {
+func _rmMinioFile(ctx context.Context, minio db.IMinioClient, fname string) error {
 	return minio.FileRm(fname, ctx)
 }

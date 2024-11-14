@@ -13,11 +13,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type iMongo interface {
+type IMongo interface {
 	GetCollection(cl *mongo.Client) *mongo.Collection
+	GetClient() (*mongo.Client, error)
 }
 type Mongo struct {
-	IMng                iMongo
+	IMng                IMongo
 	DBUri               string
 	DBName              string
 	MediaCollectionName string
