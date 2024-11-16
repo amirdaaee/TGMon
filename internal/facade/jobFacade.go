@@ -30,7 +30,7 @@ func (f *JobFacade) Create(ctx context.Context, doc *db.JobDoc, cl *mongo.Client
 	}
 	if len(res) != 0 {
 		ll.Warn("job already exists")
-		return nil, nil
+		return res[0], nil
 	}
 	// ...
 	newDoc, err := f.baseCreate(ctx, doc, cl)
