@@ -46,7 +46,7 @@ func (f *MediaFacade) Create(ctx context.Context, data *FullMediaData, cl *mongo
 		}
 		defer innerCl.Disconnect(innerCtx)
 		// ...
-		if err := createMediaJob(innerCtx, *newDoc, f.jobDS, innerCl, db.THUMBNAILJobType); err != nil {
+		if err := createMediaJob(innerCtx, *newDoc, f.jobDS, innerCl, db.SPRITEJobType); err != nil {
 			ll.WithError(err).Error("can not create sprite job")
 		}
 		// ...
@@ -130,7 +130,7 @@ func deleteMediaAllJobs(ctx context.Context, doc *db.MediaFileDoc, jobDs db.IDat
 		if errs.IsErr(err, errs.MongoObjectNotfound{}) {
 			ll.Info("no job found for media")
 		} else {
-			return fmt.Errorf("can not delete job objects")
+			return fmt.Errorf("can not delete job objects: %s", err)
 		}
 	}
 	return nil
@@ -144,7 +144,7 @@ type mediaMinioFile struct {
 
 func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.IMinioClient, mediaDs db.IDataStore[*db.MediaFileDoc], cl *mongo.Client, data *mediaMinioFile) error {
 	ll := logrus.WithField("func", "updateMediaMinioFiles")
-	updatedMedia := doc
+	updatedMedia := *doc
 	if data.thumbData != nil {
 		fName := uuid.NewString() + ".jpeg"
 		if err := minio.FileAdd(fName, data.thumbData, ctx); err != nil {
@@ -176,21 +176,21 @@ func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.I
 
 	if changed {
 		filter := mediaDs.GetIDFilter(doc.GetID())
-		_, err := mediaDs.Replace(ctx, filter, updatedMedia, cl)
+		_, err := mediaDs.Replace(ctx, filter, &updatedMedia, cl)
 		if err != nil {
 			return fmt.Errorf("can not update media doc: %s", err)
 		}
-		if updatedMedia.Thumbnail != doc.Thumbnail {
+		if doc.Thumbnail != "" && updatedMedia.Thumbnail != doc.Thumbnail {
 			if err := _rmMinioFile(ctx, minio, doc.Thumbnail); err != nil {
 				ll.WithError(err).Error("can not remove old thumbnail from minio")
 			}
 		}
-		if updatedMedia.Vtt != doc.Vtt {
+		if doc.Vtt != "" && updatedMedia.Vtt != doc.Vtt {
 			if err := _rmMinioFile(ctx, minio, doc.Vtt); err != nil {
 				ll.WithError(err).Error("can not remove old Vtt from minio")
 			}
 		}
-		if updatedMedia.Sprite != doc.Sprite {
+		if doc.Sprite != "" && updatedMedia.Sprite != doc.Sprite {
 			if err := _rmMinioFile(ctx, minio, doc.Sprite); err != nil {
 				ll.WithError(err).Error("can not remove old Sprite from minio")
 			}
