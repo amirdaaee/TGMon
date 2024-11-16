@@ -40,10 +40,6 @@ func (f *JobFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.Cli
 	docs, err := f.baseRead(ctx, filter, cl)
 	return docs, err
 }
-func (f *JobFacade) Update(ctx context.Context, filter *primitive.D, doc *db.JobDoc, cl *mongo.Client) (*db.JobDoc, error) {
-	newDoc, err := f.baseUpdate(ctx, filter, doc, cl)
-	return newDoc, err
-}
 func (f *JobFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) error {
 	return f.baseDelete(ctx, filter, cl)
 }
