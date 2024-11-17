@@ -296,54 +296,6 @@ func (_c *MockIDataStore_GetCollection_Call[T]) RunAndReturn(run func(*mongo.Cli
 	return _c
 }
 
-// GetIDFilter provides a mock function with given fields: id
-func (_m *MockIDataStore[T]) GetIDFilter(id primitive.ObjectID) *primitive.D {
-	ret := _m.Called(id)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetIDFilter")
-	}
-
-	var r0 *primitive.D
-	if rf, ok := ret.Get(0).(func(primitive.ObjectID) *primitive.D); ok {
-		r0 = rf(id)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*primitive.D)
-		}
-	}
-
-	return r0
-}
-
-// MockIDataStore_GetIDFilter_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetIDFilter'
-type MockIDataStore_GetIDFilter_Call[T db.IMongoDoc] struct {
-	*mock.Call
-}
-
-// GetIDFilter is a helper method to define mock.On call
-//   - id primitive.ObjectID
-func (_e *MockIDataStore_Expecter[T]) GetIDFilter(id interface{}) *MockIDataStore_GetIDFilter_Call[T] {
-	return &MockIDataStore_GetIDFilter_Call[T]{Call: _e.mock.On("GetIDFilter", id)}
-}
-
-func (_c *MockIDataStore_GetIDFilter_Call[T]) Run(run func(id primitive.ObjectID)) *MockIDataStore_GetIDFilter_Call[T] {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(primitive.ObjectID))
-	})
-	return _c
-}
-
-func (_c *MockIDataStore_GetIDFilter_Call[T]) Return(_a0 *primitive.D) *MockIDataStore_GetIDFilter_Call[T] {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockIDataStore_GetIDFilter_Call[T]) RunAndReturn(run func(primitive.ObjectID) *primitive.D) *MockIDataStore_GetIDFilter_Call[T] {
-	_c.Call.Return(run)
-	return _c
-}
-
 // List provides a mock function with given fields: ctx, filter, cl
 func (_m *MockIDataStore[T]) List(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]T, errs.IMongoErr) {
 	ret := _m.Called(ctx, filter, cl)
@@ -402,66 +354,6 @@ func (_c *MockIDataStore_List_Call[T]) Return(_a0 []T, _a1 errs.IMongoErr) *Mock
 }
 
 func (_c *MockIDataStore_List_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, *mongo.Client) ([]T, errs.IMongoErr)) *MockIDataStore_List_Call[T] {
-	_c.Call.Return(run)
-	return _c
-}
-
-// MarshalOmitEmpty provides a mock function with given fields: doc
-func (_m *MockIDataStore[T]) MarshalOmitEmpty(doc T) (*primitive.D, errs.IMongoErr) {
-	ret := _m.Called(doc)
-
-	if len(ret) == 0 {
-		panic("no return value specified for MarshalOmitEmpty")
-	}
-
-	var r0 *primitive.D
-	var r1 errs.IMongoErr
-	if rf, ok := ret.Get(0).(func(T) (*primitive.D, errs.IMongoErr)); ok {
-		return rf(doc)
-	}
-	if rf, ok := ret.Get(0).(func(T) *primitive.D); ok {
-		r0 = rf(doc)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*primitive.D)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(T) errs.IMongoErr); ok {
-		r1 = rf(doc)
-	} else {
-		if ret.Get(1) != nil {
-			r1 = ret.Get(1).(errs.IMongoErr)
-		}
-	}
-
-	return r0, r1
-}
-
-// MockIDataStore_MarshalOmitEmpty_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MarshalOmitEmpty'
-type MockIDataStore_MarshalOmitEmpty_Call[T db.IMongoDoc] struct {
-	*mock.Call
-}
-
-// MarshalOmitEmpty is a helper method to define mock.On call
-//   - doc T
-func (_e *MockIDataStore_Expecter[T]) MarshalOmitEmpty(doc interface{}) *MockIDataStore_MarshalOmitEmpty_Call[T] {
-	return &MockIDataStore_MarshalOmitEmpty_Call[T]{Call: _e.mock.On("MarshalOmitEmpty", doc)}
-}
-
-func (_c *MockIDataStore_MarshalOmitEmpty_Call[T]) Run(run func(doc T)) *MockIDataStore_MarshalOmitEmpty_Call[T] {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(T))
-	})
-	return _c
-}
-
-func (_c *MockIDataStore_MarshalOmitEmpty_Call[T]) Return(_a0 *primitive.D, _a1 errs.IMongoErr) *MockIDataStore_MarshalOmitEmpty_Call[T] {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockIDataStore_MarshalOmitEmpty_Call[T]) RunAndReturn(run func(T) (*primitive.D, errs.IMongoErr)) *MockIDataStore_MarshalOmitEmpty_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }

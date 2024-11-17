@@ -177,8 +177,6 @@ type IDataStore[T IMongoDoc] interface {
 	DeleteMany(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr
 	Find(ctx context.Context, filter *primitive.D, cl *mongo.Client) (T, errs.IMongoErr)
 	Replace(ctx context.Context, filter *primitive.D, doc T, cl *mongo.Client) (T, errs.IMongoErr)
-	MarshalOmitEmpty(doc T) (*primitive.D, errs.IMongoErr)
-	GetIDFilter(id primitive.ObjectID) *primitive.D
 }
 
 type DataStore[T IMongoDoc] struct {
@@ -255,28 +253,6 @@ func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, 
 	}
 	return doc, nil
 }
-func (m *DataStore[T]) GetIDFilter(id primitive.ObjectID) *primitive.D {
-	return &bson.D{{Key: "_id", Value: id}}
-}
-func (m *DataStore[T]) MarshalOmitEmpty(doc T) (*primitive.D, errs.IMongoErr) {
-	var filteredData = make(map[string]interface{})
-	v := reflect.ValueOf(doc)
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		if !field.IsZero() {
-			filteredData[v.Type().Field(i).Tag.Get("bson")] = field.Interface()
-		}
-	}
-	marsh, err := bson.Marshal(filteredData)
-	if err != nil {
-		return nil, errs.NewMongoMarshalErr(err)
-	}
-	unmarsh := new(bson.D)
-	if err := bson.Unmarshal(marsh, unmarsh); err != nil {
-		return nil, errs.NewMongoUnMarshalErr(err)
-	}
-	return unmarsh, nil
-}
 func (DB *Mongo) GetMediaDatastore() *DataStore[*MediaFileDoc] {
 	return &DataStore[*MediaFileDoc]{
 		DB:         DB,
@@ -309,6 +285,27 @@ func (DB *Mongo) GetDatastore(name DatastoreEnum) IDataStore[IMongoDoc] {
 }
 
 // ...
-func FilterByID(id primitive.ObjectID) bson.D {
-	return bson.D{{Key: "_id", Value: id}}
+func GetIDFilter(id primitive.ObjectID) *primitive.D {
+	return &bson.D{{Key: "_id", Value: id}}
+}
+
+func MarshalOmitEmpty(doc IMongoDoc) (*primitive.D, errs.IMongoErr) {
+	var filteredData = make(map[string]interface{})
+	vInd := reflect.ValueOf(doc)
+	v := reflect.Indirect(vInd)
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if !field.IsZero() {
+			filteredData[v.Type().Field(i).Tag.Get("bson")] = field.Interface()
+		}
+	}
+	marsh, err := bson.Marshal(filteredData)
+	if err != nil {
+		return nil, errs.NewMongoMarshalErr(err)
+	}
+	unmarsh := new(bson.D)
+	if err := bson.Unmarshal(marsh, unmarsh); err != nil {
+		return nil, errs.NewMongoUnMarshalErr(err)
+	}
+	return unmarsh, nil
 }

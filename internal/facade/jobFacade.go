@@ -20,7 +20,7 @@ func (f *JobFacade) Create(ctx context.Context, doc *db.JobDoc, cl *mongo.Client
 	// check for exist
 	filter := doc
 	filter.SetID(primitive.NilObjectID)
-	filterD, err := f.jobDS.MarshalOmitEmpty(filter)
+	filterD, err := db.MarshalOmitEmpty(filter)
 	if err != nil {
 		return nil, fmt.Errorf("can not marshal filter to find duplicates: %s", err)
 	}
@@ -50,7 +50,7 @@ func (f *JobFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.C
 func (f *JobFacade) Done(ctx context.Context, id primitive.ObjectID, cl *mongo.Client, data *mediaMinioFile) error {
 	ll := f.getLogger("done")
 	ds := f.jobDS
-	jobDoc, err := ds.Find(ctx, ds.GetIDFilter(id), cl)
+	jobDoc, err := ds.Find(ctx, db.GetIDFilter(id), cl)
 	if err != nil {
 		return fmt.Errorf("can not get job doc: %s", err)
 	}
@@ -69,9 +69,9 @@ func (f *JobFacade) Done(ctx context.Context, id primitive.ObjectID, cl *mongo.C
 	}
 	// ...
 	// anyway job should be deleted from this point on
-	go deleteJob(ds.GetIDFilter(id), f.mongo, f.jobDS)
+	go deleteJob(db.GetIDFilter(id), f.mongo, f.jobDS)
 	// ...
-	mediaDoc, err := f.mediaDS.Find(ctx, ds.GetIDFilter(jobDoc.MediaID), cl)
+	mediaDoc, err := f.mediaDS.Find(ctx, db.GetIDFilter(jobDoc.MediaID), cl)
 	if err != nil {
 		ll.WithError(err).Error("error getting corresponding media")
 		return nil

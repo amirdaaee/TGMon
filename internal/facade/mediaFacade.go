@@ -7,6 +7,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/amirdaaee/TGMon/internal/errs"
 	"github.com/google/uuid"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -37,6 +38,7 @@ func (f *MediaFacade) Create(ctx context.Context, data *FullMediaData, cl *mongo
 		return nil, err
 	}
 	go func() {
+		defer ginkgo.GinkgoRecover()
 		ll := f.getLogger("create:side-effect")
 		innerCtx := context.Background()
 		innerCl, err := f.mongo.GetClient()
@@ -75,6 +77,7 @@ func (f *MediaFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo
 		return err
 	}
 	go func() {
+		defer ginkgo.GinkgoRecover()
 		ll := f.getLogger("delete:side-effect")
 		innerCtx := context.Background()
 		innerCl, err := f.mongo.GetClient()
@@ -122,7 +125,7 @@ func deleteMediaAllJobs(ctx context.Context, doc *db.MediaFileDoc, jobDs db.IDat
 	jobFilter := db.JobDoc{
 		MediaID: doc.GetID(),
 	}
-	jobFilterD, err := jobDs.MarshalOmitEmpty(&jobFilter)
+	jobFilterD, err := db.MarshalOmitEmpty(&jobFilter)
 	if err != nil {
 		return fmt.Errorf("can not create filter: %s", err)
 	}
@@ -175,7 +178,7 @@ func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.I
 	changed = changed || updatedMedia.Sprite != doc.Sprite
 
 	if changed {
-		filter := mediaDs.GetIDFilter(doc.GetID())
+		filter := db.GetIDFilter(doc.GetID())
 		_, err := mediaDs.Replace(ctx, filter, &updatedMedia, cl)
 		if err != nil {
 			return fmt.Errorf("can not update media doc: %s", err)
