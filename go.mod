@@ -5,6 +5,7 @@ go 1.22.0
 toolchain go1.22.6
 
 require (
+	github.com/brianvoe/gofakeit/v7 v7.1.2
 	github.com/caarlos0/env/v11 v11.1.0
 	github.com/glebarez/sqlite v1.10.0
 	github.com/google/uuid v1.6.0
