@@ -12,9 +12,9 @@ import (
 
 type IMinioClient interface {
 	CreateBucket(ctx context.Context) error
-	FileAdd(fileName string, data []byte, ctx context.Context) error
-	FileAddStr(fileName string, data string, ctx context.Context) error
-	FileRm(fileName string, ctx context.Context) error
+	FileAdd(ctx context.Context, fileName string, data []byte) error
+	FileAddStr(ctx context.Context, fileName string, data string) error
+	FileRm(ctx context.Context, fileName string) error
 }
 type MinioClient struct {
 	*minio.Client
@@ -54,7 +54,7 @@ func (cl *MinioClient) CreateBucket(ctx context.Context) error {
 	}
 	return nil
 }
-func (cl *MinioClient) FileAdd(fileName string, data []byte, ctx context.Context) error {
+func (cl *MinioClient) FileAdd(ctx context.Context, fileName string, data []byte) error {
 	reader := bytes.NewReader(data)
 	_, err := cl.PutObject(ctx, cl.bucket, fileName, reader, reader.Size(), minio.PutObjectOptions{})
 	if err != nil {
@@ -62,7 +62,7 @@ func (cl *MinioClient) FileAdd(fileName string, data []byte, ctx context.Context
 	}
 	return nil
 }
-func (cl *MinioClient) FileAddStr(fileName string, data string, ctx context.Context) error {
+func (cl *MinioClient) FileAddStr(ctx context.Context, fileName string, data string) error {
 	reader := strings.NewReader(data)
 	_, err := cl.PutObject(ctx, cl.bucket, fileName, reader, reader.Size(), minio.PutObjectOptions{})
 	if err != nil {
@@ -70,7 +70,7 @@ func (cl *MinioClient) FileAddStr(fileName string, data string, ctx context.Cont
 	}
 	return nil
 }
-func (cl *MinioClient) FileRm(fileName string, ctx context.Context) error {
+func (cl *MinioClient) FileRm(ctx context.Context, fileName string) error {
 	err := cl.RemoveObject(ctx, cl.bucket, fileName, minio.RemoveObjectOptions{ForceDelete: true})
 	if err != nil {
 		return fmt.Errorf("error removing object: %s", err)

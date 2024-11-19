@@ -150,7 +150,7 @@ func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.I
 	updatedMedia := *doc
 	if data.thumbData != nil {
 		fName := uuid.NewString() + ".jpeg"
-		if err := minio.FileAdd(fName, data.thumbData, ctx); err != nil {
+		if err := minio.FileAdd(ctx, fName, data.thumbData); err != nil {
 			ll.WithError(err).Error("can not add new thumbnail to minio")
 		} else {
 			updatedMedia.Thumbnail = fName
@@ -158,7 +158,7 @@ func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.I
 	}
 	if data.vttData != nil {
 		fName := uuid.NewString() + ".vtt"
-		if err := minio.FileAdd(fName, data.vttData, ctx); err != nil {
+		if err := minio.FileAdd(ctx, fName, data.vttData); err != nil {
 			ll.WithError(err).Error("can not add new vtt to minio")
 		} else {
 			updatedMedia.Vtt = fName
@@ -166,7 +166,7 @@ func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.I
 	}
 	if data.spriteData != nil {
 		fName := uuid.NewString() + ".jpeg"
-		if err := minio.FileAdd(fName, data.spriteData, ctx); err != nil {
+		if err := minio.FileAdd(ctx, fName, data.spriteData); err != nil {
 			ll.WithError(err).Error("can not add new sprite to minio")
 		} else {
 			updatedMedia.Sprite = fName
@@ -222,5 +222,5 @@ func deleteMediaAllMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio d
 	}
 }
 func _rmMinioFile(ctx context.Context, minio db.IMinioClient, fname string) error {
-	return minio.FileRm(fname, ctx)
+	return minio.FileRm(ctx, fname)
 }

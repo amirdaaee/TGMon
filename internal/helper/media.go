@@ -24,7 +24,7 @@ func AddMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, doc *
 		logrus.WithError(err).Warn("can not get thumbnail")
 	} else {
 		thmb = uuid.NewString() + ".jpeg"
-		if err := minio.FileAdd(thmb, thmbData, ctx); err != nil {
+		if err := minio.FileAdd(ctx, thmb, thmbData); err != nil {
 			thmb = ""
 			logrus.WithError(err).Warn("can not store thumbnail")
 		}
@@ -74,7 +74,7 @@ func RmMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, docID 
 		}
 		for _, m := range []string{mediaDoc.Thumbnail, mediaDoc.Sprite, mediaDoc.Vtt} {
 			if m != "" {
-				if err := minio.FileRm(m, ctx); err != nil {
+				if err := minio.FileRm(ctx, m); err != nil {
 					logrus.WithError(err).Errorf("error removing %s from media db", m)
 				}
 			}
@@ -89,7 +89,7 @@ func RmMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, docID 
 
 func UpdateMediaThumbnail(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, data []byte, doc *db.MediaFileDoc, cl_ *mongoD.Client) error {
 	filename := uuid.NewString() + ".jpeg"
-	if err := minio.FileAdd(filename, data, ctx); err != nil {
+	if err := minio.FileAdd(ctx, filename, data); err != nil {
 		return fmt.Errorf("error adding file to minio: %s", err)
 	}
 	updateDoc := doc
@@ -101,7 +101,7 @@ func UpdateMediaThumbnail(ctx context.Context, mongo *db.Mongo, minio db.IMinioC
 		return fmt.Errorf("can not replace mongo record: %s", err)
 	}
 	if oldThumb != "" {
-		minio.FileRm(oldThumb, ctx)
+		minio.FileRm(ctx, oldThumb)
 	}
 	return nil
 }
@@ -109,11 +109,11 @@ func UpdateMediaVtt(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient,
 	u := uuid.NewString()
 	spriteName := u + ".jpeg"
 	vttName := u + ".vtt"
-	if err := minio.FileAdd(spriteName, image, ctx); err != nil {
+	if err := minio.FileAdd(ctx, spriteName, image); err != nil {
 		return fmt.Errorf("error addign image file to minio: %s", err)
 	}
 	vttStr := strings.ReplaceAll(string(vtt), "__NAME__", spriteName)
-	if err := minio.FileAddStr(vttName, vttStr, ctx); err != nil {
+	if err := minio.FileAddStr(ctx, vttName, vttStr); err != nil {
 		return fmt.Errorf("error addign vtt file to minio: %s", err)
 	}
 	updateDoc := doc
@@ -127,10 +127,10 @@ func UpdateMediaVtt(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient,
 		return fmt.Errorf("can not replace mongo record: %s", err)
 	}
 	if oldVtt != "" {
-		minio.FileRm(oldVtt, ctx)
+		minio.FileRm(ctx, oldVtt)
 	}
 	if oldSprite != "" {
-		minio.FileRm(oldSprite, ctx)
+		minio.FileRm(ctx, oldSprite)
 	}
 	return nil
 }

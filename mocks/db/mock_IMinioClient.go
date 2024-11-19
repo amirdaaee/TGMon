@@ -67,17 +67,17 @@ func (_c *MockIMinioClient_CreateBucket_Call) RunAndReturn(run func(context.Cont
 	return _c
 }
 
-// FileAdd provides a mock function with given fields: fileName, data, ctx
-func (_m *MockIMinioClient) FileAdd(fileName string, data []byte, ctx context.Context) error {
-	ret := _m.Called(fileName, data, ctx)
+// FileAdd provides a mock function with given fields: ctx, fileName, data
+func (_m *MockIMinioClient) FileAdd(ctx context.Context, fileName string, data []byte) error {
+	ret := _m.Called(ctx, fileName, data)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FileAdd")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, []byte, context.Context) error); ok {
-		r0 = rf(fileName, data, ctx)
+	if rf, ok := ret.Get(0).(func(context.Context, string, []byte) error); ok {
+		r0 = rf(ctx, fileName, data)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -91,16 +91,16 @@ type MockIMinioClient_FileAdd_Call struct {
 }
 
 // FileAdd is a helper method to define mock.On call
+//   - ctx context.Context
 //   - fileName string
 //   - data []byte
-//   - ctx context.Context
-func (_e *MockIMinioClient_Expecter) FileAdd(fileName interface{}, data interface{}, ctx interface{}) *MockIMinioClient_FileAdd_Call {
-	return &MockIMinioClient_FileAdd_Call{Call: _e.mock.On("FileAdd", fileName, data, ctx)}
+func (_e *MockIMinioClient_Expecter) FileAdd(ctx interface{}, fileName interface{}, data interface{}) *MockIMinioClient_FileAdd_Call {
+	return &MockIMinioClient_FileAdd_Call{Call: _e.mock.On("FileAdd", ctx, fileName, data)}
 }
 
-func (_c *MockIMinioClient_FileAdd_Call) Run(run func(fileName string, data []byte, ctx context.Context)) *MockIMinioClient_FileAdd_Call {
+func (_c *MockIMinioClient_FileAdd_Call) Run(run func(ctx context.Context, fileName string, data []byte)) *MockIMinioClient_FileAdd_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].([]byte), args[2].(context.Context))
+		run(args[0].(context.Context), args[1].(string), args[2].([]byte))
 	})
 	return _c
 }
@@ -110,22 +110,22 @@ func (_c *MockIMinioClient_FileAdd_Call) Return(_a0 error) *MockIMinioClient_Fil
 	return _c
 }
 
-func (_c *MockIMinioClient_FileAdd_Call) RunAndReturn(run func(string, []byte, context.Context) error) *MockIMinioClient_FileAdd_Call {
+func (_c *MockIMinioClient_FileAdd_Call) RunAndReturn(run func(context.Context, string, []byte) error) *MockIMinioClient_FileAdd_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// FileAddStr provides a mock function with given fields: fileName, data, ctx
-func (_m *MockIMinioClient) FileAddStr(fileName string, data string, ctx context.Context) error {
-	ret := _m.Called(fileName, data, ctx)
+// FileAddStr provides a mock function with given fields: ctx, fileName, data
+func (_m *MockIMinioClient) FileAddStr(ctx context.Context, fileName string, data string) error {
+	ret := _m.Called(ctx, fileName, data)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FileAddStr")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, string, context.Context) error); ok {
-		r0 = rf(fileName, data, ctx)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, fileName, data)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -139,16 +139,16 @@ type MockIMinioClient_FileAddStr_Call struct {
 }
 
 // FileAddStr is a helper method to define mock.On call
+//   - ctx context.Context
 //   - fileName string
 //   - data string
-//   - ctx context.Context
-func (_e *MockIMinioClient_Expecter) FileAddStr(fileName interface{}, data interface{}, ctx interface{}) *MockIMinioClient_FileAddStr_Call {
-	return &MockIMinioClient_FileAddStr_Call{Call: _e.mock.On("FileAddStr", fileName, data, ctx)}
+func (_e *MockIMinioClient_Expecter) FileAddStr(ctx interface{}, fileName interface{}, data interface{}) *MockIMinioClient_FileAddStr_Call {
+	return &MockIMinioClient_FileAddStr_Call{Call: _e.mock.On("FileAddStr", ctx, fileName, data)}
 }
 
-func (_c *MockIMinioClient_FileAddStr_Call) Run(run func(fileName string, data string, ctx context.Context)) *MockIMinioClient_FileAddStr_Call {
+func (_c *MockIMinioClient_FileAddStr_Call) Run(run func(ctx context.Context, fileName string, data string)) *MockIMinioClient_FileAddStr_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(context.Context))
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
 	})
 	return _c
 }
@@ -158,22 +158,22 @@ func (_c *MockIMinioClient_FileAddStr_Call) Return(_a0 error) *MockIMinioClient_
 	return _c
 }
 
-func (_c *MockIMinioClient_FileAddStr_Call) RunAndReturn(run func(string, string, context.Context) error) *MockIMinioClient_FileAddStr_Call {
+func (_c *MockIMinioClient_FileAddStr_Call) RunAndReturn(run func(context.Context, string, string) error) *MockIMinioClient_FileAddStr_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// FileRm provides a mock function with given fields: fileName, ctx
-func (_m *MockIMinioClient) FileRm(fileName string, ctx context.Context) error {
-	ret := _m.Called(fileName, ctx)
+// FileRm provides a mock function with given fields: ctx, fileName
+func (_m *MockIMinioClient) FileRm(ctx context.Context, fileName string) error {
+	ret := _m.Called(ctx, fileName)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FileRm")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, context.Context) error); ok {
-		r0 = rf(fileName, ctx)
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, fileName)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -187,15 +187,15 @@ type MockIMinioClient_FileRm_Call struct {
 }
 
 // FileRm is a helper method to define mock.On call
-//   - fileName string
 //   - ctx context.Context
-func (_e *MockIMinioClient_Expecter) FileRm(fileName interface{}, ctx interface{}) *MockIMinioClient_FileRm_Call {
-	return &MockIMinioClient_FileRm_Call{Call: _e.mock.On("FileRm", fileName, ctx)}
+//   - fileName string
+func (_e *MockIMinioClient_Expecter) FileRm(ctx interface{}, fileName interface{}) *MockIMinioClient_FileRm_Call {
+	return &MockIMinioClient_FileRm_Call{Call: _e.mock.On("FileRm", ctx, fileName)}
 }
 
-func (_c *MockIMinioClient_FileRm_Call) Run(run func(fileName string, ctx context.Context)) *MockIMinioClient_FileRm_Call {
+func (_c *MockIMinioClient_FileRm_Call) Run(run func(ctx context.Context, fileName string)) *MockIMinioClient_FileRm_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(context.Context))
+		run(args[0].(context.Context), args[1].(string))
 	})
 	return _c
 }
@@ -205,7 +205,7 @@ func (_c *MockIMinioClient_FileRm_Call) Return(_a0 error) *MockIMinioClient_File
 	return _c
 }
 
-func (_c *MockIMinioClient_FileRm_Call) RunAndReturn(run func(string, context.Context) error) *MockIMinioClient_FileRm_Call {
+func (_c *MockIMinioClient_FileRm_Call) RunAndReturn(run func(context.Context, string) error) *MockIMinioClient_FileRm_Call {
 	_c.Call.Return(run)
 	return _c
 }
