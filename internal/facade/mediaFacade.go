@@ -53,7 +53,7 @@ func (f *MediaFacade) Create(ctx context.Context, data *FullMediaData, cl *mongo
 		}
 		// ...
 		if data.thumb != nil {
-			if err := updateMediaMinioFiles(innerCtx, newDoc, f.minio, f.mediaDS, innerCl, &MediaMinioFile{thumbData: data.thumb}); err != nil {
+			if err := updateMediaMinioFiles(innerCtx, newDoc, f.minio, f.mediaDS, innerCl, &MediaMinioFile{ThumbData: data.thumb}); err != nil {
 				ll.WithError(err).Error("can not process thumbnail")
 			}
 		}
@@ -140,34 +140,34 @@ func deleteMediaAllJobs(ctx context.Context, doc *db.MediaFileDoc, jobDs db.IDat
 }
 
 type MediaMinioFile struct {
-	thumbData  []byte
-	vttData    []byte
-	spriteData []byte
+	ThumbData  []byte
+	VttData    []byte
+	SpriteData []byte
 }
 
 // add new files to minio, update media doc with new files, remove old files from minio
 func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.IMinioClient, mediaDs db.IDataStore[*db.MediaFileDoc], cl *mongo.Client, data *MediaMinioFile) error {
 	ll := logrus.WithField("func", "updateMediaMinioFiles")
 	updatedMedia := *doc
-	if data.thumbData != nil {
+	if data.ThumbData != nil {
 		fName := uuid.NewString() + ".jpeg"
-		if err := minio.FileAdd(ctx, fName, data.thumbData); err != nil {
+		if err := minio.FileAdd(ctx, fName, data.ThumbData); err != nil {
 			ll.WithError(err).Error("can not add new thumbnail to minio")
 		} else {
 			updatedMedia.Thumbnail = fName
 		}
 	}
-	if data.vttData != nil {
+	if data.VttData != nil {
 		fName := uuid.NewString() + ".vtt"
-		if err := minio.FileAdd(ctx, fName, data.vttData); err != nil {
+		if err := minio.FileAdd(ctx, fName, data.VttData); err != nil {
 			ll.WithError(err).Error("can not add new vtt to minio")
 		} else {
 			updatedMedia.Vtt = fName
 		}
 	}
-	if data.spriteData != nil {
+	if data.SpriteData != nil {
 		fName := uuid.NewString() + ".jpeg"
-		if err := minio.FileAdd(ctx, fName, data.spriteData); err != nil {
+		if err := minio.FileAdd(ctx, fName, data.SpriteData); err != nil {
 			ll.WithError(err).Error("can not add new sprite to minio")
 		} else {
 			updatedMedia.Sprite = fName

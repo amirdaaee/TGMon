@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/amirdaaee/TGMon/internal/db"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -52,21 +53,24 @@ func (f *JobFacade) Done(ctx context.Context, id primitive.ObjectID, cl *mongo.C
 		return fmt.Errorf("can not get job doc: %s", err)
 	}
 	if jobDoc.Type == db.THUMBNAILJobType {
-		if data.thumbData == nil {
+		if data.ThumbData == nil {
 			return fmt.Errorf("thumbnail is empty")
 		}
-		data.vttData = nil
-		data.spriteData = nil
+		data.VttData = nil
+		data.SpriteData = nil
 	}
 	if jobDoc.Type == db.SPRITEJobType {
-		if data.vttData == nil || data.spriteData == nil {
+		if data.VttData == nil || data.SpriteData == nil {
 			return fmt.Errorf("vtt or sprite is empty")
 		}
-		data.thumbData = nil
+		data.ThumbData = nil
 	}
 	// ...
 	// anyway job should be deleted from this point on
-	go deleteJob(db.GetIDFilter(id), f.mongo, f.jobDS)
+	go func() {
+		defer ginkgo.GinkgoRecover()
+		deleteJob(db.GetIDFilter(id), f.mongo, f.jobDS)
+	}()
 	// ...
 	mediaDoc, err := f.mediaDS.Find(ctx, db.GetIDFilter(jobDoc.MediaID), cl)
 	if err != nil {
