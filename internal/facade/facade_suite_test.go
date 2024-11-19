@@ -338,8 +338,10 @@ var _ = Describe("Facade", func() {
 						// Act
 						res, err := mediaFacade.Read(testContext, tc.filter, mockClient)
 						// Assert
-						Expect(res).To(Equal(tc.outputDoc))
 						Expect(err).To(BeNil())
+						Expect(res).To(Equal(tc.outputDoc))
+						Expect(len(res)).To(Equal(len(tc.outputDoc)))
+						Expect(res).To(ContainElements(tc.outputDoc))
 					})
 				}
 			})
@@ -795,7 +797,137 @@ var _ = Describe("Facade", func() {
 					})
 				}
 			})
+		})
+		Describe("Read", Label("Read"), func() {
+			type testCase struct {
+				description  string
+				filter       *primitive.D // filter to call Read
+				outputDoc    []*db.JobDoc // result docs of ds.list
+				jobDsListErr error        // error calling ds.list
+				expectErr    error
+			}
+			assertJobDs_List := func(tc testCase) {
+				jobDSMock.EXPECT().List(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+					func(ctx context.Context, d *primitive.D, c *mongo.Client) ([]*db.JobDoc, errs.IMongoErr) {
+						Expect(d).Should(Equal(tc.filter))
+						// ...
+						v := new([]*db.JobDoc)
+						err := new(error)
+						if tc.jobDsListErr == nil {
+							*v = tc.outputDoc
+						} else {
+							*err = tc.jobDsListErr
+						}
+						return *v, *err
+					},
+				)
+			}
+			newBsonEmptyFilter := func() *primitive.D {
+				return &primitive.D{}
+			}
+			newBsonIDFilter := func() *primitive.D {
+				return db.GetIDFilter(primitive.NewObjectID())
+			}
+			newFakeJobDoc := func(jt db.JobType) *db.JobDoc {
+				d := new(db.JobDoc)
+				gofakeit.Struct(&d)
+				d.SetID(primitive.NilObjectID)
+				d.Type = jt
+				return d
+			}
+			newManyFakeJobDoc := func(n uint) []*db.JobDoc {
+				res := []*db.JobDoc{}
+				jdArr := []db.JobType{db.SPRITEJobType, db.THUMBNAILJobType}
+				for range n {
+					res = append(res, newFakeJobDoc(jdArr[n%2]))
+				}
+				return res
+			}
+			Describe("Happy path", Label("Happy"), func() {
+				BeforeEach(func() {
+					resetMock()
+				})
 
+				AfterEach(func() {
+					asserMockCall()
+				})
+				testCases := []testCase{
+					{
+						description: "Successfully read many media documents",
+						outputDoc:   newManyFakeJobDoc(10),
+						filter:      newBsonIDFilter(),
+					},
+					{
+						description: "Successfully read zero media document",
+						outputDoc:   newManyFakeJobDoc(0),
+					},
+					{
+						description: "Successfully read media with nil filter",
+						outputDoc:   newManyFakeJobDoc(10),
+						filter:      nil,
+					},
+					{
+						description: "Successfully read media with empty filter",
+						outputDoc:   newManyFakeJobDoc(10),
+						filter:      newBsonEmptyFilter(),
+					},
+				}
+				for _, tc := range testCases {
+					tc := tc
+					It(tc.description, func() {
+						// Arrange
+						// ...
+						assertJobDs_List(tc)
+						// Act
+						res, err := jobFacade.Read(testContext, tc.filter, mockClient)
+						// Assert
+						Expect(err).To(BeNil())
+						Expect(res).NotTo(BeNil())
+						Expect(len(res)).To(Equal(len(tc.outputDoc)))
+						Expect(res).To(ContainElements(tc.outputDoc))
+					})
+				}
+			})
+			Describe("Failure path", Label("Failure"), func() {
+				BeforeEach(func() {
+					resetMock()
+				})
+
+				AfterEach(func() {
+					asserMockCall()
+				})
+				testCases := []testCase{
+					{
+						description:  "Error list media (datastore)",
+						outputDoc:    nil,
+						filter:       newBsonIDFilter(),
+						jobDsListErr: errs.NewMongoOpErr(fmt.Errorf("mock jobDSMock.List err")),
+						expectErr:    fmt.Errorf("sample err"),
+					},
+				}
+				for _, tc := range testCases {
+					tc := tc
+					It(tc.description, func() {
+						// Arrange
+						// ...
+						assertJobDs_List(tc)
+						// Act
+						res, err := jobFacade.Read(testContext, tc.filter, mockClient)
+						// Assert
+						if tc.expectErr == nil {
+							Expect(err).To(BeNil())
+							Expect(res).NotTo(BeNil())
+							Expect(len(res)).To(Equal(len(tc.outputDoc)))
+							Expect(res).To(ContainElements(tc.outputDoc))
+
+						} else {
+							Expect(err).ToNot(BeNil())
+							Expect(res).To(BeNil())
+							// todo: assert error type
+						}
+					})
+				}
+			})
 		})
 
 	})
