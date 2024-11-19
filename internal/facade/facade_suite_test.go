@@ -929,6 +929,379 @@ var _ = Describe("Facade", func() {
 				}
 			})
 		})
+		Describe("Done", Label("Done"), func() {
+			type testCase struct {
+				description          string
+				jobDoc               *db.JobDoc            //job doc in db
+				mediaDoc             *db.MediaFileDoc      //media doc in db
+				data                 facade.MediaMinioFile // data to pass to done function
+				expectJobDsFind      bool                  // expect job ds find
+				expectJobDsDelete    bool                  // expect job ds delete
+				expectMediaDsFind    bool                  // expect media ds find
+				expectMediaDsReplace bool                  // expect media ds replace
+				expectminioAddFile   bool                  // expect minio fileadd
+				expectminioRmFile    bool                  // expect minio filerm
+				jobDsFindErr         error                 // error calling ds.find
+				jobDsDeleteErr       error                 // error calling ds.delete
+				mediaDsFindErr       error                 // error calling mediaDs.find
+				mediaDsReplaceErr    error                 // error calling mediaDs.replace
+				minioAddFileErr      error                 // error calling minio.fileAdd
+				minioRmFileErr       error                 // error calling minio.fileRm
+				expectErr            bool
+			}
+			assertMongo_GetClient := func(tc testCase) {
+				if tc.expectMediaDsFind || tc.expectMediaDsReplace || tc.expectJobDsDelete {
+					mongoMock.EXPECT().GetClient().RunAndReturn(newMongoClient)
+				}
+			}
+			assertJobDs_Find := func(tc testCase) {
+				if tc.expectJobDsFind {
+					jobDSMock.EXPECT().Find(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+						func(ctx context.Context, d *primitive.D, c *mongo.Client) (*db.JobDoc, errs.IMongoErr) {
+							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.GetID())))
+							// ...
+							v := new(db.JobDoc)
+							err := new(error)
+							if tc.jobDsFindErr == nil {
+								v = tc.jobDoc
+							} else {
+								*err = tc.jobDsFindErr
+							}
+							// ...
+							return v, *err
+						},
+					)
+				}
+			}
+			assertJobDs_Delete := func(tc testCase) {
+				if tc.expectJobDsDelete {
+					jobDSMock.EXPECT().Delete(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+						func(ctx context.Context, d *primitive.D, c *mongo.Client) errs.IMongoErr {
+							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.GetID())))
+							// ...
+							err := new(error)
+							if tc.jobDsDeleteErr != nil {
+								*err = tc.jobDsDeleteErr
+							}
+							// ...
+							return *err
+						},
+					)
+				}
+			}
+			assertMediaDs_Find := func(tc testCase) {
+				if tc.expectMediaDsFind {
+					mediaDSMock.EXPECT().Find(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+						func(ctx context.Context, d *primitive.D, c *mongo.Client) (*db.MediaFileDoc, errs.IMongoErr) {
+							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.MediaID)))
+							// ...
+							v := new(db.MediaFileDoc)
+							err := new(error)
+							if tc.mediaDsFindErr == nil {
+								v = tc.mediaDoc
+							} else {
+								*err = tc.mediaDsFindErr
+							}
+							// ...
+							return v, *err
+						},
+					)
+				}
+			}
+			assertMediaDs_Replace := func(tc testCase) {
+				if tc.expectMediaDsReplace {
+					mediaDSMock.EXPECT().Replace(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+						func(ctx context.Context, d *primitive.D, mfd *db.MediaFileDoc, c *mongo.Client) (*db.MediaFileDoc, errs.IMongoErr) {
+							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.MediaID)))
+							switch tc.jobDoc.Type {
+							case db.SPRITEJobType:
+								Expect(mfd.Sprite).NotTo(BeEmpty())
+								Expect(mfd.Vtt).NotTo(BeEmpty())
+								Expect(mfd.Sprite).NotTo(Equal(tc.mediaDoc.Sprite))
+								Expect(mfd.Vtt).NotTo(Equal(tc.mediaDoc.Vtt))
+							case db.THUMBNAILJobType:
+								Expect(mfd.Thumbnail).NotTo(BeEmpty())
+								Expect(mfd.Thumbnail).NotTo(Equal(tc.mediaDoc.Thumbnail))
+							}
+							// ...
+							v := new(db.MediaFileDoc)
+							err := new(error)
+							// ...
+							if tc.mediaDsReplaceErr == nil {
+								v = mfd
+							} else {
+								*err = tc.mediaDsReplaceErr
+							}
+							// ...
+							return v, *err
+						},
+					)
+				}
+			}
+			assertMinio_FileAdd := func(tc testCase) func() {
+				if tc.expectminioAddFile {
+					err := new(error)
+					if tc.minioAddFileErr != nil {
+						*err = tc.minioAddFileErr
+					}
+					switch tc.jobDoc.Type {
+					case db.SPRITEJobType:
+						minioMock.EXPECT().FileAdd(mock.Anything, mock.Anything, tc.data.SpriteData).Return(*err)
+						minioMock.EXPECT().FileAdd(mock.Anything, mock.Anything, tc.data.VttData).Return(*err)
+					case db.THUMBNAILJobType:
+						minioMock.EXPECT().FileAdd(mock.Anything, mock.Anything, tc.data.ThumbData).Return(*err)
+					}
+					return func() {
+						fileNames := []string{}
+						for _, call := range minioMock.Calls {
+							if call.Method == "FileAdd" {
+								fileNames = append(fileNames, call.Arguments.String(1))
+							}
+						}
+						// ...
+						expectedCall := mock.Call{}
+						for _, call := range mediaDSMock.Calls {
+							if call.Method == "Replace" {
+								expectedCall = call
+								break
+							}
+						}
+						_doc := expectedCall.Arguments.Get(2).(*db.MediaFileDoc)
+						expectedFileNames := []string{}
+						switch tc.jobDoc.Type {
+						case db.SPRITEJobType:
+							expectedFileNames = append(expectedFileNames, _doc.Vtt)
+							expectedFileNames = append(expectedFileNames, _doc.Sprite)
+						case db.THUMBNAILJobType:
+							expectedFileNames = append(expectedFileNames, _doc.Thumbnail)
+						}
+						// ...
+						Expect(len(fileNames)).To(Equal(len(expectedFileNames)))
+						Expect(fileNames).To(ContainElements(expectedFileNames))
+					}
+				}
+				return func() {}
+			}
+			assertMinio_FileRm := func(tc testCase) {
+				if tc.expectminioRmFile {
+					err := new(error)
+					if tc.minioRmFileErr != nil {
+						*err = tc.minioRmFileErr
+					}
+					switch tc.jobDoc.Type {
+					case db.SPRITEJobType:
+						minioMock.EXPECT().FileRm(mock.Anything, tc.mediaDoc.Sprite).Return(*err)
+						minioMock.EXPECT().FileRm(mock.Anything, tc.mediaDoc.Vtt).Return(*err)
+					case db.THUMBNAILJobType:
+						minioMock.EXPECT().FileRm(mock.Anything, tc.mediaDoc.Thumbnail).Return(*err)
+					}
+				}
+			}
+			newFakeJobDoc := func(jt db.JobType) *db.JobDoc {
+				d := new(db.JobDoc)
+				gofakeit.Struct(&d)
+				d.Type = jt
+				return d
+			}
+			newFakeMediaDoc := func(hasThumbnail bool, hasVtt bool, hasSprite bool) *db.MediaFileDoc {
+				d := new(db.MediaFileDoc)
+				gofakeit.Struct(&d)
+				if !hasThumbnail {
+					d.Thumbnail = ""
+				}
+				if !hasVtt {
+					d.Vtt = ""
+				}
+				if !hasSprite {
+					d.Sprite = ""
+				}
+				return d
+			}
+			Describe("Happy path", Label("Happy"), func() {
+				BeforeEach(func() {
+					resetMock()
+				})
+
+				AfterEach(func() {
+					asserMockCall()
+				})
+				testCases := []testCase{
+					{
+						description: "Successfully done with thumbnail (no thumbnail, no vtt, no sprite)",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(false, false, false),
+						data: facade.MediaMinioFile{
+							ThumbData: []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						expectMediaDsFind:    true,
+						expectMediaDsReplace: true,
+						expectminioAddFile:   true,
+						expectminioRmFile:    false,
+					},
+					{
+						description: "Successfully done with thumbnail",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(true, true, true),
+						data: facade.MediaMinioFile{
+							ThumbData: []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						expectMediaDsFind:    true,
+						expectMediaDsReplace: true,
+						expectminioAddFile:   true,
+						expectminioRmFile:    true,
+					},
+					{
+						description: "Successfully done with thumbnail (no thumbnail, no vtt, no sprite)",
+						jobDoc:      newFakeJobDoc(db.SPRITEJobType),
+						mediaDoc:    newFakeMediaDoc(false, false, false),
+						data: facade.MediaMinioFile{
+							SpriteData: []byte("sprite-data"),
+							VttData:    []byte("vtt-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						expectMediaDsFind:    true,
+						expectMediaDsReplace: true,
+						expectminioAddFile:   true,
+						expectminioRmFile:    false,
+					},
+					{
+						description: "Successfully done with thumbnail",
+						jobDoc:      newFakeJobDoc(db.SPRITEJobType),
+						mediaDoc:    newFakeMediaDoc(true, true, true),
+						data: facade.MediaMinioFile{
+							SpriteData: []byte("sprite-data"),
+							VttData:    []byte("vtt-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						expectMediaDsFind:    true,
+						expectMediaDsReplace: true,
+						expectminioAddFile:   true,
+						expectminioRmFile:    true,
+					},
+				}
+				for _, tc := range testCases {
+					tc := tc
+					It(tc.description, func() {
+						// Arrange
+						tc := tc
+						// ...
+						tc.mediaDoc.SetID(tc.jobDoc.MediaID)
+						// ...
+						assertMongo_GetClient(tc)
+						// ...
+						assertJobDs_Find(tc)
+						assertJobDs_Delete(tc)
+						// ...
+						assertMediaDs_Replace(tc)
+						assertMediaDs_Find(tc)
+						// ...
+						assertFileName := assertMinio_FileAdd(tc)
+						assertMinio_FileRm(tc)
+						// Act
+						err := jobFacade.Done(testContext, tc.jobDoc.ID, mockClient, &tc.data)
+						time.Sleep(10 * time.Millisecond) // wait for coroutines
+						// Assert
+						Expect(err).To(BeNil())
+						assertFileName()
+					})
+				}
+			})
+			Describe("Failure path", Label("Failure"), func() {
+				BeforeEach(func() {
+					resetMock()
+				})
+
+				AfterEach(func() {
+					asserMockCall()
+				})
+				testCases := []testCase{
+					{
+						description: "Fail on thumbnail job without thumb data",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(false, false, false),
+						data: facade.MediaMinioFile{
+							SpriteData: []byte("sprite-data"),
+							VttData:    []byte("vtt-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    false,
+						expectMediaDsFind:    false,
+						expectMediaDsReplace: false,
+						expectminioAddFile:   false,
+						expectminioRmFile:    false,
+						expectErr:            true,
+					},
+					{
+						description: "Fail on sprite job without sprite data",
+						jobDoc:      newFakeJobDoc(db.SPRITEJobType),
+						mediaDoc:    newFakeMediaDoc(false, false, false),
+						data: facade.MediaMinioFile{
+							SpriteData: []byte("sprite-data"),
+							ThumbData:  []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    false,
+						expectMediaDsFind:    false,
+						expectMediaDsReplace: false,
+						expectminioAddFile:   false,
+						expectminioRmFile:    false,
+						expectErr:            true,
+					},
+					{
+						description: "Fail on sprite job without vtt data",
+						jobDoc:      newFakeJobDoc(db.SPRITEJobType),
+						mediaDoc:    newFakeMediaDoc(false, false, false),
+						data: facade.MediaMinioFile{
+							VttData:   []byte("vtt-data"),
+							ThumbData: []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    false,
+						expectMediaDsFind:    false,
+						expectMediaDsReplace: false,
+						expectminioAddFile:   false,
+						expectminioRmFile:    false,
+						expectErr:            true,
+					},
+				}
+				for _, tc := range testCases {
+					tc := tc
+					It(tc.description, func() {
+						// Arrange
+						tc := tc
+						// ...
+						tc.mediaDoc.SetID(tc.jobDoc.MediaID)
+						// ...
+						assertMongo_GetClient(tc)
+						// ...
+						assertJobDs_Find(tc)
+						assertJobDs_Delete(tc)
+						// ...
+						assertMediaDs_Replace(tc)
+						assertMediaDs_Find(tc)
+						// ...
+						assertFileName := assertMinio_FileAdd(tc)
+						assertMinio_FileRm(tc)
+						// Act
+						err := jobFacade.Done(testContext, tc.jobDoc.ID, mockClient, &tc.data)
+						time.Sleep(10 * time.Millisecond) // wait for coroutines
+						// Assert
+						if tc.expectErr {
+							Expect(err).ToNot(BeNil())
+						} else {
+							Expect(err).To(BeNil())
+						}
+						assertFileName()
+					})
+				}
+			})
+		})
 
 	})
 })
