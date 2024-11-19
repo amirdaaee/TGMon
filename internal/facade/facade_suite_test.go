@@ -38,6 +38,7 @@ var _ = Describe("Facade", func() {
 		jobDSMock   *mockDB.MockIDataStore[*db.JobDoc]
 		mediaDSMock *mockDB.MockIDataStore[*db.MediaFileDoc]
 		mediaFacade *facade.MediaFacade
+		jobFacade   *facade.JobFacade
 		mockClient  *mongo.Client
 		testContext context.Context
 	)
@@ -47,6 +48,7 @@ var _ = Describe("Facade", func() {
 		jobDSMock = mockDB.NewMockIDataStore[*db.JobDoc](GinkgoT())
 		mediaDSMock = mockDB.NewMockIDataStore[*db.MediaFileDoc](GinkgoT())
 		mediaFacade = facade.NewMediaFacade(mongoMock, minioMock, jobDSMock, mediaDSMock)
+		jobFacade = facade.NewJobFacade(mongoMock, minioMock, jobDSMock, mediaDSMock)
 	}
 	asserMockCall := func() {
 		mongoMock.AssertExpectations(GinkgoT())
@@ -62,6 +64,7 @@ var _ = Describe("Facade", func() {
 		testContext = context.Background()
 	})
 
+	// ================================
 	Describe("MediaFacade", Label("MediaFacade"), func() {
 		Describe("Create", Label("Create"), func() {
 			type testCase struct {
@@ -137,7 +140,7 @@ var _ = Describe("Facade", func() {
 					minioMock.EXPECT().FileAdd(mock.Anything, mock.Anything, tc.inputThumb).Return(*err)
 				}
 			}
-			newFakeDoc := func() *db.MediaFileDoc {
+			newFakeMediaDoc := func() *db.MediaFileDoc {
 				d := new(db.MediaFileDoc)
 				gofakeit.Struct(&d)
 				d.SetID(primitive.NilObjectID)
@@ -158,14 +161,14 @@ var _ = Describe("Facade", func() {
 				testCases := []testCase{
 					{
 						description:    "Successfully create media document with thumbnail",
-						inputDoc:       newFakeDoc(),
+						inputDoc:       newFakeMediaDoc(),
 						inputThumb:     []byte{0x01, 0x02},
 						expectJob:      true,
 						expectMinioAdd: true,
 					},
 					{
 						description:    "Successfully create media document without thumbnail",
-						inputDoc:       newFakeDoc(),
+						inputDoc:       newFakeMediaDoc(),
 						inputThumb:     nil,
 						expectJob:      true,
 						expectMinioAdd: false,
@@ -189,8 +192,9 @@ var _ = Describe("Facade", func() {
 						res, err := mediaFacade.Create(testContext, facade.NewFullMediaData(tc.inputDoc, tc.inputThumb), mockClient)
 						time.Sleep(10 * time.Millisecond) // wait for coroutines
 						// Assert
-						Expect(res).NotTo(BeNil())
 						Expect(err).To(BeNil())
+						Expect(res).NotTo(BeNil())
+						Expect(*res).To(Equal(*tc.outputDoc))
 					})
 				}
 			})
@@ -205,7 +209,7 @@ var _ = Describe("Facade", func() {
 				testCases := []testCase{
 					{
 						description:    "Successfully create media document while error creating job",
-						inputDoc:       newFakeDoc(),
+						inputDoc:       newFakeMediaDoc(),
 						inputThumb:     []byte{0x01, 0x02},
 						jobCreateError: true,
 						expectJob:      true,
@@ -213,7 +217,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:    "Successfully create media document while error adding thumbnail",
-						inputDoc:       newFakeDoc(),
+						inputDoc:       newFakeMediaDoc(),
 						inputThumb:     []byte{0x01, 0x02},
 						minioAddError:  true,
 						expectJob:      true,
@@ -221,7 +225,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:    "Successfully create media document while error replacing while adding thumbnail",
-						inputDoc:       newFakeDoc(),
+						inputDoc:       newFakeMediaDoc(),
 						inputThumb:     []byte{0x01, 0x02},
 						replaceErr:     true,
 						expectJob:      true,
@@ -229,7 +233,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description: "Error create doc (datastore)",
-						inputDoc:    newFakeDoc(),
+						inputDoc:    newFakeMediaDoc(),
 						inputThumb:  []byte{0x01, 0x02},
 						createErr:   true,
 					},
@@ -254,9 +258,11 @@ var _ = Describe("Facade", func() {
 						if tc.createErr {
 							Expect(res).To(BeNil())
 							Expect(err).NotTo(BeNil())
+							// todo: assert error type
 						} else {
-							Expect(res).NotTo(BeNil())
 							Expect(err).To(BeNil())
+							Expect(res).NotTo(BeNil())
+							Expect(*res).To(Equal(*tc.outputDoc))
 						}
 					})
 				}
@@ -285,7 +291,7 @@ var _ = Describe("Facade", func() {
 			newBsonIDFilter := func() *primitive.D {
 				return db.GetIDFilter(primitive.NewObjectID())
 			}
-			newFakeDoc := func() *db.MediaFileDoc {
+			newFakeMediaDoc := func() *db.MediaFileDoc {
 				d := new(db.MediaFileDoc)
 				gofakeit.Struct(&d)
 				return d
@@ -293,7 +299,7 @@ var _ = Describe("Facade", func() {
 			newManyFakeDoc := func(n uint) []*db.MediaFileDoc {
 				res := []*db.MediaFileDoc{}
 				for range n {
-					res = append(res, newFakeDoc())
+					res = append(res, newFakeMediaDoc())
 				}
 				return res
 			}
@@ -361,6 +367,7 @@ var _ = Describe("Facade", func() {
 						// Assert
 						Expect(res).To(BeNil())
 						Expect(err).ToNot(BeNil())
+						// todo: assert error type
 					})
 				}
 			})
@@ -427,7 +434,7 @@ var _ = Describe("Facade", func() {
 					}
 				}
 			}
-			newFakeDoc := func() *db.MediaFileDoc {
+			newFakeMediaDoc := func() *db.MediaFileDoc {
 				d := new(db.MediaFileDoc)
 				gofakeit.Struct(&d)
 				return d
@@ -459,7 +466,7 @@ var _ = Describe("Facade", func() {
 				testCases := []testCase{
 					{
 						description:     "Successfully Delete media with all minio src (thumb+vtt+sprite)",
-						outputDoc:       newFakeDoc(),
+						outputDoc:       newFakeMediaDoc(),
 						filter:          *newBsonIDFilter(),
 						withThumbMedia:  true,
 						withVttMedia:    true,
@@ -470,7 +477,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:    "Successfully Delete media with all minio src (thumb+vtt)",
-						outputDoc:      newFakeDoc(),
+						outputDoc:      newFakeMediaDoc(),
 						filter:         *newBsonIDFilter(),
 						withThumbMedia: true,
 						withVttMedia:   true,
@@ -480,7 +487,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:     "Successfully Delete media with all minio src (thumb+sprite)",
-						outputDoc:       newFakeDoc(),
+						outputDoc:       newFakeMediaDoc(),
 						filter:          *newBsonIDFilter(),
 						withThumbMedia:  true,
 						withSpriteMedia: true,
@@ -490,7 +497,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:     "Successfully Delete media with all minio src (vtt+sprite)",
-						outputDoc:       newFakeDoc(),
+						outputDoc:       newFakeMediaDoc(),
 						filter:          *newBsonIDFilter(),
 						withVttMedia:    true,
 						withSpriteMedia: true,
@@ -500,7 +507,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:    "Successfully Delete media with all minio src (thumb)",
-						outputDoc:      newFakeDoc(),
+						outputDoc:      newFakeMediaDoc(),
 						filter:         *newBsonIDFilter(),
 						withThumbMedia: true,
 						expectDelete:   true,
@@ -509,7 +516,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:   "Successfully Delete media with all minio src (vtt)",
-						outputDoc:     newFakeDoc(),
+						outputDoc:     newFakeMediaDoc(),
 						filter:        *newBsonIDFilter(),
 						withVttMedia:  true,
 						expectDelete:  true,
@@ -518,7 +525,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:     "Successfully Delete media with all minio src (sprite)",
-						outputDoc:       newFakeDoc(),
+						outputDoc:       newFakeMediaDoc(),
 						filter:          *newBsonIDFilter(),
 						withSpriteMedia: true,
 						expectDelete:    true,
@@ -527,7 +534,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:   "Successfully Delete media without minio src",
-						outputDoc:     newFakeDoc(),
+						outputDoc:     newFakeMediaDoc(),
 						filter:        *newBsonIDFilter(),
 						expectDelete:  true,
 						expectJob:     true,
@@ -566,7 +573,7 @@ var _ = Describe("Facade", func() {
 				testCases := []testCase{
 					{
 						description:        "Successfully Delete media while error creating job",
-						outputDoc:          newFakeDoc(),
+						outputDoc:          newFakeMediaDoc(),
 						filter:             *newBsonIDFilter(),
 						withThumbMedia:     true,
 						withVttMedia:       true,
@@ -578,7 +585,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:     "Successfully Delete media while error rm minio files",
-						outputDoc:       newFakeDoc(),
+						outputDoc:       newFakeMediaDoc(),
 						filter:          *newBsonIDFilter(),
 						withThumbMedia:  true,
 						withVttMedia:    true,
@@ -590,7 +597,7 @@ var _ = Describe("Facade", func() {
 					},
 					{
 						description:     "Error find doc (datastore)",
-						outputDoc:       newFakeDoc(),
+						outputDoc:       newFakeMediaDoc(),
 						filter:          *newBsonIDFilter(),
 						withThumbMedia:  true,
 						withVttMedia:    true,
@@ -625,5 +632,171 @@ var _ = Describe("Facade", func() {
 				}
 			})
 		})
+	})
+	// ================================
+	Describe("JobFacade", Label("JobFacade"), func() {
+		Describe("Create", Label("Create"), func() {
+			type testCase struct {
+				description       string
+				inputDoc          *db.JobDoc // doc to be created
+				outputDoc         *db.JobDoc // result doc of ds.create
+				isDuplicated      bool       // job is duplicated
+				expectJobDsList   bool       // expect job ds list
+				expectJobDsCreate bool       // expect job ds create
+				jobDsListErr      error      // error calling ds.list
+				jobDsCreateErr    error      // error calling ds.create
+				expectErr         error
+			}
+			assertJobDs_List := func(tc testCase) {
+				if tc.expectJobDsList {
+					jobDSMock.EXPECT().List(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+						func(ctx context.Context, d *primitive.D, c *mongo.Client) ([]*db.JobDoc, errs.IMongoErr) {
+							filterObj := db.JobDoc{MediaID: tc.inputDoc.MediaID, Type: tc.inputDoc.Type}
+							expectedFilter, _err := db.MarshalOmitEmpty(&filterObj)
+							Expect(_err).To(BeNil())
+							Expect(len(*d)).Should(Equal(len(*expectedFilter)))
+							Expect(*d).To(ContainElements(*expectedFilter))
+							// ...
+							v := []*db.JobDoc{}
+							err := new(error)
+							if tc.jobDsListErr == nil {
+								if tc.isDuplicated {
+									filterObj.SetID(tc.outputDoc.GetID())
+									v = append(v, &filterObj)
+								}
+							} else {
+								v = nil
+								*err = tc.jobDsListErr
+							}
+							return v, *err
+						},
+					)
+				}
+			}
+			assertJobDs_Create := func(tc testCase) {
+				if tc.expectJobDsCreate {
+					jobDSMock.EXPECT().Create(mock.Anything, tc.inputDoc, mock.Anything).RunAndReturn(
+						func(ctx context.Context, jd *db.JobDoc, c *mongo.Client) (*db.JobDoc, errs.IMongoErr) {
+							v := new(db.JobDoc)
+							err := new(error)
+							if tc.jobDsCreateErr == nil {
+								v = tc.outputDoc
+							} else {
+								*err = tc.jobDsCreateErr
+							}
+							return v, *err
+						},
+					)
+				}
+			}
+			newFakeJobDoc := func(jt db.JobType) *db.JobDoc {
+				d := new(db.JobDoc)
+				gofakeit.Struct(&d)
+				d.SetID(primitive.NilObjectID)
+				d.Type = jt
+				return d
+			}
+			Describe("Happy path", Label("Happy"), func() {
+				BeforeEach(func() {
+					resetMock()
+				})
+
+				AfterEach(func() {
+					asserMockCall()
+				})
+				testCases := []testCase{
+					{
+						description:       "Successfully create thumbnail job document",
+						inputDoc:          newFakeJobDoc(db.THUMBNAILJobType),
+						expectJobDsList:   true,
+						expectJobDsCreate: true,
+					},
+					{
+						description:       "Successfully create sprite job document",
+						inputDoc:          newFakeJobDoc(db.SPRITEJobType),
+						expectJobDsList:   true,
+						expectJobDsCreate: true,
+					},
+					{
+						description:     "Not create duplicated thumbnail job document",
+						inputDoc:        newFakeJobDoc(db.THUMBNAILJobType),
+						isDuplicated:    true,
+						expectJobDsList: true,
+					},
+					{
+						description:     "Not create duplicated sprite job document",
+						inputDoc:        newFakeJobDoc(db.SPRITEJobType),
+						isDuplicated:    true,
+						expectJobDsList: true,
+					},
+				}
+				for _, tc := range testCases {
+					tc := tc
+					It(tc.description, func() {
+						// Arrange
+						tc.outputDoc = newResDoc(tc.inputDoc)
+						// ...
+						assertJobDs_List(tc)
+						assertJobDs_Create(tc)
+						// Act
+						res, err := jobFacade.Create(testContext, tc.inputDoc, mockClient)
+						// Assert
+						Expect(err).To(BeNil())
+						Expect(*res).To(BeEquivalentTo(*tc.outputDoc))
+						Expect(res).NotTo(BeNil())
+					})
+				}
+			})
+			Describe("Failure path", Label("Failure"), func() {
+				BeforeEach(func() {
+					resetMock()
+				})
+
+				AfterEach(func() {
+					asserMockCall()
+				})
+				testCases := []testCase{
+					{
+						description:     "Error list docs (datastore)",
+						inputDoc:        newFakeJobDoc(db.THUMBNAILJobType),
+						expectJobDsList: true,
+						jobDsListErr:    errs.NewMongoOpErr(fmt.Errorf("mock jobDSMock.List err")),
+						expectErr:       fmt.Errorf("sample err"),
+					},
+					{
+						description:       "Error create docs (datastore)",
+						inputDoc:          newFakeJobDoc(db.THUMBNAILJobType),
+						expectJobDsList:   true,
+						expectJobDsCreate: true,
+						jobDsCreateErr:    errs.NewMongoOpErr(fmt.Errorf("mock jobDSMock.Create err")),
+						expectErr:         fmt.Errorf("sample err"),
+					},
+				}
+				for _, tc := range testCases {
+					tc := tc
+					It(tc.description, func() {
+						// Arrange
+						tc.outputDoc = newResDoc(tc.inputDoc)
+						// ...
+						assertJobDs_List(tc)
+						assertJobDs_Create(tc)
+						// Act
+						res, err := jobFacade.Create(testContext, tc.inputDoc, mockClient)
+						// Assert
+						if tc.expectErr == nil {
+							Expect(err).To(BeNil())
+							Expect(*res).To(BeEquivalentTo(*tc.outputDoc))
+							Expect(res).NotTo(BeNil())
+						} else {
+							Expect(err).ToNot(BeNil())
+							Expect(res).To(BeNil())
+							// todo: assert err type
+						}
+					})
+				}
+			})
+
+		})
+
 	})
 })
