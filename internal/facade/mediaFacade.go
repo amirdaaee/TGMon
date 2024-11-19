@@ -145,6 +145,7 @@ type mediaMinioFile struct {
 	spriteData []byte
 }
 
+// add new files to minio, update media doc with new files, remove old files from minio
 func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.IMinioClient, mediaDs db.IDataStore[*db.MediaFileDoc], cl *mongo.Client, data *mediaMinioFile) error {
 	ll := logrus.WithField("func", "updateMediaMinioFiles")
 	updatedMedia := *doc

@@ -40,9 +40,6 @@ func (f *JobFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.Cli
 	docs, err := f.baseRead(ctx, filter, cl)
 	return docs, err
 }
-func (f *JobFacade) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) error {
-	return f.baseDelete(ctx, filter, cl)
-}
 
 // update media based on job result and delete job itself
 //
