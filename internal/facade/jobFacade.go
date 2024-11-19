@@ -44,7 +44,7 @@ func (f *JobFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.Cli
 // update media based on job result and delete job itself
 //
 // job is kept only if provided data are not constistant
-func (f *JobFacade) Done(ctx context.Context, id primitive.ObjectID, cl *mongo.Client, data *mediaMinioFile) error {
+func (f *JobFacade) Done(ctx context.Context, id primitive.ObjectID, cl *mongo.Client, data *MediaMinioFile) error {
 	ll := f.getLogger("done")
 	ds := f.jobDS
 	jobDoc, err := ds.Find(ctx, db.GetIDFilter(id), cl)

@@ -53,7 +53,7 @@ func (f *MediaFacade) Create(ctx context.Context, data *FullMediaData, cl *mongo
 		}
 		// ...
 		if data.thumb != nil {
-			if err := updateMediaMinioFiles(innerCtx, newDoc, f.minio, f.mediaDS, innerCl, &mediaMinioFile{thumbData: data.thumb}); err != nil {
+			if err := updateMediaMinioFiles(innerCtx, newDoc, f.minio, f.mediaDS, innerCl, &MediaMinioFile{thumbData: data.thumb}); err != nil {
 				ll.WithError(err).Error("can not process thumbnail")
 			}
 		}
@@ -139,14 +139,14 @@ func deleteMediaAllJobs(ctx context.Context, doc *db.MediaFileDoc, jobDs db.IDat
 	return nil
 }
 
-type mediaMinioFile struct {
+type MediaMinioFile struct {
 	thumbData  []byte
 	vttData    []byte
 	spriteData []byte
 }
 
 // add new files to minio, update media doc with new files, remove old files from minio
-func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.IMinioClient, mediaDs db.IDataStore[*db.MediaFileDoc], cl *mongo.Client, data *mediaMinioFile) error {
+func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.IMinioClient, mediaDs db.IDataStore[*db.MediaFileDoc], cl *mongo.Client, data *MediaMinioFile) error {
 	ll := logrus.WithField("func", "updateMediaMinioFiles")
 	updatedMedia := *doc
 	if data.thumbData != nil {
