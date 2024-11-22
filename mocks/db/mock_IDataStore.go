@@ -10,8 +10,6 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 
-	mongo "go.mongodb.org/mongo-driver/mongo"
-
 	primitive "go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -249,19 +247,19 @@ func (_c *MockIDataStore_Find_Call[T]) RunAndReturn(run func(context.Context, *p
 }
 
 // GetCollection provides a mock function with given fields: cl
-func (_m *MockIDataStore[T]) GetCollection(cl db.IMongoClient) *mongo.Collection {
+func (_m *MockIDataStore[T]) GetCollection(cl db.IMongoClient) db.IMongoCollection {
 	ret := _m.Called(cl)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetCollection")
 	}
 
-	var r0 *mongo.Collection
-	if rf, ok := ret.Get(0).(func(db.IMongoClient) *mongo.Collection); ok {
+	var r0 db.IMongoCollection
+	if rf, ok := ret.Get(0).(func(db.IMongoClient) db.IMongoCollection); ok {
 		r0 = rf(cl)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*mongo.Collection)
+			r0 = ret.Get(0).(db.IMongoCollection)
 		}
 	}
 
@@ -286,12 +284,12 @@ func (_c *MockIDataStore_GetCollection_Call[T]) Run(run func(cl db.IMongoClient)
 	return _c
 }
 
-func (_c *MockIDataStore_GetCollection_Call[T]) Return(_a0 *mongo.Collection) *MockIDataStore_GetCollection_Call[T] {
+func (_c *MockIDataStore_GetCollection_Call[T]) Return(_a0 db.IMongoCollection) *MockIDataStore_GetCollection_Call[T] {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockIDataStore_GetCollection_Call[T]) RunAndReturn(run func(db.IMongoClient) *mongo.Collection) *MockIDataStore_GetCollection_Call[T] {
+func (_c *MockIDataStore_GetCollection_Call[T]) RunAndReturn(run func(db.IMongoClient) db.IMongoCollection) *MockIDataStore_GetCollection_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }

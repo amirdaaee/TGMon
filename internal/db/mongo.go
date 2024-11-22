@@ -17,8 +17,34 @@ type IMongoClient interface {
 	Disconnect(context.Context) error
 	Database(name string, opts ...*options.DatabaseOptions) *mongo.Database
 }
+type IMongoCollection interface {
+	Aggregate(ctx context.Context, pipeline interface{}, opts ...*options.AggregateOptions) (*mongo.Cursor, error)
+	BulkWrite(ctx context.Context, models []mongo.WriteModel, opts ...*options.BulkWriteOptions) (*mongo.BulkWriteResult, error)
+	CountDocuments(ctx context.Context, filter interface{}, opts ...*options.CountOptions) (int64, error)
+	Database() *mongo.Database
+	DeleteMany(ctx context.Context, filter interface{}, opts ...*options.DeleteOptions) (*mongo.DeleteResult, error)
+	DeleteOne(ctx context.Context, filter interface{}, opts ...*options.DeleteOptions) (*mongo.DeleteResult, error)
+	Distinct(ctx context.Context, fieldName string, filter interface{}, opts ...*options.DistinctOptions) ([]interface{}, error)
+	Drop(ctx context.Context) error
+	EstimatedDocumentCount(ctx context.Context, opts ...*options.EstimatedDocumentCountOptions) (int64, error)
+	Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (cur *mongo.Cursor, err error)
+	FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult
+	FindOneAndDelete(ctx context.Context, filter interface{}, opts ...*options.FindOneAndDeleteOptions) *mongo.SingleResult
+	FindOneAndReplace(ctx context.Context, filter interface{}, replacement interface{}, opts ...*options.FindOneAndReplaceOptions) *mongo.SingleResult
+	FindOneAndUpdate(ctx context.Context, filter interface{}, update interface{}, opts ...*options.FindOneAndUpdateOptions) *mongo.SingleResult
+	Indexes() mongo.IndexView
+	InsertMany(ctx context.Context, documents []interface{}, opts ...*options.InsertManyOptions) (*mongo.InsertManyResult, error)
+	InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error)
+	Name() string
+	ReplaceOne(ctx context.Context, filter interface{}, replacement interface{}, opts ...*options.ReplaceOptions) (*mongo.UpdateResult, error)
+	SearchIndexes() mongo.SearchIndexView
+	UpdateByID(ctx context.Context, id interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
+	UpdateMany(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
+	UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
+	Watch(ctx context.Context, pipeline interface{}, opts ...*options.ChangeStreamOptions) (*mongo.ChangeStream, error)
+}
 type IMongo interface {
-	GetCollection(cl IMongoClient) *mongo.Collection
+	GetCollection(cl IMongoClient) IMongoCollection
 	GetClient() (IMongoClient, error)
 }
 type Mongo struct {
@@ -156,10 +182,10 @@ type jobMongo struct {
 	*Mongo
 }
 
-func (m *mediaMongo) GetCollection(cl IMongoClient) *mongo.Collection {
+func (m *mediaMongo) GetCollection(cl IMongoClient) IMongoCollection {
 	return cl.Database(m.DBName).Collection(m.MediaCollectionName)
 }
-func (m *jobMongo) GetCollection(cl IMongoClient) *mongo.Collection {
+func (m *jobMongo) GetCollection(cl IMongoClient) IMongoCollection {
 	return cl.Database(m.DBName).Collection(m.JobCollectionName)
 }
 
@@ -174,7 +200,7 @@ func FilterById(docID string) (*bson.D, error) {
 
 // ---
 type IDataStore[T IMongoDoc] interface {
-	GetCollection(cl IMongoClient) *mongo.Collection
+	GetCollection(cl IMongoClient) IMongoCollection
 	Create(ctx context.Context, doc T, cl IMongoClient) (T, errs.IMongoErr)
 	List(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr)
 	Delete(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr
@@ -188,7 +214,7 @@ type DataStore[T IMongoDoc] struct {
 	collection string
 }
 
-func (m *DataStore[T]) GetCollection(cl IMongoClient) *mongo.Collection {
+func (m *DataStore[T]) GetCollection(cl IMongoClient) IMongoCollection {
 	return cl.Database(m.DB.DBName).Collection(m.collection)
 }
 func (m *DataStore[T]) Create(ctx context.Context, doc T, cl IMongoClient) (T, errs.IMongoErr) {
@@ -200,7 +226,6 @@ func (m *DataStore[T]) Create(ctx context.Context, doc T, cl IMongoClient) (T, e
 	doc.SetID(id)
 	return doc, nil
 }
-
 func (m *DataStore[T]) List(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr) {
 	cursor, err := m.GetCollection(cl).Find(ctx, filter)
 	if err != nil {
