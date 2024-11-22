@@ -272,18 +272,18 @@ var _ = Describe("Facade", func() {
 			type testCase struct {
 				description string
 				filter      *primitive.D       // filter to call Read
-				outputDoc   []*db.MediaFileDoc // result docs of ds.list
-				listErr     bool               // error calling ds.list
+				outputDoc   []*db.MediaFileDoc // result docs of ds.findMany
+				findManyErr bool               // error calling ds.findMany
 			}
 			assertMediaDs_List := func(tc testCase) {
 				v := new([]*db.MediaFileDoc)
 				err := new(error)
-				if tc.listErr {
-					*err = fmt.Errorf("mock mediaDSMock.List err")
+				if tc.findManyErr {
+					*err = fmt.Errorf("mock mediaDSMock.FindMany err")
 				} else {
 					*v = tc.outputDoc
 				}
-				mediaDSMock.EXPECT().List(mock.Anything, tc.filter, mock.Anything).Return(tc.outputDoc, *err)
+				mediaDSMock.EXPECT().FindMany(mock.Anything, tc.filter, mock.Anything).Return(tc.outputDoc, *err)
 			}
 			newBsonEmptyFilter := func() *primitive.D {
 				return &primitive.D{}
@@ -357,7 +357,7 @@ var _ = Describe("Facade", func() {
 						description: "Error list media (datastore)",
 						outputDoc:   nil,
 						filter:      newBsonIDFilter(),
-						listErr:     true,
+						findManyErr: true,
 					},
 				}
 				for _, tc := range testCases {
@@ -646,13 +646,13 @@ var _ = Describe("Facade", func() {
 				isDuplicated      bool       // job is duplicated
 				expectJobDsList   bool       // expect job ds list
 				expectJobDsCreate bool       // expect job ds create
-				jobDsListErr      error      // error calling ds.list
+				jobDsListErr      error      // error calling ds.findMany
 				jobDsCreateErr    error      // error calling ds.create
 				expectErr         error
 			}
 			assertJobDs_List := func(tc testCase) {
 				if tc.expectJobDsList {
-					jobDSMock.EXPECT().List(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+					jobDSMock.EXPECT().FindMany(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
 						func(ctx context.Context, d *primitive.D, c db.IMongoClient) ([]*db.JobDoc, errs.IMongoErr) {
 							filterObj := db.JobDoc{MediaID: tc.inputDoc.MediaID, Type: tc.inputDoc.Type}
 							expectedFilter, _err := db.MarshalOmitEmpty(&filterObj)
@@ -763,7 +763,7 @@ var _ = Describe("Facade", func() {
 						description:     "Error list docs (datastore)",
 						inputDoc:        newFakeJobDoc(db.THUMBNAILJobType),
 						expectJobDsList: true,
-						jobDsListErr:    errs.NewMongoOpErr(fmt.Errorf("mock jobDSMock.List err")),
+						jobDsListErr:    errs.NewMongoOpErr(fmt.Errorf("mock jobDSMock.FindMany err")),
 						expectErr:       fmt.Errorf("sample err"),
 					},
 					{
@@ -803,12 +803,12 @@ var _ = Describe("Facade", func() {
 			type testCase struct {
 				description  string
 				filter       *primitive.D // filter to call Read
-				outputDoc    []*db.JobDoc // result docs of ds.list
-				jobDsListErr error        // error calling ds.list
+				outputDoc    []*db.JobDoc // result docs of ds.findMany
+				jobDsListErr error        // error calling ds.findMany
 				expectErr    error
 			}
 			assertJobDs_List := func(tc testCase) {
-				jobDSMock.EXPECT().List(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+				jobDSMock.EXPECT().FindMany(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
 					func(ctx context.Context, d *primitive.D, c db.IMongoClient) ([]*db.JobDoc, errs.IMongoErr) {
 						Expect(d).Should(Equal(tc.filter))
 						// ...
@@ -902,7 +902,7 @@ var _ = Describe("Facade", func() {
 						description:  "Error list media (datastore)",
 						outputDoc:    nil,
 						filter:       newBsonIDFilter(),
-						jobDsListErr: errs.NewMongoOpErr(fmt.Errorf("mock jobDSMock.List err")),
+						jobDsListErr: errs.NewMongoOpErr(fmt.Errorf("mock jobDSMock.FindMany err")),
 						expectErr:    fmt.Errorf("sample err"),
 					},
 				}

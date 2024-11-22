@@ -202,10 +202,10 @@ func FilterById(docID string) (*bson.D, error) {
 type IDataStore[T IMongoDoc] interface {
 	GetCollection(cl IMongoClient) IMongoCollection
 	Create(ctx context.Context, doc T, cl IMongoClient) (T, errs.IMongoErr)
-	List(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr)
+	Find(ctx context.Context, filter *primitive.D, cl IMongoClient) (T, errs.IMongoErr)
+	FindMany(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr)
 	Delete(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr
 	DeleteMany(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr
-	Find(ctx context.Context, filter *primitive.D, cl IMongoClient) (T, errs.IMongoErr)
 	Replace(ctx context.Context, filter *primitive.D, doc T, cl IMongoClient) (T, errs.IMongoErr)
 }
 
@@ -226,7 +226,20 @@ func (m *DataStore[T]) Create(ctx context.Context, doc T, cl IMongoClient) (T, e
 	doc.SetID(id)
 	return doc, nil
 }
-func (m *DataStore[T]) List(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr) {
+func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl IMongoClient) (T, errs.IMongoErr) {
+	docs, err := m.FindMany(ctx, filter, cl)
+	if err != nil {
+		return *new(T), errs.NewMongoOpErr(err)
+	}
+	if len(docs) == 0 {
+		return *new(T), errs.NewMongoObjectNotfound(*filter)
+	}
+	if len(docs) > 1 {
+		return *new(T), errs.NewMongoMultipleObjectfound(*filter)
+	}
+	return docs[0], nil
+}
+func (m *DataStore[T]) FindMany(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr) {
 	cursor, err := m.GetCollection(cl).Find(ctx, filter)
 	if err != nil {
 		return nil, errs.NewMongoOpErr(err)
@@ -259,19 +272,7 @@ func (m *DataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D, cl I
 	}
 	return nil
 }
-func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl IMongoClient) (T, errs.IMongoErr) {
-	docs, err := m.List(ctx, filter, cl)
-	if err != nil {
-		return *new(T), errs.NewMongoOpErr(err)
-	}
-	if len(docs) == 0 {
-		return *new(T), errs.NewMongoObjectNotfound(*filter)
-	}
-	if len(docs) > 1 {
-		return *new(T), errs.NewMongoMultipleObjectfound(*filter)
-	}
-	return docs[0], nil
-}
+
 func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, cl IMongoClient) (T, errs.IMongoErr) {
 	res, err := m.GetCollection(cl).ReplaceOne(ctx, filter, doc)
 	if err != nil {

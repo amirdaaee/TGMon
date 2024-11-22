@@ -43,7 +43,7 @@ func (f *baseFacade[T]) baseCreate(ctx context.Context, doc T, cl db.IMongoClien
 }
 func (f *baseFacade[T]) baseRead(ctx context.Context, filter *primitive.D, cl db.IMongoClient) ([]T, errs.IMongoErr) {
 	ds := f.getDatastore()
-	docs, err := ds.List(ctx, filter, cl)
+	docs, err := ds.FindMany(ctx, filter, cl)
 	if err != nil {
 		return nil, err
 	}
