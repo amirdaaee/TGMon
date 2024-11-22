@@ -13,9 +13,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+type IMongoClient interface {
+	Disconnect(context.Context) error
+	Database(name string, opts ...*options.DatabaseOptions) *mongo.Database
+}
 type IMongo interface {
-	GetCollection(cl *mongo.Client) *mongo.Collection
-	GetClient() (*mongo.Client, error)
+	GetCollection(cl IMongoClient) *mongo.Collection
+	GetClient() (IMongoClient, error)
 }
 type Mongo struct {
 	IMng                IMongo
@@ -25,7 +29,7 @@ type Mongo struct {
 	JobCollectionName   string
 }
 
-func (m *Mongo) GetClient() (*mongo.Client, error) {
+func (m *Mongo) GetClient() (IMongoClient, error) {
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI(m.DBUri).SetServerAPIOptions(serverAPI)
 	cl, err := mongo.Connect(context.TODO(), opts)
@@ -35,7 +39,7 @@ func (m *Mongo) GetClient() (*mongo.Client, error) {
 	return cl, nil
 }
 
-func (m *Mongo) assertClient(cl *mongo.Client) (*mongo.Client, func(context.Context) error, error) {
+func (m *Mongo) assertClient(cl IMongoClient) (IMongoClient, func(context.Context) error, error) {
 	if cl != nil {
 		return cl, func(context.Context) error { return nil }, nil
 	}
@@ -45,7 +49,7 @@ func (m *Mongo) assertClient(cl *mongo.Client) (*mongo.Client, func(context.Cont
 	}
 	return cl, cl.Disconnect, nil
 }
-func (m *Mongo) DocAdd(ctx context.Context, doc interface{}, cl *mongo.Client) (*mongo.InsertOneResult, error) {
+func (m *Mongo) DocAdd(ctx context.Context, doc interface{}, cl IMongoClient) (*mongo.InsertOneResult, error) {
 	cl, disc, err := m.assertClient(cl)
 	if err != nil {
 		return nil, err
@@ -53,7 +57,7 @@ func (m *Mongo) DocAdd(ctx context.Context, doc interface{}, cl *mongo.Client) (
 	defer disc(ctx)
 	return m.IMng.GetCollection(cl).InsertOne(ctx, doc)
 }
-func (m *Mongo) DocAddMany(ctx context.Context, doc []interface{}, cl *mongo.Client) (*mongo.InsertManyResult, error) {
+func (m *Mongo) DocAddMany(ctx context.Context, doc []interface{}, cl IMongoClient) (*mongo.InsertManyResult, error) {
 	cl, disc, err := m.assertClient(cl)
 	if err != nil {
 		return nil, err
@@ -61,7 +65,7 @@ func (m *Mongo) DocAddMany(ctx context.Context, doc []interface{}, cl *mongo.Cli
 	defer disc(ctx)
 	return m.IMng.GetCollection(cl).InsertMany(ctx, doc)
 }
-func (m *Mongo) DocGetById(ctx context.Context, docID string, result interface{}, cl *mongo.Client) error {
+func (m *Mongo) DocGetById(ctx context.Context, docID string, result interface{}, cl IMongoClient) error {
 	cl, disc, err := m.assertClient(cl)
 	if err != nil {
 		return err
@@ -73,7 +77,7 @@ func (m *Mongo) DocGetById(ctx context.Context, docID string, result interface{}
 	}
 	return m.IMng.GetCollection(cl).FindOne(ctx, filter).Decode(result)
 }
-func (m *Mongo) DocDelById(ctx context.Context, docID string, cl *mongo.Client) error {
+func (m *Mongo) DocDelById(ctx context.Context, docID string, cl IMongoClient) error {
 	cl, disc, err := m.assertClient(cl)
 	if err != nil {
 		return err
@@ -86,7 +90,7 @@ func (m *Mongo) DocDelById(ctx context.Context, docID string, cl *mongo.Client) 
 	_, err = m.IMng.GetCollection(cl).DeleteOne(ctx, filter)
 	return err
 }
-func (m *Mongo) DocGetAll(ctx context.Context, result interface{}, cl *mongo.Client, opts ...*options.FindOptions) error {
+func (m *Mongo) DocGetAll(ctx context.Context, result interface{}, cl IMongoClient, opts ...*options.FindOptions) error {
 	cl, disc, err := m.assertClient(cl)
 	if err != nil {
 		return err
@@ -101,7 +105,7 @@ func (m *Mongo) DocGetAll(ctx context.Context, result interface{}, cl *mongo.Cli
 	}
 	return nil
 }
-func (m *Mongo) DocGetNeighbour(ctx context.Context, mediaDoc MediaFileDoc, cl *mongo.Client) (*MediaFileDoc, *MediaFileDoc, error) {
+func (m *Mongo) DocGetNeighbour(ctx context.Context, mediaDoc MediaFileDoc, cl IMongoClient) (*MediaFileDoc, *MediaFileDoc, error) {
 	ll := logrus.WithField("module", "DocGetNeighbour").WithField("target", mediaDoc.ID)
 	cl, disc, err := m.assertClient(cl)
 	if err != nil {
@@ -152,10 +156,10 @@ type jobMongo struct {
 	*Mongo
 }
 
-func (m *mediaMongo) GetCollection(cl *mongo.Client) *mongo.Collection {
+func (m *mediaMongo) GetCollection(cl IMongoClient) *mongo.Collection {
 	return cl.Database(m.DBName).Collection(m.MediaCollectionName)
 }
-func (m *jobMongo) GetCollection(cl *mongo.Client) *mongo.Collection {
+func (m *jobMongo) GetCollection(cl IMongoClient) *mongo.Collection {
 	return cl.Database(m.DBName).Collection(m.JobCollectionName)
 }
 
@@ -170,13 +174,13 @@ func FilterById(docID string) (*bson.D, error) {
 
 // ---
 type IDataStore[T IMongoDoc] interface {
-	GetCollection(cl *mongo.Client) *mongo.Collection
-	Create(ctx context.Context, doc T, cl *mongo.Client) (T, errs.IMongoErr)
-	List(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]T, errs.IMongoErr)
-	Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr
-	DeleteMany(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr
-	Find(ctx context.Context, filter *primitive.D, cl *mongo.Client) (T, errs.IMongoErr)
-	Replace(ctx context.Context, filter *primitive.D, doc T, cl *mongo.Client) (T, errs.IMongoErr)
+	GetCollection(cl IMongoClient) *mongo.Collection
+	Create(ctx context.Context, doc T, cl IMongoClient) (T, errs.IMongoErr)
+	List(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr)
+	Delete(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr
+	DeleteMany(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr
+	Find(ctx context.Context, filter *primitive.D, cl IMongoClient) (T, errs.IMongoErr)
+	Replace(ctx context.Context, filter *primitive.D, doc T, cl IMongoClient) (T, errs.IMongoErr)
 }
 
 type DataStore[T IMongoDoc] struct {
@@ -184,10 +188,10 @@ type DataStore[T IMongoDoc] struct {
 	collection string
 }
 
-func (m *DataStore[T]) GetCollection(cl *mongo.Client) *mongo.Collection {
+func (m *DataStore[T]) GetCollection(cl IMongoClient) *mongo.Collection {
 	return cl.Database(m.DB.DBName).Collection(m.collection)
 }
-func (m *DataStore[T]) Create(ctx context.Context, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
+func (m *DataStore[T]) Create(ctx context.Context, doc T, cl IMongoClient) (T, errs.IMongoErr) {
 	res, err := m.GetCollection(cl).InsertOne(ctx, doc)
 	if err != nil {
 		return doc, errs.NewMongoOpErr(err)
@@ -197,7 +201,7 @@ func (m *DataStore[T]) Create(ctx context.Context, doc T, cl *mongo.Client) (T, 
 	return doc, nil
 }
 
-func (m *DataStore[T]) List(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]T, errs.IMongoErr) {
+func (m *DataStore[T]) List(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr) {
 	cursor, err := m.GetCollection(cl).Find(ctx, filter)
 	if err != nil {
 		return nil, errs.NewMongoOpErr(err)
@@ -214,7 +218,7 @@ func (m *DataStore[T]) List(ctx context.Context, filter *primitive.D, cl *mongo.
 	}
 	return res, nil
 }
-func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr {
+func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr {
 	if res, err := m.GetCollection(cl).DeleteOne(ctx, filter); err != nil {
 		return errs.NewMongoOpErr(err)
 	} else if res.DeletedCount == 0 {
@@ -222,7 +226,7 @@ func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl *mong
 	}
 	return nil
 }
-func (m *DataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr {
+func (m *DataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr {
 	if res, err := m.GetCollection(cl).DeleteMany(ctx, filter); err != nil {
 		return errs.NewMongoOpErr(err)
 	} else if res.DeletedCount == 0 {
@@ -230,7 +234,7 @@ func (m *DataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D, cl *
 	}
 	return nil
 }
-func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl *mongo.Client) (T, errs.IMongoErr) {
+func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl IMongoClient) (T, errs.IMongoErr) {
 	docs, err := m.List(ctx, filter, cl)
 	if err != nil {
 		return *new(T), errs.NewMongoOpErr(err)
@@ -243,7 +247,7 @@ func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl *mongo.
 	}
 	return docs[0], nil
 }
-func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
+func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, cl IMongoClient) (T, errs.IMongoErr) {
 	res, err := m.GetCollection(cl).ReplaceOne(ctx, filter, doc)
 	if err != nil {
 		return doc, err

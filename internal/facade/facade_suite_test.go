@@ -56,7 +56,7 @@ var _ = Describe("Facade", func() {
 		jobDSMock.AssertExpectations(GinkgoT())
 		mediaDSMock.AssertExpectations(GinkgoT())
 	}
-	newMongoClient := func() (*mongo.Client, error) {
+	newMongoClient := func() (db.IMongoClient, error) {
 		return &mongo.Client{}, nil
 	}
 	BeforeEach(func() {
@@ -98,7 +98,7 @@ var _ = Describe("Facade", func() {
 			assertMediaDs_Replace := func(tc testCase) {
 				if tc.expectMinioAdd && !tc.minioAddError {
 					mediaDSMock.EXPECT().Replace(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, mfd *db.MediaFileDoc, c *mongo.Client) (*db.MediaFileDoc, errs.IMongoErr) {
+						func(ctx context.Context, d *primitive.D, mfd *db.MediaFileDoc, c db.IMongoClient) (*db.MediaFileDoc, errs.IMongoErr) {
 							Expect(*d).To(BeEquivalentTo(*db.GetIDFilter(tc.outputDoc.GetID())))
 							Expect(mfd.GetID()).To(BeEquivalentTo(tc.outputDoc.GetID()))
 							Expect(mfd.Thumbnail).NotTo(BeEmpty())
@@ -117,7 +117,7 @@ var _ = Describe("Facade", func() {
 			assertJobDs_Create := func(tc testCase) {
 				if tc.expectJob {
 					jobDSMock.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, jd *db.JobDoc, c *mongo.Client) (*db.JobDoc, errs.IMongoErr) {
+						func(ctx context.Context, jd *db.JobDoc, c db.IMongoClient) (*db.JobDoc, errs.IMongoErr) {
 							Expect(jd.MediaID).To(BeEquivalentTo(tc.outputDoc.GetID()))
 							Expect(jd.Type).To(BeEquivalentTo(db.SPRITEJobType))
 							v := new(db.JobDoc)
@@ -413,14 +413,15 @@ var _ = Describe("Facade", func() {
 			}
 			assertJobDs_DeleteMany := func(tc testCase) {
 				if tc.expectJob {
-					jobDSMock.EXPECT().DeleteMany(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, d *primitive.D, c *mongo.Client) errs.IMongoErr {
-						Expect(*d).To(BeEquivalentTo(primitive.D{{Key: "MediaID", Value: tc.outputDoc.ID}}))
-						err := new(error)
-						if tc.jobDeleteManyError {
-							*err = fmt.Errorf("mock mediaDSMock.DeleteMany err")
-						}
-						return *err
-					})
+					jobDSMock.EXPECT().DeleteMany(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+						func(ctx context.Context, d *primitive.D, c db.IMongoClient) errs.IMongoErr {
+							Expect(*d).To(BeEquivalentTo(primitive.D{{Key: "MediaID", Value: tc.outputDoc.ID}}))
+							err := new(error)
+							if tc.jobDeleteManyError {
+								*err = fmt.Errorf("mock mediaDSMock.DeleteMany err")
+							}
+							return *err
+						})
 				}
 			}
 			assertMinioMock_RmAdd := func(tc testCase) {
@@ -652,7 +653,7 @@ var _ = Describe("Facade", func() {
 			assertJobDs_List := func(tc testCase) {
 				if tc.expectJobDsList {
 					jobDSMock.EXPECT().List(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, c *mongo.Client) ([]*db.JobDoc, errs.IMongoErr) {
+						func(ctx context.Context, d *primitive.D, c db.IMongoClient) ([]*db.JobDoc, errs.IMongoErr) {
 							filterObj := db.JobDoc{MediaID: tc.inputDoc.MediaID, Type: tc.inputDoc.Type}
 							expectedFilter, _err := db.MarshalOmitEmpty(&filterObj)
 							Expect(_err).To(BeNil())
@@ -678,7 +679,7 @@ var _ = Describe("Facade", func() {
 			assertJobDs_Create := func(tc testCase) {
 				if tc.expectJobDsCreate {
 					jobDSMock.EXPECT().Create(mock.Anything, tc.inputDoc, mock.Anything).RunAndReturn(
-						func(ctx context.Context, jd *db.JobDoc, c *mongo.Client) (*db.JobDoc, errs.IMongoErr) {
+						func(ctx context.Context, jd *db.JobDoc, c db.IMongoClient) (*db.JobDoc, errs.IMongoErr) {
 							v := new(db.JobDoc)
 							err := new(error)
 							if tc.jobDsCreateErr == nil {
@@ -808,7 +809,7 @@ var _ = Describe("Facade", func() {
 			}
 			assertJobDs_List := func(tc testCase) {
 				jobDSMock.EXPECT().List(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-					func(ctx context.Context, d *primitive.D, c *mongo.Client) ([]*db.JobDoc, errs.IMongoErr) {
+					func(ctx context.Context, d *primitive.D, c db.IMongoClient) ([]*db.JobDoc, errs.IMongoErr) {
 						Expect(d).Should(Equal(tc.filter))
 						// ...
 						v := new([]*db.JobDoc)
@@ -957,7 +958,7 @@ var _ = Describe("Facade", func() {
 			assertJobDs_Find := func(tc testCase) {
 				if tc.expectJobDsFind {
 					jobDSMock.EXPECT().Find(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, c *mongo.Client) (*db.JobDoc, errs.IMongoErr) {
+						func(ctx context.Context, d *primitive.D, c db.IMongoClient) (*db.JobDoc, errs.IMongoErr) {
 							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.GetID())))
 							// ...
 							v := new(db.JobDoc)
@@ -976,7 +977,7 @@ var _ = Describe("Facade", func() {
 			assertJobDs_Delete := func(tc testCase) {
 				if tc.expectJobDsDelete {
 					jobDSMock.EXPECT().Delete(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, c *mongo.Client) errs.IMongoErr {
+						func(ctx context.Context, d *primitive.D, c db.IMongoClient) errs.IMongoErr {
 							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.GetID())))
 							// ...
 							err := new(error)
@@ -992,7 +993,7 @@ var _ = Describe("Facade", func() {
 			assertMediaDs_Find := func(tc testCase) {
 				if tc.expectMediaDsFind {
 					mediaDSMock.EXPECT().Find(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, c *mongo.Client) (*db.MediaFileDoc, errs.IMongoErr) {
+						func(ctx context.Context, d *primitive.D, c db.IMongoClient) (*db.MediaFileDoc, errs.IMongoErr) {
 							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.MediaID)))
 							// ...
 							v := new(db.MediaFileDoc)
@@ -1011,7 +1012,7 @@ var _ = Describe("Facade", func() {
 			assertMediaDs_Replace := func(tc testCase) {
 				if tc.expectMediaDsReplace {
 					mediaDSMock.EXPECT().Replace(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, mfd *db.MediaFileDoc, c *mongo.Client) (*db.MediaFileDoc, errs.IMongoErr) {
+						func(ctx context.Context, d *primitive.D, mfd *db.MediaFileDoc, c db.IMongoClient) (*db.MediaFileDoc, errs.IMongoErr) {
 							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.MediaID)))
 							switch tc.jobDoc.Type {
 							case db.SPRITEJobType:

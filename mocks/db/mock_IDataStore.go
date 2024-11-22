@@ -29,7 +29,7 @@ func (_m *MockIDataStore[T]) EXPECT() *MockIDataStore_Expecter[T] {
 }
 
 // Create provides a mock function with given fields: ctx, doc, cl
-func (_m *MockIDataStore[T]) Create(ctx context.Context, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
+func (_m *MockIDataStore[T]) Create(ctx context.Context, doc T, cl db.IMongoClient) (T, errs.IMongoErr) {
 	ret := _m.Called(ctx, doc, cl)
 
 	if len(ret) == 0 {
@@ -38,16 +38,16 @@ func (_m *MockIDataStore[T]) Create(ctx context.Context, doc T, cl *mongo.Client
 
 	var r0 T
 	var r1 errs.IMongoErr
-	if rf, ok := ret.Get(0).(func(context.Context, T, *mongo.Client) (T, errs.IMongoErr)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, T, db.IMongoClient) (T, errs.IMongoErr)); ok {
 		return rf(ctx, doc, cl)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, T, *mongo.Client) T); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, T, db.IMongoClient) T); ok {
 		r0 = rf(ctx, doc, cl)
 	} else {
 		r0 = ret.Get(0).(T)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, T, *mongo.Client) errs.IMongoErr); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, T, db.IMongoClient) errs.IMongoErr); ok {
 		r1 = rf(ctx, doc, cl)
 	} else {
 		if ret.Get(1) != nil {
@@ -66,14 +66,14 @@ type MockIDataStore_Create_Call[T db.IMongoDoc] struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - doc T
-//   - cl *mongo.Client
+//   - cl db.IMongoClient
 func (_e *MockIDataStore_Expecter[T]) Create(ctx interface{}, doc interface{}, cl interface{}) *MockIDataStore_Create_Call[T] {
 	return &MockIDataStore_Create_Call[T]{Call: _e.mock.On("Create", ctx, doc, cl)}
 }
 
-func (_c *MockIDataStore_Create_Call[T]) Run(run func(ctx context.Context, doc T, cl *mongo.Client)) *MockIDataStore_Create_Call[T] {
+func (_c *MockIDataStore_Create_Call[T]) Run(run func(ctx context.Context, doc T, cl db.IMongoClient)) *MockIDataStore_Create_Call[T] {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(T), args[2].(*mongo.Client))
+		run(args[0].(context.Context), args[1].(T), args[2].(db.IMongoClient))
 	})
 	return _c
 }
@@ -83,13 +83,13 @@ func (_c *MockIDataStore_Create_Call[T]) Return(_a0 T, _a1 errs.IMongoErr) *Mock
 	return _c
 }
 
-func (_c *MockIDataStore_Create_Call[T]) RunAndReturn(run func(context.Context, T, *mongo.Client) (T, errs.IMongoErr)) *MockIDataStore_Create_Call[T] {
+func (_c *MockIDataStore_Create_Call[T]) RunAndReturn(run func(context.Context, T, db.IMongoClient) (T, errs.IMongoErr)) *MockIDataStore_Create_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Delete provides a mock function with given fields: ctx, filter, cl
-func (_m *MockIDataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr {
+func (_m *MockIDataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl db.IMongoClient) errs.IMongoErr {
 	ret := _m.Called(ctx, filter, cl)
 
 	if len(ret) == 0 {
@@ -97,7 +97,7 @@ func (_m *MockIDataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl
 	}
 
 	var r0 errs.IMongoErr
-	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, *mongo.Client) errs.IMongoErr); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, db.IMongoClient) errs.IMongoErr); ok {
 		r0 = rf(ctx, filter, cl)
 	} else {
 		if ret.Get(0) != nil {
@@ -116,14 +116,14 @@ type MockIDataStore_Delete_Call[T db.IMongoDoc] struct {
 // Delete is a helper method to define mock.On call
 //   - ctx context.Context
 //   - filter *primitive.D
-//   - cl *mongo.Client
+//   - cl db.IMongoClient
 func (_e *MockIDataStore_Expecter[T]) Delete(ctx interface{}, filter interface{}, cl interface{}) *MockIDataStore_Delete_Call[T] {
 	return &MockIDataStore_Delete_Call[T]{Call: _e.mock.On("Delete", ctx, filter, cl)}
 }
 
-func (_c *MockIDataStore_Delete_Call[T]) Run(run func(ctx context.Context, filter *primitive.D, cl *mongo.Client)) *MockIDataStore_Delete_Call[T] {
+func (_c *MockIDataStore_Delete_Call[T]) Run(run func(ctx context.Context, filter *primitive.D, cl db.IMongoClient)) *MockIDataStore_Delete_Call[T] {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*primitive.D), args[2].(*mongo.Client))
+		run(args[0].(context.Context), args[1].(*primitive.D), args[2].(db.IMongoClient))
 	})
 	return _c
 }
@@ -133,13 +133,13 @@ func (_c *MockIDataStore_Delete_Call[T]) Return(_a0 errs.IMongoErr) *MockIDataSt
 	return _c
 }
 
-func (_c *MockIDataStore_Delete_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, *mongo.Client) errs.IMongoErr) *MockIDataStore_Delete_Call[T] {
+func (_c *MockIDataStore_Delete_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, db.IMongoClient) errs.IMongoErr) *MockIDataStore_Delete_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }
 
 // DeleteMany provides a mock function with given fields: ctx, filter, cl
-func (_m *MockIDataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr {
+func (_m *MockIDataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D, cl db.IMongoClient) errs.IMongoErr {
 	ret := _m.Called(ctx, filter, cl)
 
 	if len(ret) == 0 {
@@ -147,7 +147,7 @@ func (_m *MockIDataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D
 	}
 
 	var r0 errs.IMongoErr
-	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, *mongo.Client) errs.IMongoErr); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, db.IMongoClient) errs.IMongoErr); ok {
 		r0 = rf(ctx, filter, cl)
 	} else {
 		if ret.Get(0) != nil {
@@ -166,14 +166,14 @@ type MockIDataStore_DeleteMany_Call[T db.IMongoDoc] struct {
 // DeleteMany is a helper method to define mock.On call
 //   - ctx context.Context
 //   - filter *primitive.D
-//   - cl *mongo.Client
+//   - cl db.IMongoClient
 func (_e *MockIDataStore_Expecter[T]) DeleteMany(ctx interface{}, filter interface{}, cl interface{}) *MockIDataStore_DeleteMany_Call[T] {
 	return &MockIDataStore_DeleteMany_Call[T]{Call: _e.mock.On("DeleteMany", ctx, filter, cl)}
 }
 
-func (_c *MockIDataStore_DeleteMany_Call[T]) Run(run func(ctx context.Context, filter *primitive.D, cl *mongo.Client)) *MockIDataStore_DeleteMany_Call[T] {
+func (_c *MockIDataStore_DeleteMany_Call[T]) Run(run func(ctx context.Context, filter *primitive.D, cl db.IMongoClient)) *MockIDataStore_DeleteMany_Call[T] {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*primitive.D), args[2].(*mongo.Client))
+		run(args[0].(context.Context), args[1].(*primitive.D), args[2].(db.IMongoClient))
 	})
 	return _c
 }
@@ -183,13 +183,13 @@ func (_c *MockIDataStore_DeleteMany_Call[T]) Return(_a0 errs.IMongoErr) *MockIDa
 	return _c
 }
 
-func (_c *MockIDataStore_DeleteMany_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, *mongo.Client) errs.IMongoErr) *MockIDataStore_DeleteMany_Call[T] {
+func (_c *MockIDataStore_DeleteMany_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, db.IMongoClient) errs.IMongoErr) *MockIDataStore_DeleteMany_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Find provides a mock function with given fields: ctx, filter, cl
-func (_m *MockIDataStore[T]) Find(ctx context.Context, filter *primitive.D, cl *mongo.Client) (T, errs.IMongoErr) {
+func (_m *MockIDataStore[T]) Find(ctx context.Context, filter *primitive.D, cl db.IMongoClient) (T, errs.IMongoErr) {
 	ret := _m.Called(ctx, filter, cl)
 
 	if len(ret) == 0 {
@@ -198,16 +198,16 @@ func (_m *MockIDataStore[T]) Find(ctx context.Context, filter *primitive.D, cl *
 
 	var r0 T
 	var r1 errs.IMongoErr
-	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, *mongo.Client) (T, errs.IMongoErr)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, db.IMongoClient) (T, errs.IMongoErr)); ok {
 		return rf(ctx, filter, cl)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, *mongo.Client) T); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, db.IMongoClient) T); ok {
 		r0 = rf(ctx, filter, cl)
 	} else {
 		r0 = ret.Get(0).(T)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *primitive.D, *mongo.Client) errs.IMongoErr); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *primitive.D, db.IMongoClient) errs.IMongoErr); ok {
 		r1 = rf(ctx, filter, cl)
 	} else {
 		if ret.Get(1) != nil {
@@ -226,14 +226,14 @@ type MockIDataStore_Find_Call[T db.IMongoDoc] struct {
 // Find is a helper method to define mock.On call
 //   - ctx context.Context
 //   - filter *primitive.D
-//   - cl *mongo.Client
+//   - cl db.IMongoClient
 func (_e *MockIDataStore_Expecter[T]) Find(ctx interface{}, filter interface{}, cl interface{}) *MockIDataStore_Find_Call[T] {
 	return &MockIDataStore_Find_Call[T]{Call: _e.mock.On("Find", ctx, filter, cl)}
 }
 
-func (_c *MockIDataStore_Find_Call[T]) Run(run func(ctx context.Context, filter *primitive.D, cl *mongo.Client)) *MockIDataStore_Find_Call[T] {
+func (_c *MockIDataStore_Find_Call[T]) Run(run func(ctx context.Context, filter *primitive.D, cl db.IMongoClient)) *MockIDataStore_Find_Call[T] {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*primitive.D), args[2].(*mongo.Client))
+		run(args[0].(context.Context), args[1].(*primitive.D), args[2].(db.IMongoClient))
 	})
 	return _c
 }
@@ -243,13 +243,13 @@ func (_c *MockIDataStore_Find_Call[T]) Return(_a0 T, _a1 errs.IMongoErr) *MockID
 	return _c
 }
 
-func (_c *MockIDataStore_Find_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, *mongo.Client) (T, errs.IMongoErr)) *MockIDataStore_Find_Call[T] {
+func (_c *MockIDataStore_Find_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, db.IMongoClient) (T, errs.IMongoErr)) *MockIDataStore_Find_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetCollection provides a mock function with given fields: cl
-func (_m *MockIDataStore[T]) GetCollection(cl *mongo.Client) *mongo.Collection {
+func (_m *MockIDataStore[T]) GetCollection(cl db.IMongoClient) *mongo.Collection {
 	ret := _m.Called(cl)
 
 	if len(ret) == 0 {
@@ -257,7 +257,7 @@ func (_m *MockIDataStore[T]) GetCollection(cl *mongo.Client) *mongo.Collection {
 	}
 
 	var r0 *mongo.Collection
-	if rf, ok := ret.Get(0).(func(*mongo.Client) *mongo.Collection); ok {
+	if rf, ok := ret.Get(0).(func(db.IMongoClient) *mongo.Collection); ok {
 		r0 = rf(cl)
 	} else {
 		if ret.Get(0) != nil {
@@ -274,14 +274,14 @@ type MockIDataStore_GetCollection_Call[T db.IMongoDoc] struct {
 }
 
 // GetCollection is a helper method to define mock.On call
-//   - cl *mongo.Client
+//   - cl db.IMongoClient
 func (_e *MockIDataStore_Expecter[T]) GetCollection(cl interface{}) *MockIDataStore_GetCollection_Call[T] {
 	return &MockIDataStore_GetCollection_Call[T]{Call: _e.mock.On("GetCollection", cl)}
 }
 
-func (_c *MockIDataStore_GetCollection_Call[T]) Run(run func(cl *mongo.Client)) *MockIDataStore_GetCollection_Call[T] {
+func (_c *MockIDataStore_GetCollection_Call[T]) Run(run func(cl db.IMongoClient)) *MockIDataStore_GetCollection_Call[T] {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*mongo.Client))
+		run(args[0].(db.IMongoClient))
 	})
 	return _c
 }
@@ -291,13 +291,13 @@ func (_c *MockIDataStore_GetCollection_Call[T]) Return(_a0 *mongo.Collection) *M
 	return _c
 }
 
-func (_c *MockIDataStore_GetCollection_Call[T]) RunAndReturn(run func(*mongo.Client) *mongo.Collection) *MockIDataStore_GetCollection_Call[T] {
+func (_c *MockIDataStore_GetCollection_Call[T]) RunAndReturn(run func(db.IMongoClient) *mongo.Collection) *MockIDataStore_GetCollection_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }
 
 // List provides a mock function with given fields: ctx, filter, cl
-func (_m *MockIDataStore[T]) List(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]T, errs.IMongoErr) {
+func (_m *MockIDataStore[T]) List(ctx context.Context, filter *primitive.D, cl db.IMongoClient) ([]T, errs.IMongoErr) {
 	ret := _m.Called(ctx, filter, cl)
 
 	if len(ret) == 0 {
@@ -306,10 +306,10 @@ func (_m *MockIDataStore[T]) List(ctx context.Context, filter *primitive.D, cl *
 
 	var r0 []T
 	var r1 errs.IMongoErr
-	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, *mongo.Client) ([]T, errs.IMongoErr)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, db.IMongoClient) ([]T, errs.IMongoErr)); ok {
 		return rf(ctx, filter, cl)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, *mongo.Client) []T); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, db.IMongoClient) []T); ok {
 		r0 = rf(ctx, filter, cl)
 	} else {
 		if ret.Get(0) != nil {
@@ -317,7 +317,7 @@ func (_m *MockIDataStore[T]) List(ctx context.Context, filter *primitive.D, cl *
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *primitive.D, *mongo.Client) errs.IMongoErr); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *primitive.D, db.IMongoClient) errs.IMongoErr); ok {
 		r1 = rf(ctx, filter, cl)
 	} else {
 		if ret.Get(1) != nil {
@@ -336,14 +336,14 @@ type MockIDataStore_List_Call[T db.IMongoDoc] struct {
 // List is a helper method to define mock.On call
 //   - ctx context.Context
 //   - filter *primitive.D
-//   - cl *mongo.Client
+//   - cl db.IMongoClient
 func (_e *MockIDataStore_Expecter[T]) List(ctx interface{}, filter interface{}, cl interface{}) *MockIDataStore_List_Call[T] {
 	return &MockIDataStore_List_Call[T]{Call: _e.mock.On("List", ctx, filter, cl)}
 }
 
-func (_c *MockIDataStore_List_Call[T]) Run(run func(ctx context.Context, filter *primitive.D, cl *mongo.Client)) *MockIDataStore_List_Call[T] {
+func (_c *MockIDataStore_List_Call[T]) Run(run func(ctx context.Context, filter *primitive.D, cl db.IMongoClient)) *MockIDataStore_List_Call[T] {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*primitive.D), args[2].(*mongo.Client))
+		run(args[0].(context.Context), args[1].(*primitive.D), args[2].(db.IMongoClient))
 	})
 	return _c
 }
@@ -353,13 +353,13 @@ func (_c *MockIDataStore_List_Call[T]) Return(_a0 []T, _a1 errs.IMongoErr) *Mock
 	return _c
 }
 
-func (_c *MockIDataStore_List_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, *mongo.Client) ([]T, errs.IMongoErr)) *MockIDataStore_List_Call[T] {
+func (_c *MockIDataStore_List_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, db.IMongoClient) ([]T, errs.IMongoErr)) *MockIDataStore_List_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Replace provides a mock function with given fields: ctx, filter, doc, cl
-func (_m *MockIDataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
+func (_m *MockIDataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, cl db.IMongoClient) (T, errs.IMongoErr) {
 	ret := _m.Called(ctx, filter, doc, cl)
 
 	if len(ret) == 0 {
@@ -368,16 +368,16 @@ func (_m *MockIDataStore[T]) Replace(ctx context.Context, filter *primitive.D, d
 
 	var r0 T
 	var r1 errs.IMongoErr
-	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, T, *mongo.Client) (T, errs.IMongoErr)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, T, db.IMongoClient) (T, errs.IMongoErr)); ok {
 		return rf(ctx, filter, doc, cl)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, T, *mongo.Client) T); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *primitive.D, T, db.IMongoClient) T); ok {
 		r0 = rf(ctx, filter, doc, cl)
 	} else {
 		r0 = ret.Get(0).(T)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *primitive.D, T, *mongo.Client) errs.IMongoErr); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *primitive.D, T, db.IMongoClient) errs.IMongoErr); ok {
 		r1 = rf(ctx, filter, doc, cl)
 	} else {
 		if ret.Get(1) != nil {
@@ -397,14 +397,14 @@ type MockIDataStore_Replace_Call[T db.IMongoDoc] struct {
 //   - ctx context.Context
 //   - filter *primitive.D
 //   - doc T
-//   - cl *mongo.Client
+//   - cl db.IMongoClient
 func (_e *MockIDataStore_Expecter[T]) Replace(ctx interface{}, filter interface{}, doc interface{}, cl interface{}) *MockIDataStore_Replace_Call[T] {
 	return &MockIDataStore_Replace_Call[T]{Call: _e.mock.On("Replace", ctx, filter, doc, cl)}
 }
 
-func (_c *MockIDataStore_Replace_Call[T]) Run(run func(ctx context.Context, filter *primitive.D, doc T, cl *mongo.Client)) *MockIDataStore_Replace_Call[T] {
+func (_c *MockIDataStore_Replace_Call[T]) Run(run func(ctx context.Context, filter *primitive.D, doc T, cl db.IMongoClient)) *MockIDataStore_Replace_Call[T] {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*primitive.D), args[2].(T), args[3].(*mongo.Client))
+		run(args[0].(context.Context), args[1].(*primitive.D), args[2].(T), args[3].(db.IMongoClient))
 	})
 	return _c
 }
@@ -414,7 +414,7 @@ func (_c *MockIDataStore_Replace_Call[T]) Return(_a0 T, _a1 errs.IMongoErr) *Moc
 	return _c
 }
 
-func (_c *MockIDataStore_Replace_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, T, *mongo.Client) (T, errs.IMongoErr)) *MockIDataStore_Replace_Call[T] {
+func (_c *MockIDataStore_Replace_Call[T]) RunAndReturn(run func(context.Context, *primitive.D, T, db.IMongoClient) (T, errs.IMongoErr)) *MockIDataStore_Replace_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }

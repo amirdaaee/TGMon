@@ -7,7 +7,6 @@ import (
 	"github.com/amirdaaee/TGMon/internal/errs"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type baseFacade[T db.IMongoDoc] struct {
@@ -34,7 +33,7 @@ func (f *baseFacade[T]) getDatastore() db.IDataStore[T] {
 	}
 	return *ds
 }
-func (f *baseFacade[T]) baseCreate(ctx context.Context, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
+func (f *baseFacade[T]) baseCreate(ctx context.Context, doc T, cl db.IMongoClient) (T, errs.IMongoErr) {
 	ds := f.getDatastore()
 	newDoc, err := ds.Create(ctx, doc, cl)
 	if err != nil {
@@ -42,7 +41,7 @@ func (f *baseFacade[T]) baseCreate(ctx context.Context, doc T, cl *mongo.Client)
 	}
 	return newDoc, err
 }
-func (f *baseFacade[T]) baseRead(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]T, errs.IMongoErr) {
+func (f *baseFacade[T]) baseRead(ctx context.Context, filter *primitive.D, cl db.IMongoClient) ([]T, errs.IMongoErr) {
 	ds := f.getDatastore()
 	docs, err := ds.List(ctx, filter, cl)
 	if err != nil {
@@ -51,7 +50,7 @@ func (f *baseFacade[T]) baseRead(ctx context.Context, filter *primitive.D, cl *m
 	return docs, err
 }
 
-//	func (f *baseFacade[T]) baseUpdate(ctx context.Context, filter *primitive.D, doc T, cl *mongo.Client) (T, errs.IMongoErr) {
+//	func (f *baseFacade[T]) baseUpdate(ctx context.Context, filter *primitive.D, doc T, cl db.IMongoClient) (T, errs.IMongoErr) {
 //		ds := f.getDatastore()
 //		newDoc, err := ds.Replace(ctx, filter, doc, cl)
 //		if err != nil {
@@ -59,7 +58,7 @@ func (f *baseFacade[T]) baseRead(ctx context.Context, filter *primitive.D, cl *m
 //		}
 //		return newDoc, err
 //	}
-func (f *baseFacade[T]) baseDelete(ctx context.Context, filter *primitive.D, cl *mongo.Client) errs.IMongoErr {
+func (f *baseFacade[T]) baseDelete(ctx context.Context, filter *primitive.D, cl db.IMongoClient) errs.IMongoErr {
 	ds := f.getDatastore()
 	return ds.Delete(ctx, filter, cl)
 }

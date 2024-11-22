@@ -3,7 +3,9 @@
 package db
 
 import (
+	db "github.com/amirdaaee/TGMon/internal/db"
 	mock "github.com/stretchr/testify/mock"
+
 	mongo "go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -21,23 +23,23 @@ func (_m *MockIMongo) EXPECT() *MockIMongo_Expecter {
 }
 
 // GetClient provides a mock function with given fields:
-func (_m *MockIMongo) GetClient() (*mongo.Client, error) {
+func (_m *MockIMongo) GetClient() (db.IMongoClient, error) {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetClient")
 	}
 
-	var r0 *mongo.Client
+	var r0 db.IMongoClient
 	var r1 error
-	if rf, ok := ret.Get(0).(func() (*mongo.Client, error)); ok {
+	if rf, ok := ret.Get(0).(func() (db.IMongoClient, error)); ok {
 		return rf()
 	}
-	if rf, ok := ret.Get(0).(func() *mongo.Client); ok {
+	if rf, ok := ret.Get(0).(func() db.IMongoClient); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*mongo.Client)
+			r0 = ret.Get(0).(db.IMongoClient)
 		}
 	}
 
@@ -67,18 +69,18 @@ func (_c *MockIMongo_GetClient_Call) Run(run func()) *MockIMongo_GetClient_Call 
 	return _c
 }
 
-func (_c *MockIMongo_GetClient_Call) Return(_a0 *mongo.Client, _a1 error) *MockIMongo_GetClient_Call {
+func (_c *MockIMongo_GetClient_Call) Return(_a0 db.IMongoClient, _a1 error) *MockIMongo_GetClient_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockIMongo_GetClient_Call) RunAndReturn(run func() (*mongo.Client, error)) *MockIMongo_GetClient_Call {
+func (_c *MockIMongo_GetClient_Call) RunAndReturn(run func() (db.IMongoClient, error)) *MockIMongo_GetClient_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetCollection provides a mock function with given fields: cl
-func (_m *MockIMongo) GetCollection(cl *mongo.Client) *mongo.Collection {
+func (_m *MockIMongo) GetCollection(cl db.IMongoClient) *mongo.Collection {
 	ret := _m.Called(cl)
 
 	if len(ret) == 0 {
@@ -86,7 +88,7 @@ func (_m *MockIMongo) GetCollection(cl *mongo.Client) *mongo.Collection {
 	}
 
 	var r0 *mongo.Collection
-	if rf, ok := ret.Get(0).(func(*mongo.Client) *mongo.Collection); ok {
+	if rf, ok := ret.Get(0).(func(db.IMongoClient) *mongo.Collection); ok {
 		r0 = rf(cl)
 	} else {
 		if ret.Get(0) != nil {
@@ -103,14 +105,14 @@ type MockIMongo_GetCollection_Call struct {
 }
 
 // GetCollection is a helper method to define mock.On call
-//   - cl *mongo.Client
+//   - cl db.IMongoClient
 func (_e *MockIMongo_Expecter) GetCollection(cl interface{}) *MockIMongo_GetCollection_Call {
 	return &MockIMongo_GetCollection_Call{Call: _e.mock.On("GetCollection", cl)}
 }
 
-func (_c *MockIMongo_GetCollection_Call) Run(run func(cl *mongo.Client)) *MockIMongo_GetCollection_Call {
+func (_c *MockIMongo_GetCollection_Call) Run(run func(cl db.IMongoClient)) *MockIMongo_GetCollection_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*mongo.Client))
+		run(args[0].(db.IMongoClient))
 	})
 	return _c
 }
@@ -120,7 +122,7 @@ func (_c *MockIMongo_GetCollection_Call) Return(_a0 *mongo.Collection) *MockIMon
 	return _c
 }
 
-func (_c *MockIMongo_GetCollection_Call) RunAndReturn(run func(*mongo.Client) *mongo.Collection) *MockIMongo_GetCollection_Call {
+func (_c *MockIMongo_GetCollection_Call) RunAndReturn(run func(db.IMongoClient) *mongo.Collection) *MockIMongo_GetCollection_Call {
 	_c.Call.Return(run)
 	return _c
 }

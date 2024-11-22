@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	mongoD "go.mongodb.org/mongo-driver/mongo"
 )
 
 func AddMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, doc *bot.Document, wp *bot.WorkerPool) error {
@@ -87,7 +86,7 @@ func RmMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, docID 
 	return nil
 }
 
-func UpdateMediaThumbnail(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, data []byte, doc *db.MediaFileDoc, cl_ *mongoD.Client) error {
+func UpdateMediaThumbnail(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, data []byte, doc *db.MediaFileDoc, cl_ db.IMongoClient) error {
 	filename := uuid.NewString() + ".jpeg"
 	if err := minio.FileAdd(ctx, filename, data); err != nil {
 		return fmt.Errorf("error adding file to minio: %s", err)
@@ -105,7 +104,7 @@ func UpdateMediaThumbnail(ctx context.Context, mongo *db.Mongo, minio db.IMinioC
 	}
 	return nil
 }
-func UpdateMediaVtt(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, image []byte, vtt []byte, doc *db.MediaFileDoc, cl_ *mongoD.Client) error {
+func UpdateMediaVtt(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, image []byte, vtt []byte, doc *db.MediaFileDoc, cl_ db.IMongoClient) error {
 	u := uuid.NewString()
 	spriteName := u + ".jpeg"
 	vttName := u + ".vtt"
