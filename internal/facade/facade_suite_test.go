@@ -1127,7 +1127,7 @@ var _ = Describe("Facade", func() {
 				})
 				testCases := []testCase{
 					{
-						description: "Successfully done with thumbnail (no thumbnail, no vtt, no sprite)",
+						description: "Successfully done thumbnail (no thumbnail, no vtt, no sprite)",
 						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
 						mediaDoc:    newFakeMediaDoc(false, false, false),
 						data: facade.MediaMinioFile{
@@ -1141,7 +1141,7 @@ var _ = Describe("Facade", func() {
 						expectminioRmFile:    false,
 					},
 					{
-						description: "Successfully done with thumbnail",
+						description: "Successfully done thumbnail",
 						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
 						mediaDoc:    newFakeMediaDoc(true, true, true),
 						data: facade.MediaMinioFile{
@@ -1155,7 +1155,23 @@ var _ = Describe("Facade", func() {
 						expectminioRmFile:    true,
 					},
 					{
-						description: "Successfully done with thumbnail (no thumbnail, no vtt, no sprite)",
+						description: "Successfully done thumbnail with redunant data",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(true, true, true),
+						data: facade.MediaMinioFile{
+							ThumbData:  []byte("thumb-data"),
+							SpriteData: []byte("sprite-data"),
+							VttData:    []byte("vtt-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						expectMediaDsFind:    true,
+						expectMediaDsReplace: true,
+						expectminioAddFile:   true,
+						expectminioRmFile:    true,
+					},
+					{
+						description: "Successfully done sprite (no thumbnail, no vtt, no sprite)",
 						jobDoc:      newFakeJobDoc(db.SPRITEJobType),
 						mediaDoc:    newFakeMediaDoc(false, false, false),
 						data: facade.MediaMinioFile{
@@ -1170,10 +1186,26 @@ var _ = Describe("Facade", func() {
 						expectminioRmFile:    false,
 					},
 					{
-						description: "Successfully done with thumbnail",
+						description: "Successfully done sprite",
 						jobDoc:      newFakeJobDoc(db.SPRITEJobType),
 						mediaDoc:    newFakeMediaDoc(true, true, true),
 						data: facade.MediaMinioFile{
+							SpriteData: []byte("sprite-data"),
+							VttData:    []byte("vtt-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						expectMediaDsFind:    true,
+						expectMediaDsReplace: true,
+						expectminioAddFile:   true,
+						expectminioRmFile:    true,
+					},
+					{
+						description: "Successfully done sprite with redunant data",
+						jobDoc:      newFakeJobDoc(db.SPRITEJobType),
+						mediaDoc:    newFakeMediaDoc(true, true, true),
+						data: facade.MediaMinioFile{
+							ThumbData:  []byte("thumb-data"),
 							SpriteData: []byte("sprite-data"),
 							VttData:    []byte("vtt-data"),
 						},
@@ -1185,6 +1217,8 @@ var _ = Describe("Facade", func() {
 						expectminioRmFile:    true,
 					},
 				}
+				// ...
+
 				for _, tc := range testCases {
 					tc := tc
 					It(tc.description, func() {
@@ -1269,7 +1303,59 @@ var _ = Describe("Facade", func() {
 						expectminioRmFile:    false,
 						expectErr:            true,
 					},
+					{
+						description: "Fail at jobDS.read",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(false, false, false),
+						data: facade.MediaMinioFile{
+							ThumbData: []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    false,
+						expectMediaDsFind:    false,
+						expectMediaDsReplace: false,
+						expectminioAddFile:   false,
+						expectminioRmFile:    false,
+						jobDsFindErr:         errs.NewMongoOpErr(fmt.Errorf("mock jobDSMock.Find err")),
+						expectErr:            true,
+					},
+					{
+						description: "successfully done while minio rm fail in goroutine",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(true, true, true),
+						data: facade.MediaMinioFile{
+							ThumbData: []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						expectMediaDsFind:    true,
+						expectMediaDsReplace: true,
+						expectminioAddFile:   true,
+						expectminioRmFile:    true,
+						minioRmFileErr:       errs.NewMongoOpErr(fmt.Errorf("mock minio.RmFile err")),
+						expectErr:            false,
+					},
+					{
+						description: "successfully done while jobds.delete fail in goroutine",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(true, true, true),
+						data: facade.MediaMinioFile{
+							ThumbData: []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						expectMediaDsFind:    true,
+						expectMediaDsReplace: true,
+						expectminioAddFile:   true,
+						expectminioRmFile:    true,
+						jobDsDeleteErr:       errs.NewMongoOpErr(fmt.Errorf("mock jobDS.Delete err")),
+						expectErr:            false,
+					},
+					// TODO: MongoDB issues.
+					// TODO: Minio issues.
 				}
+				// ...
+
 				for _, tc := range testCases {
 					tc := tc
 					It(tc.description, func() {
