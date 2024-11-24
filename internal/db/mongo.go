@@ -17,21 +17,6 @@ type IMongoClient interface {
 	Disconnect(context.Context) error
 	Database(name string, opts ...*options.DatabaseOptions) *mongo.Database
 }
-type IMongoDatabase interface {
-	Aggregate(ctx context.Context, pipeline interface{}, opts ...*options.AggregateOptions) (*mongo.Cursor, error)
-	Client() *mongo.Client
-	Collection(name string, opts ...*options.CollectionOptions) *mongo.Collection
-	CreateCollection(ctx context.Context, name string, opts ...*options.CreateCollectionOptions) error
-	CreateView(ctx context.Context, viewName string, viewOn string, pipeline interface{}, opts ...*options.CreateViewOptions) error
-	Drop(ctx context.Context) error
-	ListCollectionNames(ctx context.Context, filter interface{}, opts ...*options.ListCollectionsOptions) ([]string, error)
-	ListCollectionSpecifications(ctx context.Context, filter interface{}, opts ...*options.ListCollectionsOptions) ([]*mongo.CollectionSpecification, error)
-	ListCollections(ctx context.Context, filter interface{}, opts ...*options.ListCollectionsOptions) (*mongo.Cursor, error)
-	Name() string
-	RunCommand(ctx context.Context, runCommand interface{}, opts ...*options.RunCmdOptions) *mongo.SingleResult
-	RunCommandCursor(ctx context.Context, runCommand interface{}, opts ...*options.RunCmdOptions) (*mongo.Cursor, error)
-	Watch(ctx context.Context, pipeline interface{}, opts ...*options.ChangeStreamOptions) (*mongo.ChangeStream, error)
-}
 type IMongoCollection interface {
 	Aggregate(ctx context.Context, pipeline interface{}, opts ...*options.AggregateOptions) (*mongo.Cursor, error)
 	BulkWrite(ctx context.Context, models []mongo.WriteModel, opts ...*options.BulkWriteOptions) (*mongo.BulkWriteResult, error)
@@ -79,7 +64,6 @@ func (m *Mongo) GetClient() (IMongoClient, error) {
 	}
 	return cl, nil
 }
-
 func (m *Mongo) assertClient(cl IMongoClient) (IMongoClient, func(context.Context) error, error) {
 	if cl != nil {
 		return cl, func(context.Context) error { return nil }, nil
@@ -225,12 +209,16 @@ type IDataStore[T IMongoDoc] interface {
 }
 
 type DataStore[T IMongoDoc] struct {
-	DB         *Mongo
-	collection string
+	dbName            string
+	collectionName    string
+	collectionFactory func(IMongoClient) IMongoCollection
 }
 
 func (m *DataStore[T]) GetCollection(cl IMongoClient) IMongoCollection {
-	return cl.Database(m.DB.DBName).Collection(m.collection)
+	if m.collectionFactory != nil {
+		return m.collectionFactory(cl)
+	}
+	return cl.Database(m.dbName).Collection(m.collectionName)
 }
 func (m *DataStore[T]) Create(ctx context.Context, doc T, cl IMongoClient) (T, errs.IMongoErr) {
 	res, err := m.GetCollection(cl).InsertOne(ctx, doc)
@@ -287,7 +275,6 @@ func (m *DataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D, cl I
 	}
 	return nil
 }
-
 func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, cl IMongoClient) (T, errs.IMongoErr) {
 	res, err := m.GetCollection(cl).ReplaceOne(ctx, filter, doc)
 	if err != nil {
@@ -298,36 +285,25 @@ func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, 
 	}
 	return doc, nil
 }
-func (DB *Mongo) GetMediaDatastore() *DataStore[*MediaFileDoc] {
-	return &DataStore[*MediaFileDoc]{
-		DB:         DB,
-		collection: DB.MediaCollectionName,
-	}
+func (m *DataStore[T]) WithCollectionFactory(factory func(IMongoClient) IMongoCollection) IDataStore[T] {
+	m.collectionFactory = factory
+	return m
 }
-func (DB *Mongo) GetJobDatastore() *DataStore[*JobDoc] {
-	return &DataStore[*JobDoc]{
-		DB:         DB,
-		collection: DB.JobCollectionName,
+
+func NewDatastore[T IMongoDoc](dbName string, collectionName string) IDataStore[T] {
+	return &DataStore[T]{
+		dbName:         dbName,
+		collectionName: collectionName,
 	}
 }
 
+// ...
 type DatastoreEnum int
 
 const (
 	MEDIA_DS DatastoreEnum = iota
 	JOB_DS
 )
-
-func (DB *Mongo) GetDatastore(name DatastoreEnum) IDataStore[IMongoDoc] {
-	ds := new(DataStore[IMongoDoc])
-	switch name {
-	case MEDIA_DS:
-		ds = (*DataStore[IMongoDoc])(DB.GetMediaDatastore())
-	case JOB_DS:
-		ds = (*DataStore[IMongoDoc])(DB.GetJobDatastore())
-	}
-	return ds
-}
 
 // ...
 func GetIDFilter(id primitive.ObjectID) *primitive.D {
