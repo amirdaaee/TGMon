@@ -231,34 +231,33 @@ func (m *DataStore[T]) Create(ctx context.Context, doc T, cl IMongoClient) (T, e
 	return doc, nil
 }
 func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl IMongoClient) (T, errs.IMongoErr) {
-	docs, err := m.FindMany(ctx, filter, cl)
-	if err != nil {
-		return *new(T), errs.NewMongoOpErr(err)
+	doc := new(T)
+	if cnt, err := m.Count(ctx, filter, cl); err != nil {
+		return *doc, err
+	} else if cnt == 0 {
+		return *doc, errs.NewMongoObjectNotfound(*filter)
+	} else if cnt > 1 {
+		return *doc, errs.NewMongoMultipleObjectfound(*filter)
 	}
-	if len(docs) == 0 {
-		return *new(T), errs.NewMongoObjectNotfound(*filter)
+	res := m.GetCollection(cl).FindOne(ctx, filter)
+	if res.Err() != nil {
+		return *doc, errs.NewMongoOpErr(res.Err())
 	}
-	if len(docs) > 1 {
-		return *new(T), errs.NewMongoMultipleObjectfound(*filter)
+	if err := res.Decode(doc); err != nil {
+		return *doc, errs.NewMongoUnMarshalErr(err)
 	}
-	return docs[0], nil
+	return *doc, nil
 }
 func (m *DataStore[T]) FindMany(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr) {
 	cursor, err := m.GetCollection(cl).Find(ctx, filter)
 	if err != nil {
 		return nil, errs.NewMongoOpErr(err)
 	}
-
-	res := []T{}
-	for cursor.Next(ctx) {
-		var r T
-		err := cursor.Decode(&r)
-		if err != nil {
-			return res, errs.NewMongoUnMarshalErr(err)
-		}
-		res = append(res, r)
+	res := new([]T)
+	if err := cursor.All(ctx, res); err != nil {
+		return *res, errs.NewMongoUnMarshalErr(err)
 	}
-	return res, nil
+	return *res, nil
 }
 func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr {
 	if res, err := m.GetCollection(cl).DeleteOne(ctx, filter); err != nil {
@@ -286,11 +285,17 @@ func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, 
 	}
 	return doc, nil
 }
+func (m *DataStore[T]) Count(ctx context.Context, filter *primitive.D, cl IMongoClient) (int64, error) {
+	res, err := m.GetCollection(cl).CountDocuments(ctx, filter)
+	if err != nil {
+		return 0, errs.NewMongoOpErr(err)
+	}
+	return res, nil
+}
 func (m *DataStore[T]) WithCollectionFactory(factory func(IMongoClient) IMongoCollection) IDataStore[T] {
 	m.collectionFactory = factory
 	return m
 }
-
 func NewDatastore[T IMongoDoc](dbName string, collectionName string) IDataStore[T] {
 	return &DataStore[T]{
 		dbName:         dbName,
