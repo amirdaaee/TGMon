@@ -417,6 +417,54 @@ func (_c *MockIDataStore_Replace_Call[T]) RunAndReturn(run func(context.Context,
 	return _c
 }
 
+// WithCollectionFactory provides a mock function with given fields: factory
+func (_m *MockIDataStore[T]) WithCollectionFactory(factory func(db.IMongoClient) db.IMongoCollection) db.IDataStore[T] {
+	ret := _m.Called(factory)
+
+	if len(ret) == 0 {
+		panic("no return value specified for WithCollectionFactory")
+	}
+
+	var r0 db.IDataStore[T]
+	if rf, ok := ret.Get(0).(func(func(db.IMongoClient) db.IMongoCollection) db.IDataStore[T]); ok {
+		r0 = rf(factory)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(db.IDataStore[T])
+		}
+	}
+
+	return r0
+}
+
+// MockIDataStore_WithCollectionFactory_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WithCollectionFactory'
+type MockIDataStore_WithCollectionFactory_Call[T db.IMongoDoc] struct {
+	*mock.Call
+}
+
+// WithCollectionFactory is a helper method to define mock.On call
+//   - factory func(db.IMongoClient) db.IMongoCollection
+func (_e *MockIDataStore_Expecter[T]) WithCollectionFactory(factory interface{}) *MockIDataStore_WithCollectionFactory_Call[T] {
+	return &MockIDataStore_WithCollectionFactory_Call[T]{Call: _e.mock.On("WithCollectionFactory", factory)}
+}
+
+func (_c *MockIDataStore_WithCollectionFactory_Call[T]) Run(run func(factory func(db.IMongoClient) db.IMongoCollection)) *MockIDataStore_WithCollectionFactory_Call[T] {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(func(db.IMongoClient) db.IMongoCollection))
+	})
+	return _c
+}
+
+func (_c *MockIDataStore_WithCollectionFactory_Call[T]) Return(_a0 db.IDataStore[T]) *MockIDataStore_WithCollectionFactory_Call[T] {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockIDataStore_WithCollectionFactory_Call[T]) RunAndReturn(run func(func(db.IMongoClient) db.IMongoCollection) db.IDataStore[T]) *MockIDataStore_WithCollectionFactory_Call[T] {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockIDataStore creates a new instance of MockIDataStore. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockIDataStore[T db.IMongoDoc](t interface {

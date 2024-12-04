@@ -27,22 +27,23 @@ type MongoOpErr struct{ *baseMongoErr }
 type MongoMarshalErr struct{ *baseMongoErr }
 type MongoUnMarshalErr struct{ *baseMongoErr }
 type MongoObjectNotfound struct{ *baseMongoErr }
+type MongoMultipleObjectfound struct{ *baseMongoErr }
 
 func NewMongoClientErr(e error) IMongoErr {
 	return MongoClientErr{&baseMongoErr{message: "error getting mongo client", txt: e.Error()}}
 }
 func NewMongoOpErr(e error) IMongoErr {
-	return MongoClientErr{&baseMongoErr{message: "error performain mongo action", txt: e.Error()}}
+	return MongoOpErr{&baseMongoErr{message: "error performain mongo action", txt: e.Error()}}
 }
 func NewMongoMarshalErr(e error) IMongoErr {
-	return MongoClientErr{&baseMongoErr{message: "error marshaling mongo", txt: e.Error()}}
+	return MongoMarshalErr{&baseMongoErr{message: "error marshaling mongo", txt: e.Error()}}
 }
 func NewMongoUnMarshalErr(e error) IMongoErr {
-	return MongoClientErr{&baseMongoErr{message: "error unmarshaling mongo", txt: e.Error()}}
+	return MongoUnMarshalErr{&baseMongoErr{message: "error unmarshaling mongo", txt: e.Error()}}
 }
 func NewMongoObjectNotfound(q bson.D) IMongoErr {
-	return MongoClientErr{&baseMongoErr{message: "requested object not found", txt: fmt.Sprintf("filter: %+v", q)}}
+	return MongoObjectNotfound{&baseMongoErr{message: "requested object not found", txt: fmt.Sprintf("filter: %+v", q)}}
 }
 func NewMongoMultipleObjectfound(q bson.D) IMongoErr {
-	return MongoClientErr{&baseMongoErr{message: "multiple object found for query", txt: fmt.Sprintf("filter: %+v", q)}}
+	return MongoMultipleObjectfound{&baseMongoErr{message: "multiple object found for query", txt: fmt.Sprintf("filter: %+v", q)}}
 }

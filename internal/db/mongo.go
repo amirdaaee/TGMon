@@ -206,6 +206,7 @@ type IDataStore[T IMongoDoc] interface {
 	Delete(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr
 	DeleteMany(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr
 	Replace(ctx context.Context, filter *primitive.D, doc T, cl IMongoClient) (T, errs.IMongoErr)
+	WithCollectionFactory(factory func(IMongoClient) IMongoCollection) IDataStore[T]
 }
 
 type DataStore[T IMongoDoc] struct {

@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gotd/td v0.102.0
 	github.com/joho/godotenv v1.5.1
-	github.com/onsi/ginkgo/v2 v2.21.0
+	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.35.1
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
