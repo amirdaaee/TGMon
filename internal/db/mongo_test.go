@@ -17,36 +17,36 @@ import (
 )
 
 var _ = Describe("Mongo", func() {
-	var (
-		mockMongoColl   *mockDB.MockIMongoCollection
-		mockMongoClient *mockDB.MockIMongoClient
-		mockMongoDoc    *mockDB.MockIMongoDoc
-		testContext     context.Context
-	)
-	resetMock := func() {
-		mockMongoColl = mockDB.NewMockIMongoCollection(GinkgoT())
-		mockMongoClient = mockDB.NewMockIMongoClient(GinkgoT())
-		mockMongoDoc = mockDB.NewMockIMongoDoc(GinkgoT())
-	}
-	asserMockCall := func() {
-		mockMongoColl.AssertExpectations(GinkgoT())
-		mockMongoClient.AssertExpectations(GinkgoT())
-		mockMongoDoc.AssertExpectations(GinkgoT())
-	}
-	dummy_filter := func() bson.D {
-		return bson.D{{Key: "hello", Value: "world"}}
-	}
+	var testContext context.Context
 	// ...
 	BeforeEach(func() {
 		testContext = context.Background()
 	})
 	// ================================
 	Describe("DataStore", Label("DataStore"), func() {
+		var (
+			mockMongoColl   *mockDB.MockIMongoCollection
+			mockMongoClient *mockDB.MockIMongoClient
+			mockMongoDoc    *mockDB.MockIMongoDoc
+		)
+		resetMock := func() {
+			mockMongoColl = mockDB.NewMockIMongoCollection(GinkgoT())
+			mockMongoClient = mockDB.NewMockIMongoClient(GinkgoT())
+			mockMongoDoc = mockDB.NewMockIMongoDoc(GinkgoT())
+		}
+		asserMockCall := func() {
+			mockMongoColl.AssertExpectations(GinkgoT())
+			mockMongoClient.AssertExpectations(GinkgoT())
+			mockMongoDoc.AssertExpectations(GinkgoT())
+		}
 		newDataStore := func() db.IDataStore[*mockDB.MockIMongoDoc] {
 			ds := db.NewDatastore[*mockDB.MockIMongoDoc]("testDB", "testColl")
 			return ds.WithCollectionFactory(func(ic db.IMongoClient) db.IMongoCollection {
 				return mockMongoColl
 			})
+		}
+		dummy_filter := func() bson.D {
+			return bson.D{{Key: "hello", Value: "world"}}
 		}
 		Describe("Create", Label("Create"), func() {
 			type testCase struct {
