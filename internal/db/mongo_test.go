@@ -270,28 +270,28 @@ var _ = Describe("Mongo", func() {
 				{
 					description:             "successfully delete doc",
 					tType:                   HAPPY_PATH,
-					filter:                  bson.D{{Key: "hello", Value: "world"}},
+					filter:                  dummy_filter(),
 					expectCollDeleteOneCall: true,
 					expectCollCountDocsDoc:  1,
 				},
 				{
 					description:            "error not found",
 					tType:                  FAILURE,
-					filter:                 bson.D{{Key: "hello", Value: "world"}},
+					filter:                 dummy_filter(),
 					expectCollCountDocsDoc: 0,
 					expectErr:              errs.MongoObjectNotfound{},
 				},
 				{
 					description:            "error multiple found",
 					tType:                  FAILURE,
-					filter:                 bson.D{{Key: "hello", Value: "world"}},
+					filter:                 dummy_filter(),
 					expectCollCountDocsDoc: 2,
 					expectErr:              errs.MongoMultipleObjectfound{},
 				},
 				{
 					description:            "error count document",
 					tType:                  FAILURE,
-					filter:                 bson.D{{Key: "hello", Value: "world"}},
+					filter:                 dummy_filter(),
 					expectCollCountDocsErr: fmt.Errorf("mock coll.CountDocs err"),
 					expectCollCountDocsDoc: 1,
 					expectErr:              errs.MongoOpErr{},
@@ -299,7 +299,7 @@ var _ = Describe("Mongo", func() {
 				{
 					description:             "error deleteOne document",
 					tType:                   FAILURE,
-					filter:                  bson.D{{Key: "hello", Value: "world"}},
+					filter:                  dummy_filter(),
 					expectCollDeleteOneCall: true,
 					expectCollDeleteOneErr:  fmt.Errorf("mock coll.deleteOne err"),
 					expectCollCountDocsDoc:  1,
@@ -326,5 +326,64 @@ var _ = Describe("Mongo", func() {
 				})
 			}
 		})
+		Describe("DeleteMany", Label("DeleteMany"), func() {
+			type testCase struct {
+				description             string
+				tType                   TestCaseType
+				filter                  bson.D
+				expectCollDeleteManyErr error // error to return by coll.DeleteMany
+				expectErr               error // error to return by ds.Find
+			}
+			// ...
+			BeforeEach(func() {
+				resetMock()
+			})
+			AfterEach(func() {
+				asserMockCall()
+			})
+			// ...
+			assertMongoColl_DeleteMany := func(tc testCase) {
+				mockMongoColl.EXPECT().DeleteMany(mock.Anything, mock.Anything).RunAndReturn(
+					func(ctx context.Context, i interface{}, do ...*options.DeleteOptions) (*mongo.DeleteResult, error) {
+						Expect(i).To(BeEquivalentTo(&tc.filter))
+						return &mongo.DeleteResult{}, tc.expectCollDeleteManyErr
+					},
+				)
+			}
+			// ...
+			tests := []testCase{
+				{
+					description: "successfully deleteMany docs",
+					tType:       HAPPY_PATH,
+					filter:      dummy_filter(),
+				},
+				{
+					description:             "error call deleteMany",
+					tType:                   FAILURE,
+					filter:                  dummy_filter(),
+					expectCollDeleteManyErr: fmt.Errorf("mock coll.DeleteMany err"),
+					expectErr:               errs.MongoOpErr{},
+				},
+			}
+			// ...
+			for _, tc := range tests {
+				tc := tc
+				It(tc.description, Label(string(tc.tType)), func() {
+					// Arrange
+					ds := newDataStore()
+					assertMongoColl_DeleteMany(tc)
+					// Act
+					err := ds.DeleteMany(testContext, &tc.filter, mockMongoClient)
+					// Assert
+					if tc.expectErr == nil {
+						Expect(err).NotTo(HaveOccurred())
+					} else {
+						Expect(err).To(HaveOccurred())
+						Expect(err).To(BeAssignableToTypeOf(tc.expectErr))
+					}
+				})
+			}
+		})
+		// TODO: ds.Count test
 	})
 })
