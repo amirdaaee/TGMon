@@ -232,12 +232,8 @@ func (m *DataStore[T]) Create(ctx context.Context, doc T, cl IMongoClient) (T, e
 }
 func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl IMongoClient) (T, errs.IMongoErr) {
 	doc := new(T)
-	if cnt, err := m.Count(ctx, filter, cl); err != nil {
+	if err := m.assertSingleDoc(ctx, filter, cl); err != nil {
 		return *doc, err
-	} else if cnt == 0 {
-		return *doc, errs.NewMongoObjectNotfound(*filter)
-	} else if cnt > 1 {
-		return *doc, errs.NewMongoMultipleObjectfound(*filter)
 	}
 	res := m.GetCollection(cl).FindOne(ctx, filter)
 	if res.Err() != nil {
@@ -260,18 +256,17 @@ func (m *DataStore[T]) FindMany(ctx context.Context, filter *primitive.D, cl IMo
 	return *res, nil
 }
 func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr {
-	if res, err := m.GetCollection(cl).DeleteOne(ctx, filter); err != nil {
+	if err := m.assertSingleDoc(ctx, filter, cl); err != nil {
+		return err
+	}
+	if _, err := m.GetCollection(cl).DeleteOne(ctx, filter); err != nil {
 		return errs.NewMongoOpErr(err)
-	} else if res.DeletedCount == 0 {
-		return errs.NewMongoObjectNotfound(*filter)
 	}
 	return nil
 }
 func (m *DataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr {
-	if res, err := m.GetCollection(cl).DeleteMany(ctx, filter); err != nil {
+	if _, err := m.GetCollection(cl).DeleteMany(ctx, filter); err != nil {
 		return errs.NewMongoOpErr(err)
-	} else if res.DeletedCount == 0 {
-		return errs.NewMongoObjectNotfound(*filter)
 	}
 	return nil
 }
@@ -291,6 +286,16 @@ func (m *DataStore[T]) Count(ctx context.Context, filter *primitive.D, cl IMongo
 		return 0, errs.NewMongoOpErr(err)
 	}
 	return res, nil
+}
+func (m *DataStore[T]) assertSingleDoc(ctx context.Context, filter *primitive.D, cl IMongoClient) error {
+	if cnt, err := m.Count(ctx, filter, cl); err != nil {
+		return err
+	} else if cnt == 0 {
+		return errs.NewMongoObjectNotfound(*filter)
+	} else if cnt > 1 {
+		return errs.NewMongoMultipleObjectfound(*filter)
+	}
+	return nil
 }
 func (m *DataStore[T]) WithCollectionFactory(factory func(IMongoClient) IMongoCollection) IDataStore[T] {
 	m.collectionFactory = factory

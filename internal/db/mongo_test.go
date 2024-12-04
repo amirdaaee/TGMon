@@ -33,6 +33,9 @@ var _ = Describe("Mongo", func() {
 		mockMongoClient.AssertExpectations(GinkgoT())
 		mockMongoDoc.AssertExpectations(GinkgoT())
 	}
+	dummy_filter := func() bson.D {
+		return bson.D{{Key: "hello", Value: "world"}}
+	}
 	// ...
 	BeforeEach(func() {
 		testContext = context.Background()
@@ -165,10 +168,111 @@ var _ = Describe("Mongo", func() {
 				{
 					description:            "successfully find doc",
 					tType:                  HAPPY_PATH,
-					filter:                 bson.D{{Key: "hello", Value: "world"}},
+					filter:                 dummy_filter(),
 					expectCollFindOneCall:  true,
 					expectCollFindOneDoc:   &mockDB.MockIMongoDoc{},
 					expectCollCountDocsDoc: 1,
+				},
+				{
+					description:            "error not found",
+					tType:                  FAILURE,
+					filter:                 dummy_filter(),
+					expectCollCountDocsDoc: 0,
+					expectErr:              errs.MongoObjectNotfound{},
+				},
+				{
+					description:            "error multiple found",
+					tType:                  FAILURE,
+					filter:                 dummy_filter(),
+					expectCollCountDocsDoc: 2,
+					expectErr:              errs.MongoMultipleObjectfound{},
+				},
+				{
+					description:            "error count document",
+					tType:                  FAILURE,
+					filter:                 dummy_filter(),
+					expectCollCountDocsErr: fmt.Errorf("mock coll.CountDocs err"),
+					expectCollCountDocsDoc: 1,
+					expectErr:              errs.MongoOpErr{},
+				},
+				{
+					description:            "error findOne document",
+					tType:                  FAILURE,
+					filter:                 dummy_filter(),
+					expectCollFindOneCall:  true,
+					expectCollFindOneErr:   fmt.Errorf("mock coll.findOne err"),
+					expectCollCountDocsDoc: 1,
+					expectErr:              errs.MongoOpErr{},
+				},
+			}
+			// ...
+			for _, tc := range tests {
+				tc := tc
+				It(tc.description, Label(string(tc.tType)), func() {
+					// Arrange
+					ds := newDataStore()
+					assertMongoColl_FindOne(tc)
+					assertMongoColl_CountDocuments(tc)
+					// Act
+					res, err := ds.Find(testContext, &tc.filter, mockMongoClient)
+					// Assert
+					if tc.expectErr == nil {
+						Expect(err).NotTo(HaveOccurred())
+						Expect(res).NotTo(BeNil())
+						Expect(res).To(Equal(tc.expectCollFindOneDoc))
+					} else {
+						Expect(err).To(HaveOccurred())
+						Expect(err).To(BeAssignableToTypeOf(tc.expectErr))
+					}
+				})
+			}
+		})
+		Describe("Delete", Label("Delete"), func() {
+			type testCase struct {
+				description             string
+				tType                   TestCaseType
+				filter                  bson.D
+				expectCollDeleteOneCall bool  // call to coll.DeleteOne is expected
+				expectCollDeleteOneErr  error // error to return by coll.DeleteOne
+				expectCollCountDocsDoc  int64 // number of docs matching filter
+				expectCollCountDocsErr  error // error to return by coll.CountDocuments
+				expectErr               error // error to return by ds.Find
+			}
+			// ...
+			BeforeEach(func() {
+				resetMock()
+			})
+			AfterEach(func() {
+				asserMockCall()
+			})
+			// ...
+			assertMongoColl_DeleteOne := func(tc testCase) {
+				if !tc.expectCollDeleteOneCall {
+					return
+				}
+				mockMongoColl.EXPECT().DeleteOne(mock.Anything, mock.Anything).RunAndReturn(
+					func(ctx context.Context, i interface{}, do ...*options.DeleteOptions) (*mongo.DeleteResult, error) {
+						Expect(i).To(BeEquivalentTo(&tc.filter))
+						return &mongo.DeleteResult{DeletedCount: tc.expectCollCountDocsDoc}, tc.expectCollDeleteOneErr
+					},
+				)
+			}
+			assertMongoColl_CountDocuments := func(tc testCase) {
+				mockMongoColl.EXPECT().CountDocuments(mock.Anything, mock.Anything).RunAndReturn(
+					func(ctx context.Context, i interface{}, co ...*options.CountOptions) (int64, error) {
+						Expect(i).To(BeEquivalentTo(&tc.filter))
+						return tc.expectCollCountDocsDoc, tc.expectCollCountDocsErr
+					},
+				)
+			}
+			// ...
+			tests := []testCase{
+				{
+					description:             "successfully delete doc",
+					tType:                   HAPPY_PATH,
+					filter:                  bson.D{{Key: "hello", Value: "world"}},
+					expectCollDeleteOneCall: true,
+					expectCollCountDocsDoc:  1,
 				},
 				{
 					description:            "error not found",
@@ -193,13 +297,13 @@ var _ = Describe("Mongo", func() {
 					expectErr:              errs.MongoOpErr{},
 				},
 				{
-					description:            "error findOne document",
-					tType:                  FAILURE,
-					filter:                 bson.D{{Key: "hello", Value: "world"}},
-					expectCollFindOneCall:  true,
-					expectCollFindOneErr:   fmt.Errorf("mock coll.findOne err"),
-					expectCollCountDocsDoc: 1,
-					expectErr:              errs.MongoOpErr{},
+					description:             "error deleteOne document",
+					tType:                   FAILURE,
+					filter:                  bson.D{{Key: "hello", Value: "world"}},
+					expectCollDeleteOneCall: true,
+					expectCollDeleteOneErr:  fmt.Errorf("mock coll.deleteOne err"),
+					expectCollCountDocsDoc:  1,
+					expectErr:               errs.MongoOpErr{},
 				},
 			}
 			// ...
@@ -208,15 +312,13 @@ var _ = Describe("Mongo", func() {
 				It(tc.description, Label(string(tc.tType)), func() {
 					// Arrange
 					ds := newDataStore()
-					assertMongoColl_FindOne(tc)
+					assertMongoColl_DeleteOne(tc)
 					assertMongoColl_CountDocuments(tc)
 					// Act
-					res, err := ds.Find(testContext, &tc.filter, mockMongoClient)
+					err := ds.Delete(testContext, &tc.filter, mockMongoClient)
 					// Assert
 					if tc.expectErr == nil {
 						Expect(err).NotTo(HaveOccurred())
-						Expect(res).NotTo(BeNil())
-						Expect(res).To(Equal(tc.expectCollFindOneDoc))
 					} else {
 						Expect(err).To(HaveOccurred())
 						Expect(err).To(BeAssignableToTypeOf(tc.expectErr))
