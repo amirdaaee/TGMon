@@ -3,7 +3,9 @@
 package db
 
 import (
+	errs "github.com/amirdaaee/TGMon/internal/errs"
 	mock "github.com/stretchr/testify/mock"
+
 	primitive "go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -108,6 +110,65 @@ func (_c *MockIMongoDoc_GetIDStr_Call) Return(_a0 string) *MockIMongoDoc_GetIDSt
 }
 
 func (_c *MockIMongoDoc_GetIDStr_Call) RunAndReturn(run func() string) *MockIMongoDoc_GetIDStr_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MarshalOmitEmpty provides a mock function with given fields:
+func (_m *MockIMongoDoc) MarshalOmitEmpty() (*primitive.M, errs.IMongoErr) {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for MarshalOmitEmpty")
+	}
+
+	var r0 *primitive.M
+	var r1 errs.IMongoErr
+	if rf, ok := ret.Get(0).(func() (*primitive.M, errs.IMongoErr)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() *primitive.M); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*primitive.M)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func() errs.IMongoErr); ok {
+		r1 = rf()
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(errs.IMongoErr)
+		}
+	}
+
+	return r0, r1
+}
+
+// MockIMongoDoc_MarshalOmitEmpty_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MarshalOmitEmpty'
+type MockIMongoDoc_MarshalOmitEmpty_Call struct {
+	*mock.Call
+}
+
+// MarshalOmitEmpty is a helper method to define mock.On call
+func (_e *MockIMongoDoc_Expecter) MarshalOmitEmpty() *MockIMongoDoc_MarshalOmitEmpty_Call {
+	return &MockIMongoDoc_MarshalOmitEmpty_Call{Call: _e.mock.On("MarshalOmitEmpty")}
+}
+
+func (_c *MockIMongoDoc_MarshalOmitEmpty_Call) Run(run func()) *MockIMongoDoc_MarshalOmitEmpty_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockIMongoDoc_MarshalOmitEmpty_Call) Return(_a0 *primitive.M, _a1 errs.IMongoErr) *MockIMongoDoc_MarshalOmitEmpty_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockIMongoDoc_MarshalOmitEmpty_Call) RunAndReturn(run func() (*primitive.M, errs.IMongoErr)) *MockIMongoDoc_MarshalOmitEmpty_Call {
 	_c.Call.Return(run)
 	return _c
 }

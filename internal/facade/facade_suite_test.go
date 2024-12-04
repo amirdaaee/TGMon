@@ -98,7 +98,7 @@ var _ = Describe("Facade", func() {
 			assertMediaDs_Replace := func(tc testCase) {
 				if tc.expectMinioAdd && !tc.minioAddError {
 					mediaDSMock.EXPECT().Replace(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, mfd *db.MediaFileDoc, c db.IMongoClient) (*db.MediaFileDoc, errs.IMongoErr) {
+						func(ctx context.Context, d *primitive.M, mfd *db.MediaFileDoc, c db.IMongoClient) (*db.MediaFileDoc, errs.IMongoErr) {
 							Expect(*d).To(BeEquivalentTo(*db.GetIDFilter(tc.outputDoc.GetID())))
 							Expect(mfd.GetID()).To(BeEquivalentTo(tc.outputDoc.GetID()))
 							Expect(mfd.Thumbnail).NotTo(BeEmpty())
@@ -143,7 +143,7 @@ var _ = Describe("Facade", func() {
 			newFakeMediaDoc := func() *db.MediaFileDoc {
 				d := new(db.MediaFileDoc)
 				gofakeit.Struct(&d)
-				d.SetID(primitive.NilObjectID)
+				d.SetID(primitive.NewObjectID())
 				d.DateAdded = 0
 				d.Sprite = ""
 				d.Vtt = ""
@@ -271,7 +271,7 @@ var _ = Describe("Facade", func() {
 		Describe("Read", Label("Read"), func() {
 			type testCase struct {
 				description string
-				filter      *primitive.D       // filter to call Read
+				filter      *primitive.M       // filter to call Read
 				outputDoc   []*db.MediaFileDoc // result docs of ds.findMany
 				findManyErr bool               // error calling ds.findMany
 			}
@@ -285,10 +285,10 @@ var _ = Describe("Facade", func() {
 				}
 				mediaDSMock.EXPECT().FindMany(mock.Anything, tc.filter, mock.Anything).Return(tc.outputDoc, *err)
 			}
-			newBsonEmptyFilter := func() *primitive.D {
-				return &primitive.D{}
+			newBsonEmptyFilter := func() *primitive.M {
+				return &primitive.M{}
 			}
-			newBsonIDFilter := func() *primitive.D {
+			newBsonIDFilter := func() *primitive.M {
 				return db.GetIDFilter(primitive.NewObjectID())
 			}
 			newFakeMediaDoc := func() *db.MediaFileDoc {
@@ -377,7 +377,7 @@ var _ = Describe("Facade", func() {
 		Describe("Delete", Label("Delete"), func() {
 			type testCase struct {
 				description        string
-				filter             primitive.D      // filter to call Read
+				filter             primitive.M      // filter to call Read
 				outputDoc          *db.MediaFileDoc // result doc of ds.find
 				withThumbMedia     bool             // doc has Thumbnail
 				withVttMedia       bool             // doc has Vtt
@@ -414,8 +414,8 @@ var _ = Describe("Facade", func() {
 			assertJobDs_DeleteMany := func(tc testCase) {
 				if tc.expectJob {
 					jobDSMock.EXPECT().DeleteMany(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, c db.IMongoClient) errs.IMongoErr {
-							Expect(*d).To(BeEquivalentTo(primitive.D{{Key: "MediaID", Value: tc.outputDoc.ID}}))
+						func(ctx context.Context, d *primitive.M, c db.IMongoClient) errs.IMongoErr {
+							Expect(*d).To(BeEquivalentTo(primitive.M{"MediaID": tc.outputDoc.ID}))
 							err := new(error)
 							if tc.jobDeleteManyError {
 								*err = fmt.Errorf("mock mediaDSMock.DeleteMany err")
@@ -456,7 +456,7 @@ var _ = Describe("Facade", func() {
 					tc.outputDoc.Vtt = ""
 				}
 			}
-			newBsonIDFilter := func() *primitive.D {
+			newBsonIDFilter := func() *primitive.M {
 				return db.GetIDFilter(primitive.NewObjectID())
 			}
 			Describe("Happy path", Label("Happy"), func() {
@@ -653,12 +653,12 @@ var _ = Describe("Facade", func() {
 			assertJobDs_List := func(tc testCase) {
 				if tc.expectJobDsList {
 					jobDSMock.EXPECT().FindMany(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, c db.IMongoClient) ([]*db.JobDoc, errs.IMongoErr) {
+						func(ctx context.Context, d *primitive.M, c db.IMongoClient) ([]*db.JobDoc, errs.IMongoErr) {
 							filterObj := db.JobDoc{MediaID: tc.inputDoc.MediaID, Type: tc.inputDoc.Type}
-							expectedFilter, _err := db.MarshalOmitEmpty(&filterObj)
+							expectedFilter, _err := filterObj.MarshalOmitEmpty()
 							Expect(_err).To(BeNil())
 							Expect(len(*d)).Should(Equal(len(*expectedFilter)))
-							Expect(*d).To(ContainElements(*expectedFilter))
+							Expect(*d).To(Equal(*expectedFilter))
 							// ...
 							v := []*db.JobDoc{}
 							err := new(error)
@@ -695,7 +695,7 @@ var _ = Describe("Facade", func() {
 			newFakeJobDoc := func(jt db.JobType) *db.JobDoc {
 				d := new(db.JobDoc)
 				gofakeit.Struct(&d)
-				d.SetID(primitive.NilObjectID)
+				d.SetID(primitive.NewObjectID())
 				d.Type = jt
 				return d
 			}
@@ -802,14 +802,14 @@ var _ = Describe("Facade", func() {
 		Describe("Read", Label("Read"), func() {
 			type testCase struct {
 				description  string
-				filter       *primitive.D // filter to call Read
+				filter       *primitive.M // filter to call Read
 				outputDoc    []*db.JobDoc // result docs of ds.findMany
 				jobDsListErr error        // error calling ds.findMany
 				expectErr    error
 			}
 			assertJobDs_List := func(tc testCase) {
 				jobDSMock.EXPECT().FindMany(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-					func(ctx context.Context, d *primitive.D, c db.IMongoClient) ([]*db.JobDoc, errs.IMongoErr) {
+					func(ctx context.Context, d *primitive.M, c db.IMongoClient) ([]*db.JobDoc, errs.IMongoErr) {
 						Expect(d).Should(Equal(tc.filter))
 						// ...
 						v := new([]*db.JobDoc)
@@ -823,16 +823,16 @@ var _ = Describe("Facade", func() {
 					},
 				)
 			}
-			newBsonEmptyFilter := func() *primitive.D {
-				return &primitive.D{}
+			newBsonEmptyFilter := func() *primitive.M {
+				return &primitive.M{}
 			}
-			newBsonIDFilter := func() *primitive.D {
+			newBsonIDFilter := func() *primitive.M {
 				return db.GetIDFilter(primitive.NewObjectID())
 			}
 			newFakeJobDoc := func(jt db.JobType) *db.JobDoc {
 				d := new(db.JobDoc)
 				gofakeit.Struct(&d)
-				d.SetID(primitive.NilObjectID)
+				d.SetID(primitive.NewObjectID())
 				d.Type = jt
 				return d
 			}
@@ -958,7 +958,7 @@ var _ = Describe("Facade", func() {
 			assertJobDs_Find := func(tc testCase) {
 				if tc.expectJobDsFind {
 					jobDSMock.EXPECT().Find(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, c db.IMongoClient) (*db.JobDoc, errs.IMongoErr) {
+						func(ctx context.Context, d *primitive.M, c db.IMongoClient) (*db.JobDoc, errs.IMongoErr) {
 							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.GetID())))
 							// ...
 							v := new(db.JobDoc)
@@ -977,7 +977,7 @@ var _ = Describe("Facade", func() {
 			assertJobDs_Delete := func(tc testCase) {
 				if tc.expectJobDsDelete {
 					jobDSMock.EXPECT().Delete(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, c db.IMongoClient) errs.IMongoErr {
+						func(ctx context.Context, d *primitive.M, c db.IMongoClient) errs.IMongoErr {
 							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.GetID())))
 							// ...
 							err := new(error)
@@ -993,7 +993,7 @@ var _ = Describe("Facade", func() {
 			assertMediaDs_Find := func(tc testCase) {
 				if tc.expectMediaDsFind {
 					mediaDSMock.EXPECT().Find(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, c db.IMongoClient) (*db.MediaFileDoc, errs.IMongoErr) {
+						func(ctx context.Context, d *primitive.M, c db.IMongoClient) (*db.MediaFileDoc, errs.IMongoErr) {
 							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.MediaID)))
 							// ...
 							v := new(db.MediaFileDoc)
@@ -1012,7 +1012,7 @@ var _ = Describe("Facade", func() {
 			assertMediaDs_Replace := func(tc testCase) {
 				if tc.expectMediaDsReplace {
 					mediaDSMock.EXPECT().Replace(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-						func(ctx context.Context, d *primitive.D, mfd *db.MediaFileDoc, c db.IMongoClient) (*db.MediaFileDoc, errs.IMongoErr) {
+						func(ctx context.Context, d *primitive.M, mfd *db.MediaFileDoc, c db.IMongoClient) (*db.MediaFileDoc, errs.IMongoErr) {
 							Expect(*d).To(Equal(*db.GetIDFilter(tc.jobDoc.MediaID)))
 							switch tc.jobDoc.Type {
 							case db.SPRITEJobType:

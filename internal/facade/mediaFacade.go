@@ -59,7 +59,7 @@ func (f *MediaFacade) Create(ctx context.Context, data *FullMediaData, cl db.IMo
 	}()
 	return newDoc, err
 }
-func (f *MediaFacade) Read(ctx context.Context, filter *primitive.D, cl db.IMongoClient) ([]*db.MediaFileDoc, error) {
+func (f *MediaFacade) Read(ctx context.Context, filter *primitive.M, cl db.IMongoClient) ([]*db.MediaFileDoc, error) {
 	docs, err := f.baseRead(ctx, filter, cl)
 	return docs, err
 }
@@ -67,7 +67,7 @@ func (f *MediaFacade) Read(ctx context.Context, filter *primitive.D, cl db.IMong
 // delete new media doc
 // + delete minio files
 // + delete all related jobs
-func (f *MediaFacade) Delete(ctx context.Context, filter *primitive.D, cl db.IMongoClient) error {
+func (f *MediaFacade) Delete(ctx context.Context, filter *primitive.M, cl db.IMongoClient) error {
 	doc, err := f.mediaDS.Find(ctx, filter, cl)
 	if err != nil {
 		return err
@@ -121,13 +121,15 @@ func createMediaJob(ctx context.Context, doc db.MediaFileDoc, jobDs db.IDataStor
 }
 func deleteMediaAllJobs(ctx context.Context, doc *db.MediaFileDoc, jobDs db.IDataStore[*db.JobDoc], cl db.IMongoClient) error {
 	ll := logrus.WithField("func", "deleteMediaAllJobs")
-	jobFilter := db.JobDoc{
-		MediaID: doc.GetID(),
-	}
-	jobFilterD, err := db.MarshalOmitEmpty(&jobFilter)
-	if err != nil {
-		return fmt.Errorf("can not create filter: %s", err)
-	}
+	// jobFilter := db.JobDoc{
+	// 	MediaID: doc.GetID(),
+	// }
+	// jobFilterD, err := jobFilter.MarshalOmitEmpty()
+	// if err != nil {
+	// 	return fmt.Errorf("can not create filter: %s", err)
+	// }
+	jobFilterD := &primitive.M{"MediaID": doc.GetID()}
+
 	if err := jobDs.DeleteMany(ctx, jobFilterD, cl); err != nil {
 		if errs.IsErr(err, errs.MongoObjectNotfound{}) {
 			ll.Info("no job found for media")

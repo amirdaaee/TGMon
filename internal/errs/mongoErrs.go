@@ -3,7 +3,7 @@ package errs
 import (
 	"fmt"
 
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type IMongoErr interface {
@@ -41,9 +41,9 @@ func NewMongoMarshalErr(e error) IMongoErr {
 func NewMongoUnMarshalErr(e error) IMongoErr {
 	return MongoUnMarshalErr{&baseMongoErr{message: "error unmarshaling mongo", txt: e.Error()}}
 }
-func NewMongoObjectNotfound(q bson.D) IMongoErr {
+func NewMongoObjectNotfound(q primitive.M) IMongoErr {
 	return MongoObjectNotfound{&baseMongoErr{message: "requested object not found", txt: fmt.Sprintf("filter: %+v", q)}}
 }
-func NewMongoMultipleObjectfound(q bson.D) IMongoErr {
+func NewMongoMultipleObjectfound(q primitive.M) IMongoErr {
 	return MongoMultipleObjectfound{&baseMongoErr{message: "multiple object found for query", txt: fmt.Sprintf("filter: %+v", q)}}
 }

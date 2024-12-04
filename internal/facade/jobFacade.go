@@ -21,7 +21,7 @@ func (f *JobFacade) Create(ctx context.Context, doc *db.JobDoc, cl *mongo.Client
 	// check for exist
 	filter := doc
 	filter.SetID(primitive.NilObjectID)
-	filterD, err := db.MarshalOmitEmpty(filter)
+	filterD, err := filter.MarshalOmitEmpty()
 	if err != nil {
 		return nil, fmt.Errorf("can not marshal filter to find duplicates: %s", err)
 	}
@@ -37,7 +37,7 @@ func (f *JobFacade) Create(ctx context.Context, doc *db.JobDoc, cl *mongo.Client
 	newDoc, err := f.baseCreate(ctx, doc, cl)
 	return newDoc, err
 }
-func (f *JobFacade) Read(ctx context.Context, filter *primitive.D, cl *mongo.Client) ([]*db.JobDoc, error) {
+func (f *JobFacade) Read(ctx context.Context, filter *primitive.M, cl *mongo.Client) ([]*db.JobDoc, error) {
 	docs, err := f.baseRead(ctx, filter, cl)
 	return docs, err
 }
@@ -99,7 +99,7 @@ func NewJobFacade(mongo db.IMongo, minio db.IMinioClient, jobDS db.IDataStore[*d
 }
 
 // ...
-func deleteJob(filter *primitive.D, monog db.IMongo, jobDS db.IDataStore[*db.JobDoc]) {
+func deleteJob(filter *primitive.M, monog db.IMongo, jobDS db.IDataStore[*db.JobDoc]) {
 	ll := logrus.WithField("func", "deleteJob")
 	ctx := context.Background()
 	cl, err := monog.GetClient()

@@ -1,8 +1,11 @@
 package db
 
 import (
+	"reflect"
+
 	"github.com/amirdaaee/TGMon/internal/errs"
 	"github.com/gotd/td/tg"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -11,6 +14,7 @@ type IMongoDoc interface {
 	SetID(primitive.ObjectID)
 	GetIDStr() string
 	SetIDStr(string) error
+	MarshalOmitEmpty() (*primitive.M, errs.IMongoErr)
 }
 type baseMongoDoc struct {
 	ID primitive.ObjectID `bson:"_id,omitempty"`
@@ -27,6 +31,23 @@ func (d *baseMongoDoc) SetID(id primitive.ObjectID) {
 }
 func (d *baseMongoDoc) SetIDStr(id string) error {
 	return setIDStr(d, id)
+}
+func (d *baseMongoDoc) MarshalOmitEmpty() (*primitive.M, errs.IMongoErr) {
+	marsh, err := bson.Marshal(d)
+	if err != nil {
+		return nil, errs.NewMongoMarshalErr(err)
+	}
+	unmarsh := new(bson.M)
+	if err := bson.Unmarshal(marsh, unmarsh); err != nil {
+		return nil, errs.NewMongoUnMarshalErr(err)
+	}
+	res := bson.M{}
+	for k, v := range *unmarsh {
+		if !reflect.ValueOf(v).IsZero() {
+			res[k] = v
+		}
+	}
+	return &res, nil
 }
 
 // ...

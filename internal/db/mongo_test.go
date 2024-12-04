@@ -10,7 +10,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -45,8 +44,8 @@ var _ = Describe("Mongo", func() {
 				return mockMongoColl
 			})
 		}
-		dummy_filter := func() bson.D {
-			return bson.D{{Key: "hello", Value: "world"}}
+		dummy_filter := func() primitive.M {
+			return primitive.M{"hello": "world"}
 		}
 		Describe("Create", Label("Create"), func() {
 			type testCase struct {
@@ -128,7 +127,7 @@ var _ = Describe("Mongo", func() {
 			type testCase struct {
 				description            string
 				tType                  TestCaseType
-				filter                 bson.D
+				filter                 primitive.M
 				expectCollFindOneCall  bool         // call to coll.FindOne is expected
 				expectCollFindOneDoc   db.IMongoDoc // doc to return by coll.FindOne
 				expectCollFindOneErr   error        // error to return by coll.FindOne
@@ -231,7 +230,7 @@ var _ = Describe("Mongo", func() {
 			type testCase struct {
 				description             string
 				tType                   TestCaseType
-				filter                  bson.D
+				filter                  primitive.M
 				expectCollDeleteOneCall bool  // call to coll.DeleteOne is expected
 				expectCollDeleteOneErr  error // error to return by coll.DeleteOne
 				expectCollCountDocsDoc  int64 // number of docs matching filter
@@ -330,9 +329,9 @@ var _ = Describe("Mongo", func() {
 			type testCase struct {
 				description             string
 				tType                   TestCaseType
-				filter                  bson.D
+				filter                  primitive.M
 				expectCollDeleteManyErr error // error to return by coll.DeleteMany
-				expectErr               error // error to return by ds.Find
+				expectErr               error // error to return by ds.DeleteMany
 			}
 			// ...
 			BeforeEach(func() {

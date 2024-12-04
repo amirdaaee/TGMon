@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"reflect"
 	"sync"
 
 	"github.com/amirdaaee/TGMon/internal/errs"
@@ -201,11 +200,11 @@ func FilterById(docID string) (*bson.D, error) {
 type IDataStore[T IMongoDoc] interface {
 	GetCollection(cl IMongoClient) IMongoCollection
 	Create(ctx context.Context, doc T, cl IMongoClient) (T, errs.IMongoErr)
-	Find(ctx context.Context, filter *primitive.D, cl IMongoClient) (T, errs.IMongoErr)
-	FindMany(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr)
-	Delete(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr
-	DeleteMany(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr
-	Replace(ctx context.Context, filter *primitive.D, doc T, cl IMongoClient) (T, errs.IMongoErr)
+	Find(ctx context.Context, filter *primitive.M, cl IMongoClient) (T, errs.IMongoErr)
+	FindMany(ctx context.Context, filter *primitive.M, cl IMongoClient) ([]T, errs.IMongoErr)
+	Delete(ctx context.Context, filter *primitive.M, cl IMongoClient) errs.IMongoErr
+	DeleteMany(ctx context.Context, filter *primitive.M, cl IMongoClient) errs.IMongoErr
+	Replace(ctx context.Context, filter *primitive.M, doc T, cl IMongoClient) (T, errs.IMongoErr)
 	WithCollectionFactory(factory func(IMongoClient) IMongoCollection) IDataStore[T]
 }
 
@@ -230,7 +229,7 @@ func (m *DataStore[T]) Create(ctx context.Context, doc T, cl IMongoClient) (T, e
 	doc.SetID(id)
 	return doc, nil
 }
-func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl IMongoClient) (T, errs.IMongoErr) {
+func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.M, cl IMongoClient) (T, errs.IMongoErr) {
 	doc := new(T)
 	if err := m.assertSingleDoc(ctx, filter, cl); err != nil {
 		return *doc, err
@@ -244,7 +243,7 @@ func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.D, cl IMongoC
 	}
 	return *doc, nil
 }
-func (m *DataStore[T]) FindMany(ctx context.Context, filter *primitive.D, cl IMongoClient) ([]T, errs.IMongoErr) {
+func (m *DataStore[T]) FindMany(ctx context.Context, filter *primitive.M, cl IMongoClient) ([]T, errs.IMongoErr) {
 	cursor, err := m.GetCollection(cl).Find(ctx, filter)
 	if err != nil {
 		return nil, errs.NewMongoOpErr(err)
@@ -255,7 +254,7 @@ func (m *DataStore[T]) FindMany(ctx context.Context, filter *primitive.D, cl IMo
 	}
 	return *res, nil
 }
-func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr {
+func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.M, cl IMongoClient) errs.IMongoErr {
 	if err := m.assertSingleDoc(ctx, filter, cl); err != nil {
 		return err
 	}
@@ -264,13 +263,13 @@ func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.D, cl IMong
 	}
 	return nil
 }
-func (m *DataStore[T]) DeleteMany(ctx context.Context, filter *primitive.D, cl IMongoClient) errs.IMongoErr {
+func (m *DataStore[T]) DeleteMany(ctx context.Context, filter *primitive.M, cl IMongoClient) errs.IMongoErr {
 	if _, err := m.GetCollection(cl).DeleteMany(ctx, filter); err != nil {
 		return errs.NewMongoOpErr(err)
 	}
 	return nil
 }
-func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, cl IMongoClient) (T, errs.IMongoErr) {
+func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.M, doc T, cl IMongoClient) (T, errs.IMongoErr) {
 	res, err := m.GetCollection(cl).ReplaceOne(ctx, filter, doc)
 	if err != nil {
 		return doc, err
@@ -280,14 +279,14 @@ func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.D, doc T, 
 	}
 	return doc, nil
 }
-func (m *DataStore[T]) Count(ctx context.Context, filter *primitive.D, cl IMongoClient) (int64, error) {
+func (m *DataStore[T]) Count(ctx context.Context, filter *primitive.M, cl IMongoClient) (int64, error) {
 	res, err := m.GetCollection(cl).CountDocuments(ctx, filter)
 	if err != nil {
 		return 0, errs.NewMongoOpErr(err)
 	}
 	return res, nil
 }
-func (m *DataStore[T]) assertSingleDoc(ctx context.Context, filter *primitive.D, cl IMongoClient) error {
+func (m *DataStore[T]) assertSingleDoc(ctx context.Context, filter *primitive.M, cl IMongoClient) error {
 	if cnt, err := m.Count(ctx, filter, cl); err != nil {
 		return err
 	} else if cnt == 0 {
@@ -317,27 +316,6 @@ const (
 )
 
 // ...
-func GetIDFilter(id primitive.ObjectID) *primitive.D {
-	return &bson.D{{Key: "_id", Value: id}}
-}
-
-func MarshalOmitEmpty(doc IMongoDoc) (*primitive.D, errs.IMongoErr) {
-	var filteredData = make(map[string]interface{})
-	vInd := reflect.ValueOf(doc)
-	v := reflect.Indirect(vInd)
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		if !field.IsZero() {
-			filteredData[v.Type().Field(i).Tag.Get("bson")] = field.Interface()
-		}
-	}
-	marsh, err := bson.Marshal(filteredData)
-	if err != nil {
-		return nil, errs.NewMongoMarshalErr(err)
-	}
-	unmarsh := new(bson.D)
-	if err := bson.Unmarshal(marsh, unmarsh); err != nil {
-		return nil, errs.NewMongoUnMarshalErr(err)
-	}
-	return unmarsh, nil
+func GetIDFilter(id primitive.ObjectID) *primitive.M {
+	return &bson.M{"_id": id}
 }
