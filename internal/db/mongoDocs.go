@@ -21,33 +21,24 @@ type baseMongoDoc struct {
 }
 
 func (d *baseMongoDoc) GetID() primitive.ObjectID {
-	return getID(d)
+	return d.ID
 }
 func (d *baseMongoDoc) GetIDStr() string {
-	return getIDStr(d)
+	return d.ID.Hex()
 }
 func (d *baseMongoDoc) SetID(id primitive.ObjectID) {
-	setID(d, id)
+	d.ID = id
 }
 func (d *baseMongoDoc) SetIDStr(id string) error {
-	return setIDStr(d, id)
+	idObj, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return errs.NewMongoUnMarshalErr(err)
+	}
+	d.ID = idObj
+	return nil
 }
 func (d *baseMongoDoc) MarshalOmitEmpty() (*primitive.M, errs.IMongoErr) {
-	marsh, err := bson.Marshal(d)
-	if err != nil {
-		return nil, errs.NewMongoMarshalErr(err)
-	}
-	unmarsh := new(bson.M)
-	if err := bson.Unmarshal(marsh, unmarsh); err != nil {
-		return nil, errs.NewMongoUnMarshalErr(err)
-	}
-	res := bson.M{}
-	for k, v := range *unmarsh {
-		if !reflect.ValueOf(v).IsZero() {
-			res[k] = v
-		}
-	}
-	return &res, nil
+	return MarshalOmitEmpty(d)
 }
 
 // ...
@@ -80,21 +71,21 @@ type JobDoc struct {
 	Type         JobType            `bson:"JobType" json:"type"`
 }
 
-func getID(v *baseMongoDoc) primitive.ObjectID {
-	return v.ID
-}
-func getIDStr(v *baseMongoDoc) string {
-	return v.ID.Hex()
-}
-
-func setID(v *baseMongoDoc, id primitive.ObjectID) {
-	v.ID = id
-}
-func setIDStr(v *baseMongoDoc, id string) error {
-	idObj, err := primitive.ObjectIDFromHex(id)
+// ===
+func MarshalOmitEmpty(v interface{}) (*primitive.M, errs.IMongoErr) {
+	marsh, err := bson.Marshal(v)
 	if err != nil {
-		return errs.NewMongoUnMarshalErr(err)
+		return nil, errs.NewMongoMarshalErr(err)
 	}
-	v.ID = idObj
-	return nil
+	unmarsh := new(bson.M)
+	if err := bson.Unmarshal(marsh, unmarsh); err != nil {
+		return nil, errs.NewMongoUnMarshalErr(err)
+	}
+	res := bson.M{}
+	for k, v := range *unmarsh {
+		if !reflect.ValueOf(v).IsZero() {
+			res[k] = v
+		}
+	}
+	return &res, nil
 }
