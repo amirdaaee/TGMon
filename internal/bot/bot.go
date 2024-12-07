@@ -38,55 +38,21 @@ type Worker struct {
 func (w *Worker) GetChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	w.inputChannelLock.Lock()
 	defer w.inputChannelLock.Unlock()
-	if w.inputChannel == nil {
-		chatList, err := w.Client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.TargetChannelId}})
-		if err != nil {
-			return nil, fmt.Errorf("can not get channel")
-		}
-		var channel tg.InputChannelClass
-		for _, cht := range chatList.GetChats() {
-			if cht.GetID() == w.TargetChannelId {
-				if chn, ok := cht.(*tg.Channel); !ok {
-					return nil, fmt.Errorf("target channel is not a channel")
-				} else {
-					channel = chn.AsInput()
-					break
-				}
-			}
-		}
-		if channel == nil {
-			return nil, fmt.Errorf("target channel not found")
-		}
-		w.inputChannel = channel
-	}
-	return w.inputChannel, nil
+	return w.getInputChannel(ctx)
 }
-func (w *Worker) GetMessages(msgID []int, ctx context.Context) (*tg.MessagesChannelMessages, error) {
+func (w *Worker) GetMessages(ctx context.Context, msgID []int) (*tg.MessagesChannelMessages, error) {
 	channel, err := w.GetChannel(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("can not get channel: %s", err)
+		return nil, fmt.Errorf("can not get channel while getting messages: %s", err)
 	}
-	inputMsgList := []tg.InputMessageClass{}
-	for _, id := range msgID {
-		inputMsgList = append(inputMsgList, &tg.InputMessageID{ID: id})
-	}
-
-	allMsgsCls, err := w.Client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: channel, ID: inputMsgList})
-	if err != nil {
-		return nil, fmt.Errorf("can not get messages of channel: %s", err)
-	}
-	allMsgs, ok := allMsgsCls.(*tg.MessagesChannelMessages)
-	if !ok {
-		return nil, fmt.Errorf("class of messages is %T, not MessagesChannelMessages", allMsgsCls)
-	}
-	return allMsgs, nil
+	return w.getChannelMessages(ctx, channel, msgID)
 }
 func (w *Worker) UpdateDocAccHash(doc *Document, ctx context.Context) error {
 	w.accCacheLock.Lock()
 	defer w.accCacheLock.Unlock()
 	accHash, ok := w.accCache.Get(doc.ID)
 	if !ok {
-		msg, err := w.GetMessages([]int{doc.MessageID}, ctx)
+		msg, err := w.GetMessages(ctx, []int{doc.MessageID})
 		if err != nil {
 			return fmt.Errorf("error getting message of document: %s", err)
 		}
@@ -188,14 +154,6 @@ func (wp *WorkerPool) SelectNextWorker() *Worker {
 
 func (wp *WorkerPool) GetCurrentWorker() *Worker {
 	return wp.Bots[wp.curIndex]
-}
-func (wp *WorkerPool) GetChannelMessages(ctx context.Context, msgID []int) (*tg.MessagesChannelMessages, error) {
-	w := wp.GetCurrentWorker()
-	channel, err := w.getInputChannel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("can not get channel while reading messages: %s", err)
-	}
-	return w.getChannelMessages(ctx, channel, msgID)
 }
 
 // ...
