@@ -415,7 +415,7 @@ var _ = Describe("Facade", func() {
 				if tc.expectJob {
 					jobDSMock.EXPECT().DeleteMany(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
 						func(ctx context.Context, d *primitive.M, c db.IMongoClient) errs.IMongoErr {
-							Expect(*d).To(BeEquivalentTo(primitive.M{"MediaID": tc.outputDoc.ID}))
+							Expect(*d).To(Equal(primitive.M{"MediaID": tc.outputDoc.ID}))
 							err := new(error)
 							if tc.jobDeleteManyError {
 								*err = fmt.Errorf("mock mediaDSMock.DeleteMany err")
@@ -424,7 +424,7 @@ var _ = Describe("Facade", func() {
 						})
 				}
 			}
-			assertMinioMock_RmAdd := func(tc testCase) {
+			assertMinioMock_FileRm := func(tc testCase) {
 				if tc.expectMinioRm {
 					err := new(error)
 					if tc.minioRmError {
@@ -557,7 +557,7 @@ var _ = Describe("Facade", func() {
 						// ...
 						assertJobDs_DeleteMany(tc)
 						// ...
-						assertMinioMock_RmAdd(tc)
+						assertMinioMock_FileRm(tc)
 						// Act
 						err := mediaFacade.Delete(testContext, &tc.filter, mockClient)
 						time.Sleep(10 * time.Millisecond) // wait for coroutines
@@ -621,7 +621,7 @@ var _ = Describe("Facade", func() {
 						// ...
 						assertJobDs_DeleteMany(tc)
 						// ...
-						assertMinioMock_RmAdd(tc)
+						assertMinioMock_FileRm(tc)
 						// Act
 						err := mediaFacade.Delete(testContext, &tc.filter, mockClient)
 						time.Sleep(10 * time.Millisecond) // wait for coroutines
