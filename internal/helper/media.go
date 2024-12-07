@@ -18,7 +18,7 @@ func AddMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, doc *
 	ll.Debug("started processing")
 	docMeta := doc.GetMetadata()
 	thmb := ""
-	thmbData, err := wp.GetNextWorker().GetThumbnail(doc, ctx)
+	thmbData, err := wp.SelectNextWorker().GetThumbnail(doc, ctx)
 	if err != nil {
 		logrus.WithError(err).Warn("can not get thumbnail")
 	} else {
@@ -68,7 +68,7 @@ func RmMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, docID 
 	}
 	go func() {
 		ctx := context.Background()
-		if err := wp.GetNextWorker().DeleteMessages([]int{mediaDoc.MessageID}); err != nil {
+		if err := wp.SelectNextWorker().DeleteMessages([]int{mediaDoc.MessageID}); err != nil {
 			logrus.WithError(err).Error("error removing media message")
 		}
 		for _, m := range []string{mediaDoc.Thumbnail, mediaDoc.Sprite, mediaDoc.Vtt} {

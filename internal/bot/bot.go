@@ -35,9 +35,6 @@ type Worker struct {
 	accCacheLock     sync.Mutex
 }
 
-func (w *Worker) String() string {
-	return fmt.Sprintf("{Worker (%s|@%s)}", w.Token, w.Client.Self.Username)
-}
 func (w *Worker) GetChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	w.inputChannelLock.Lock()
 	defer w.inputChannelLock.Unlock()
@@ -128,6 +125,34 @@ func (w *Worker) GetThumbnail(doc *Document, ctx context.Context) ([]byte, error
 	thumbFile := res.(*tg.UploadFile)
 	return thumbFile.Bytes, nil
 }
+func (w *Worker) getLogger() *logrus.Entry {
+	s := fmt.Sprintf("{Worker (%s|@%s)}", w.Token, w.Client.Self.Username)
+	return logrus.WithField("worker", s)
+}
+func (w *Worker) getInputChannel(ctx context.Context) (tg.InputChannelClass, error) {
+	if w.inputChannel == nil {
+		chatList, err := w.Client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.TargetChannelId}})
+		if err != nil {
+			return nil, fmt.Errorf("can not get channel")
+		}
+		var channel tg.InputChannelClass
+		for _, cht := range chatList.GetChats() {
+			if cht.GetID() == w.TargetChannelId {
+				if chn, ok := cht.(*tg.Channel); !ok {
+					return nil, fmt.Errorf("target channel is not a channel")
+				} else {
+					channel = chn.AsInput()
+					break
+				}
+			}
+		}
+		if channel == nil {
+			return nil, fmt.Errorf("target channel not found")
+		}
+		w.inputChannel = channel
+	}
+	return w.inputChannel, nil
+}
 
 // ...
 type WorkerPool struct {
@@ -136,13 +161,13 @@ type WorkerPool struct {
 	mut      sync.Mutex
 }
 
-func (wp *WorkerPool) GetNextWorker() *Worker {
+func (wp *WorkerPool) SelectNextWorker() *Worker {
 	wp.mut.Lock()
 	defer wp.mut.Unlock()
 	index := (wp.curIndex + 1) % len(wp.Bots)
 	wp.curIndex = index
 	worker := wp.Bots[index]
-	logrus.Debugf("Using worker %s", worker.String())
+	worker.getLogger().Debugf("using this worker (%d/%d)", index+1, len(wp.Bots))
 	return worker
 }
 

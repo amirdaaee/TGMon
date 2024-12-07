@@ -42,7 +42,7 @@ func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.M
 		return nil
 	}
 
-	worker := wp.GetNextWorker()
+	worker := wp.SelectNextWorker()
 	docMsg, err := worker.GetMessages([]int{medDoc.MessageID}, ctx)
 	if err != nil {
 		return fmt.Errorf("error GetMessages: %s", err)
