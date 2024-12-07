@@ -153,6 +153,21 @@ func (w *Worker) getInputChannel(ctx context.Context) (tg.InputChannelClass, err
 	}
 	return w.inputChannel, nil
 }
+func (w *Worker) getChannelMessages(ctx context.Context, channel tg.InputChannelClass, msgID []int) (*tg.MessagesChannelMessages, error) {
+	inputMsgList := []tg.InputMessageClass{}
+	for _, id := range msgID {
+		inputMsgList = append(inputMsgList, &tg.InputMessageID{ID: id})
+	}
+	allMsgsCls, err := w.Client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: channel, ID: inputMsgList})
+	if err != nil {
+		return nil, fmt.Errorf("can not get messages of channel: %s", err)
+	}
+	allMsgs, ok := allMsgsCls.(*tg.MessagesChannelMessages)
+	if !ok {
+		return nil, fmt.Errorf("class of messages is %T, not MessagesChannelMessages", allMsgsCls)
+	}
+	return allMsgs, nil
+}
 
 // ...
 type WorkerPool struct {
@@ -169,6 +184,18 @@ func (wp *WorkerPool) SelectNextWorker() *Worker {
 	worker := wp.Bots[index]
 	worker.getLogger().Debugf("using this worker (%d/%d)", index+1, len(wp.Bots))
 	return worker
+}
+
+func (wp *WorkerPool) GetCurrentWorker() *Worker {
+	return wp.Bots[wp.curIndex]
+}
+func (wp *WorkerPool) GetChannelMessages(ctx context.Context, msgID []int) (*tg.MessagesChannelMessages, error) {
+	w := wp.GetCurrentWorker()
+	channel, err := w.getInputChannel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("can not get channel while reading messages: %s", err)
+	}
+	return w.getChannelMessages(ctx, channel, msgID)
 }
 
 // ...
