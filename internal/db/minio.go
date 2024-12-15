@@ -4,12 +4,19 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+type IMinioCl interface {
+	BucketExists(ctx context.Context, bucketName string) (bool, error)
+	MakeBucket(ctx context.Context, bucketName string, opts minio.MakeBucketOptions) (err error)
+	PutObject(ctx context.Context, bucketName string, objectName string, reader io.Reader, objectSize int64, opts minio.PutObjectOptions) (info minio.UploadInfo, err error)
+	RemoveObject(ctx context.Context, bucketName string, objectName string, opts minio.RemoveObjectOptions) error
+}
 type IMinioClient interface {
 	CreateBucket(ctx context.Context) error
 	FileAdd(ctx context.Context, fileName string, data []byte) error
@@ -17,7 +24,7 @@ type IMinioClient interface {
 	FileRm(ctx context.Context, fileName string) error
 }
 type MinioClient struct {
-	*minio.Client
+	IMinioCl
 	bucket string
 }
 type MinioConfig struct {
@@ -28,21 +35,28 @@ type MinioConfig struct {
 	MinioSecure    bool
 }
 
-func NewMinioClient(minioCfg *MinioConfig) (IMinioClient, error) {
-	minioClient, err := minio.New(minioCfg.MinioEndpoint, &minio.Options{
+func NewMinioClient(minioCfg *MinioConfig, factory func(string, *minio.Options) (IMinioCl, error), skipAssertBucket bool) (IMinioClient, error) {
+	if factory == nil {
+		factory = newMinioCl
+	}
+	minioClient, err := factory(minioCfg.MinioEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(minioCfg.MinioAccessKey, minioCfg.MinioSecretKey, ""),
 		Secure: minioCfg.MinioSecure,
 	})
 	if err != nil {
 		return nil, err
 	}
-	cl := MinioClient{Client: minioClient, bucket: minioCfg.MinioBucket}
-	if err := cl.CreateBucket(context.TODO()); err != nil {
-		return nil, err
+	cl := MinioClient{IMinioCl: minioClient, bucket: minioCfg.MinioBucket}
+	if !skipAssertBucket {
+		if err := cl.CreateBucket(context.TODO()); err != nil {
+			return nil, err
+		}
 	}
-	return &cl, err
+	return &cl, nil
 }
-
+func newMinioCl(endpoint string, opts *minio.Options) (IMinioCl, error) {
+	return minio.New(endpoint, opts)
+}
 func (cl *MinioClient) CreateBucket(ctx context.Context) error {
 	if exists, err := cl.BucketExists(ctx, cl.bucket); err != nil {
 		return fmt.Errorf("can not check bucket existance: %s", err)
@@ -56,15 +70,14 @@ func (cl *MinioClient) CreateBucket(ctx context.Context) error {
 }
 func (cl *MinioClient) FileAdd(ctx context.Context, fileName string, data []byte) error {
 	reader := bytes.NewReader(data)
-	_, err := cl.PutObject(ctx, cl.bucket, fileName, reader, reader.Size(), minio.PutObjectOptions{})
-	if err != nil {
-		return err
-	}
-	return nil
+	return cl.fileAddAnything(ctx, fileName, reader, reader.Size())
 }
 func (cl *MinioClient) FileAddStr(ctx context.Context, fileName string, data string) error {
 	reader := strings.NewReader(data)
-	_, err := cl.PutObject(ctx, cl.bucket, fileName, reader, reader.Size(), minio.PutObjectOptions{})
+	return cl.fileAddAnything(ctx, fileName, reader, reader.Size())
+}
+func (cl *MinioClient) fileAddAnything(ctx context.Context, fileName string, r io.Reader, s int64) error {
+	_, err := cl.PutObject(ctx, cl.bucket, fileName, r, s, minio.PutObjectOptions{})
 	if err != nil {
 		return err
 	}
