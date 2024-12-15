@@ -9,8 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/celestix/gotgproto"
+	"github.com/amirdaaee/TGMon/internal/db"
+	"github.com/amirdaaee/TGMon/internal/facade"
+	"github.com/celestix/gotgproto/dispatcher"
 	"github.com/celestix/gotgproto/dispatcher/handlers"
+	"github.com/celestix/gotgproto/ext"
+
+	"github.com/celestix/gotgproto"
 	"github.com/celestix/gotgproto/sessionMaker"
 	"github.com/glebarez/sqlite"
 	"github.com/gotd/contrib/middleware/floodwait"
@@ -26,13 +31,14 @@ import (
 
 // ...
 type Worker struct {
-	Token            string
-	Client           *gotgproto.Client
-	TargetChannelId  int64
+	token            string
+	client           *gotgproto.Client
+	targetChannelId  int64
 	inputChannel     tg.InputChannelClass
 	inputChannelLock sync.Mutex
 	accCache         *lru.Cache[int64, int64]
 	accCacheLock     sync.Mutex
+	sessCfg          *SessionConfig
 }
 
 func (w *Worker) GetChannel(ctx context.Context) (tg.InputChannelClass, error) {
@@ -69,7 +75,7 @@ func (w *Worker) GetDocAccHash(doc *TelegramDocument, ctx context.Context) (int6
 	return accHash, nil
 }
 func (w *Worker) DeleteMessages(msgID []int) error {
-	return w.Client.CreateContext().DeleteMessages(w.TargetChannelId, msgID)
+	return w.client.CreateContext().DeleteMessages(w.targetChannelId, msgID)
 }
 func (w *Worker) GetThumbnail(doc *TelegramDocument, ctx context.Context) ([]byte, error) {
 	thmb := doc.Thumbs[0].(*tg.PhotoSize)
@@ -86,7 +92,7 @@ func (w *Worker) GetThumbnail(doc *TelegramDocument, ctx context.Context) ([]byt
 		Limit:    1024 * 1024,
 		Precise:  false,
 	}
-	res, err := w.Client.API().UploadGetFile(ctx, req)
+	res, err := w.client.API().UploadGetFile(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -94,17 +100,21 @@ func (w *Worker) GetThumbnail(doc *TelegramDocument, ctx context.Context) ([]byt
 	return thumbFile.Bytes, nil
 }
 func (w *Worker) getLogger() *logrus.Entry {
-	s := fmt.Sprintf("{Worker (%s|@%s)}", w.Token, w.Client.Self.Username)
+	botUsername := "?"
+	if w.client != nil {
+		botUsername = w.client.Self.Username
+	}
+	s := fmt.Sprintf("{Worker (%s|@%s)}", w.token, botUsername)
 	return logrus.WithField("worker", s)
 }
 func (w *Worker) getInputChannel(ctx context.Context) (tg.InputChannelClass, error) {
-	chatList, err := w.Client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.TargetChannelId}})
+	chatList, err := w.client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.targetChannelId}})
 	if err != nil {
 		return nil, fmt.Errorf("can not get channel")
 	}
 	var channel tg.InputChannelClass
 	for _, cht := range chatList.GetChats() {
-		if cht.GetID() == w.TargetChannelId {
+		if cht.GetID() == w.targetChannelId {
 			if chn, ok := cht.(*tg.Channel); !ok {
 				return nil, fmt.Errorf("target channel is not a channel")
 			} else {
@@ -123,7 +133,7 @@ func (w *Worker) getChannelMessages(ctx context.Context, channel tg.InputChannel
 	for _, id := range msgID {
 		inputMsgList = append(inputMsgList, &tg.InputMessageID{ID: id})
 	}
-	allMsgsCls, err := w.Client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: channel, ID: inputMsgList})
+	allMsgsCls, err := w.client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: channel, ID: inputMsgList})
 	if err != nil {
 		return nil, fmt.Errorf("can not get messages of channel: %s", err)
 	}
@@ -144,6 +154,40 @@ func (w *Worker) getDocAccHash(ctx context.Context, doc *TelegramDocument) (int6
 	}
 	return newDoc.AccessHash, nil
 }
+func (w *Worker) startClient() error {
+	sessCfg := w.sessCfg
+	if w.client != nil {
+		w.getLogger().Warn("client is already started")
+		return nil
+	}
+	os.Mkdir(sessCfg.SessionDir, os.ModePerm)
+	sessionDBPath := fmt.Sprintf("%s/worker-%s.sqlite3", sessCfg.SessionDir, strings.Split(w.token, ":")[0])
+	sessionType := sessionMaker.SqlSession(sqlite.Open(sessionDBPath))
+	clOpts := gotgproto.ClientOpts{
+		Session:          sessionType,
+		DisableCopyright: true,
+		Middlewares: []telegram.Middleware{
+			floodwait.NewSimpleWaiter().WithMaxRetries(10).WithMaxWait(5 * time.Second),
+			ratelimit.New(rate.Every(time.Millisecond*100), 5),
+		},
+	}
+	if resolver, err := sessCfg.getSocksDialer(); err != nil {
+		logrus.WithError(err).Error("can not get socks dialer. using default")
+	} else if resolver != nil {
+		clOpts.Resolver = *resolver
+	}
+	client, err := gotgproto.NewClient(
+		sessCfg.AppID,
+		sessCfg.AppHash,
+		gotgproto.ClientTypeBot(w.token),
+		&clOpts,
+	)
+	if err != nil {
+		return err
+	}
+	w.client = client
+	return nil
+}
 
 // ...
 type WorkerPool struct {
@@ -162,8 +206,88 @@ func (wp *WorkerPool) SelectNextWorker() *Worker {
 	return worker
 }
 
-func (wp *WorkerPool) GetCurrentWorker() *Worker {
-	return wp.Bots[wp.curIndex]
+// ...
+type Master struct {
+	Bot         *Worker
+	mediaFacade facade.IMediaFacade
+	mongo       db.IMongo
+}
+
+func (mstr *Master) Start() error {
+	return mstr.Bot.client.Idle()
+}
+func (mstr *Master) getLogger() *logrus.Entry {
+	mstrUsername := "?"
+	if mstr.Bot.client != nil {
+		mstrUsername = mstr.Bot.client.Self.Username
+	}
+	s := fmt.Sprintf("{Master (%s|@%s)}", mstr.Bot.token, mstrUsername)
+	return logrus.WithField("worker", s)
+}
+func (mstr *Master) handle(ctx *ext.Context, u *ext.Update) error {
+	effMsg := u.EffectiveMessage
+	ll := mstr.getLogger()
+	ll.Debug("new message")
+	if supported := mstr.filter(u, ll); !supported {
+		ll.Debug("stopped further processing")
+		return dispatcher.EndGroups
+	}
+	doc := TelegramDocument{}
+	if err := doc.FromMessage(effMsg.Message); err != nil {
+		return fmt.Errorf("error getting document of message %s", err)
+	}
+	// ...
+	cl, err := mstr.mongo.GetClient()
+	if err != nil {
+		return fmt.Errorf("can not get mongo client %s", err)
+	}
+	defer cl.Disconnect(ctx)
+	// ...
+	mediaDoc := mstr.dbDocFromMessage(&doc)
+	thumb, err := mstr.Bot.GetThumbnail(&doc, ctx)
+	if err != nil {
+		ll.WithError(err).Error("can not get thumbnail")
+	}
+	media := facade.NewFullMediaData(mediaDoc, thumb)
+	if _, err := mstr.mediaFacade.Create(ctx, media, cl); err != nil {
+		return fmt.Errorf("error in facade create: %s", err)
+	}
+	ll.Debug("new media added")
+	return nil
+}
+func (mstr *Master) dbDocFromMessage(doc *TelegramDocument) *db.MediaFileDoc {
+	docMeta := doc.GetMetadata()
+	mediaDoc := db.MediaFileDoc{
+		Location:  docMeta.Location,
+		FileSize:  docMeta.FileSize,
+		FileName:  docMeta.FileName,
+		MimeType:  docMeta.MimeType,
+		FileID:    docMeta.DocID,
+		MessageID: doc.MessageID,
+		Duration:  docMeta.Duration,
+		DateAdded: time.Now().Unix(),
+	}
+	return &mediaDoc
+}
+func (mstr *Master) filter(u *ext.Update, ll *logrus.Entry) bool {
+	ll = ll.WithField("at", "filter")
+	chatId := u.EffectiveChat().GetID()
+	effMsg := u.EffectiveMessage
+	if chatId != mstr.Bot.targetChannelId {
+		ll.Debug("message not in channel")
+		return false
+	}
+	if effMsg.Media == nil {
+		ll.Debug("message doesn't contain media")
+		return false
+	}
+	switch m := effMsg.Media.(type) {
+	case *tg.MessageMediaDocument:
+		return true
+	default:
+		ll.Debugf("message type (%T) not supported", m)
+		return false
+	}
 }
 
 // ...
@@ -175,91 +299,12 @@ type SessionConfig struct {
 	ChannelId  int64
 }
 
-// ...
-func NewMaster(token string, sessCfg *SessionConfig) (*Notifier, error) {
-	client, err := startClient(token, sessCfg)
-	if err != nil {
-		return nil, fmt.Errorf("error starting master bot: %s", err)
-	}
-	notifier := Notifier{
-		DocNotifier: &docNotifier{channelId: sessCfg.ChannelId, Chan: make(chan *TelegramDocument)},
-	}
-	client.Dispatcher.AddHandler(
-		handlers.NewMessage(nil, notifier.DocNotifier.handle),
-	)
-	go func() {
-		if err := client.Idle(); err != nil {
-			logrus.WithError(err).Fatal("error idle bot")
-		}
-	}()
-	return &notifier, nil
-}
-
-func NewWorkerPool(tokens []string, sessCfg *SessionConfig) (*WorkerPool, error) {
-	var wg sync.WaitGroup
-	wp := WorkerPool{}
-	for _, tok := range tokens {
-		wg.Add(1)
-		go func(_i string) {
-			defer wg.Done()
-			ll := logrus.WithField("worker", _i)
-			client, err := startClient(_i, sessCfg)
-			if err != nil {
-				ll.WithError(err).Warn("can not start worker")
-				return
-			}
-			wp.mut.Lock()
-			defer wp.mut.Unlock()
-			accCache, err := lru.New[int64, int64](128)
-			if err != nil {
-				ll.WithError(err).Warn("can not create worker accCache")
-				return
-			}
-			wp.Bots = append(wp.Bots, &Worker{Client: client, Token: _i, TargetChannelId: sessCfg.ChannelId, accCache: accCache})
-			ll.Info("worker started")
-		}(tok)
-	}
-	wg.Wait()
-	if len(wp.Bots) == 0 {
-		return nil, fmt.Errorf("no worker is avaiable")
-	}
-	return &wp, nil
-}
-
-func startClient(botToken string, sessCfg *SessionConfig) (*gotgproto.Client, error) {
-	os.Mkdir(sessCfg.SessionDir, os.ModePerm)
-	sessionType := sessionMaker.SqlSession(sqlite.Open(fmt.Sprintf("%s/worker-%s.sqlite3", sessCfg.SessionDir, strings.Split(botToken, ":")[0])))
-	clOpts := gotgproto.ClientOpts{
-		Session:          sessionType,
-		DisableCopyright: true,
-		Middlewares: []telegram.Middleware{
-			floodwait.NewSimpleWaiter().WithMaxRetries(10).WithMaxWait(5 * time.Second),
-			ratelimit.New(rate.Every(time.Millisecond*100), 5),
-		},
-	}
-	if resolver, err := getSocksDialer(sessCfg); err != nil {
-		logrus.WithError(err).Error("can not get socks dialer. using default")
-	} else if resolver != nil {
-		clOpts.Resolver = *resolver
-	}
-	client, err := gotgproto.NewClient(
-		sessCfg.AppID,
-		sessCfg.AppHash,
-		gotgproto.ClientTypeBot(botToken),
-		&clOpts,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
-}
-
-func getSocksDialer(sessCfg *SessionConfig) (*dcs.Resolver, error) {
+func (sessCfg *SessionConfig) getSocksDialer() (*dcs.Resolver, error) {
 	proxyUriStr := sessCfg.SocksProxy
 	if proxyUriStr == "" {
 		return nil, nil
 	}
-	proxyUri, err := url.Parse(string(proxyUriStr))
+	proxyUri, err := url.Parse(proxyUriStr)
 	if err != nil {
 		return nil, fmt.Errorf("can not parse proxy url (%s): %s", proxyUriStr, err)
 	}
@@ -276,4 +321,57 @@ func getSocksDialer(sessCfg *SessionConfig) (*dcs.Resolver, error) {
 		Dial: dc.DialContext,
 	})
 	return &dialler, nil
+}
+
+// ...
+func NewWorker(token string, sessCfg *SessionConfig) (*Worker, error) {
+	accCache, err := lru.New[int64, int64](128)
+	if err != nil {
+		return nil, fmt.Errorf("can not create worker accCache: %s", err)
+	}
+	w := &Worker{token: token, targetChannelId: sessCfg.ChannelId, accCache: accCache, sessCfg: sessCfg}
+	return w, nil
+}
+func NewWorkerPool(tokens []string, sessCfg *SessionConfig) (*WorkerPool, error) {
+	var wg sync.WaitGroup
+	wp := WorkerPool{}
+	for _, tok := range tokens {
+		wg.Add(1)
+		go func(_i string) {
+			defer wg.Done()
+			ll := logrus.WithField("worker", _i)
+			w, err := NewWorker(_i, sessCfg)
+			if err != nil {
+				ll.WithError(err).Warn("can not create worker")
+				return
+			}
+			if err := w.startClient(); err != nil {
+				ll.WithError(err).Warn("can not start worker")
+				return
+			}
+			wp.mut.Lock()
+			defer wp.mut.Unlock()
+			wp.Bots = append(wp.Bots, w)
+			ll.Info("worker started")
+		}(tok)
+	}
+	wg.Wait()
+	if len(wp.Bots) == 0 {
+		return nil, fmt.Errorf("no worker is avaiable")
+	}
+	return &wp, nil
+}
+func NewMaster(token string, sessCfg *SessionConfig, facade *facade.MediaFacade) (*Master, error) {
+	w, err := NewWorker(token, sessCfg)
+	if err != nil {
+		return nil, fmt.Errorf("can not create client: %s", err)
+	}
+	if err := w.startClient(); err != nil {
+		return nil, fmt.Errorf("error starting master bot: %s", err)
+	}
+	mstr := &Master{Bot: w, mediaFacade: facade}
+	w.client.Dispatcher.AddHandler(
+		handlers.NewMessage(nil, mstr.handle),
+	)
+	return mstr, nil
 }

@@ -24,6 +24,9 @@ func NewFullMediaData(doc *db.MediaFileDoc, thumb []byte) *FullMediaData {
 	}
 }
 
+type IMediaFacade interface {
+	Create(ctx context.Context, data *FullMediaData, cl db.IMongoClient) (*db.MediaFileDoc, error)
+}
 type MediaFacade struct {
 	baseFacade[*db.MediaFileDoc]
 }

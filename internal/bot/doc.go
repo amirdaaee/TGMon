@@ -7,7 +7,7 @@ import (
 )
 
 // ...
-type DocumentMetadata struct {
+type TelegramDocumentMetadata struct {
 	FileName string
 	Duration float64
 
@@ -42,8 +42,8 @@ func (d *TelegramDocument) FromMessage(msg tg.MessageClass) error {
 		return fmt.Errorf("unexpected media type %T", media)
 	}
 }
-func (d *TelegramDocument) GetMetadata() *DocumentMetadata {
-	meta := DocumentMetadata{}
+func (d *TelegramDocument) GetMetadata() *TelegramDocumentMetadata {
+	meta := TelegramDocumentMetadata{}
 	for _, attribute := range d.Attributes {
 		switch v := attribute.(type) {
 		case *tg.DocumentAttributeFilename:

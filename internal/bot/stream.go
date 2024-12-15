@@ -104,7 +104,7 @@ func (r *TGReader) readMedia(offset int64, limit int, loc *tg.InputDocumentFileL
 		Limit:    limit,
 		Location: loc,
 	}
-	res, err := r.worker.Client.API().UploadGetFile(r.ctx, req)
+	res, err := r.worker.client.API().UploadGetFile(r.ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func NewTelegramReader(
 	chunkSize int64,
 	profileFile string,
 ) (*TGReader, error) {
-	pl := NewBotProfiler(profileFile, document.ID, worker.Token)
+	pl := NewBotProfiler(profileFile, document.ID, worker.token)
 	// ...
 	sTime := time.Now()
 	if _, err := worker.GetDocAccHash(document, ctx); err != nil {
