@@ -13,7 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-func AddMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, doc *bot.Document, wp *bot.WorkerPool) error {
+func AddMedia(ctx context.Context, mongo *db.Mongo, minio db.IMinioClient, doc *bot.TelegramDocument, wp *bot.WorkerPool) error {
 	ll := logrus.WithField("message-id", doc.MessageID)
 	ll.Debug("started processing")
 	docMeta := doc.GetMetadata()

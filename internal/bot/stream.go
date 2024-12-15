@@ -13,7 +13,7 @@ import (
 
 // ...
 type readMeta struct {
-	doc           *Document
+	doc           *TelegramDocument
 	start         int64
 	end           int64
 	chunkSize     int64
@@ -140,7 +140,7 @@ func (r *TGReader) stripData(p []byte, offset int64, limit int) []byte {
 func NewTelegramReader(
 	ctx *gin.Context,
 	worker *Worker,
-	document *Document,
+	document *TelegramDocument,
 	start int64,
 	end int64,
 	contentLength int64,

@@ -13,7 +13,7 @@ type Notifier struct {
 }
 type docNotifier struct {
 	channelId int64
-	Chan      chan *Document
+	Chan      chan *TelegramDocument
 }
 
 func (dn *docNotifier) handle(ctx *ext.Context, u *ext.Update) error {
@@ -33,7 +33,7 @@ func (dn *docNotifier) handle(ctx *ext.Context, u *ext.Update) error {
 		ll.Debug("message not supported")
 		return dispatcher.EndGroups
 	}
-	doc := Document{}
+	doc := TelegramDocument{}
 	if err := doc.FromMessage(effMsg.Message); err != nil {
 		return fmt.Errorf("error getting document of message %s", err)
 	}

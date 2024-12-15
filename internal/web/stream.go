@@ -47,7 +47,7 @@ func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.M
 	if err != nil {
 		return fmt.Errorf("error GetMessages: %s", err)
 	}
-	doc := bot.Document{}
+	doc := bot.TelegramDocument{}
 	doc.FromMessage(docMsg.Messages[0])
 	lr, err := bot.NewTelegramReader(ctx, worker, &doc, metaData.start, metaData.end, metaData.contentLength, chunckSize, profileFile)
 	if err != nil {

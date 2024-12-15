@@ -18,12 +18,12 @@ type DocumentMetadata struct {
 }
 
 // ...
-type Document struct {
+type TelegramDocument struct {
 	*tg.Document
 	MessageID int
 }
 
-func (d *Document) FromMessage(msg tg.MessageClass) error {
+func (d *TelegramDocument) FromMessage(msg tg.MessageClass) error {
 	m, ok := msg.(*tg.Message)
 	if !ok {
 		return fmt.Errorf("provided message type is %T", msg)
@@ -42,7 +42,7 @@ func (d *Document) FromMessage(msg tg.MessageClass) error {
 		return fmt.Errorf("unexpected media type %T", media)
 	}
 }
-func (d *Document) GetMetadata() *DocumentMetadata {
+func (d *TelegramDocument) GetMetadata() *DocumentMetadata {
 	meta := DocumentMetadata{}
 	for _, attribute := range d.Attributes {
 		switch v := attribute.(type) {

@@ -54,7 +54,7 @@ func (w *Worker) GetMessages(ctx context.Context, msgID []int) (*tg.MessagesChan
 	}
 	return w.getChannelMessages(ctx, channel, msgID)
 }
-func (w *Worker) GetDocAccHash(doc *Document, ctx context.Context) (int64, error) {
+func (w *Worker) GetDocAccHash(doc *TelegramDocument, ctx context.Context) (int64, error) {
 	w.accCacheLock.Lock()
 	defer w.accCacheLock.Unlock()
 	accHash, ok := w.accCache.Get(doc.ID)
@@ -71,7 +71,7 @@ func (w *Worker) GetDocAccHash(doc *Document, ctx context.Context) (int64, error
 func (w *Worker) DeleteMessages(msgID []int) error {
 	return w.Client.CreateContext().DeleteMessages(w.TargetChannelId, msgID)
 }
-func (w *Worker) GetThumbnail(doc *Document, ctx context.Context) ([]byte, error) {
+func (w *Worker) GetThumbnail(doc *TelegramDocument, ctx context.Context) ([]byte, error) {
 	thmb := doc.Thumbs[0].(*tg.PhotoSize)
 	size := thmb.Type
 	loc_ := tg.InputDocumentFileLocation{}
@@ -133,12 +133,12 @@ func (w *Worker) getChannelMessages(ctx context.Context, channel tg.InputChannel
 	}
 	return allMsgs, nil
 }
-func (w *Worker) getDocAccHash(ctx context.Context, doc *Document) (int64, error) {
+func (w *Worker) getDocAccHash(ctx context.Context, doc *TelegramDocument) (int64, error) {
 	msg, err := w.GetMessages(ctx, []int{doc.MessageID})
 	if err != nil {
 		return 0, fmt.Errorf("error getting message of document: %s", err)
 	}
-	newDoc := Document{}
+	newDoc := TelegramDocument{}
 	if err := newDoc.FromMessage(msg.Messages[0]); err != nil {
 		return 0, fmt.Errorf("error getting document of message of document: %s", err)
 	}
@@ -182,7 +182,7 @@ func NewMaster(token string, sessCfg *SessionConfig) (*Notifier, error) {
 		return nil, fmt.Errorf("error starting master bot: %s", err)
 	}
 	notifier := Notifier{
-		DocNotifier: &docNotifier{channelId: sessCfg.ChannelId, Chan: make(chan *Document)},
+		DocNotifier: &docNotifier{channelId: sessCfg.ChannelId, Chan: make(chan *TelegramDocument)},
 	}
 	client.Dispatcher.AddHandler(
 		handlers.NewMessage(nil, notifier.DocNotifier.handle),
