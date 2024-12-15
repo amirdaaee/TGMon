@@ -38,7 +38,14 @@ type Worker struct {
 func (w *Worker) GetChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	w.inputChannelLock.Lock()
 	defer w.inputChannelLock.Unlock()
-	return w.getInputChannel(ctx)
+	if w.inputChannel == nil {
+		ch, err := w.getInputChannel(ctx)
+		if err != nil {
+			return nil, err
+		}
+		w.inputChannel = ch
+	}
+	return w.inputChannel, nil
 }
 func (w *Worker) GetMessages(ctx context.Context, msgID []int) (*tg.MessagesChannelMessages, error) {
 	channel, err := w.GetChannel(ctx)
@@ -47,24 +54,19 @@ func (w *Worker) GetMessages(ctx context.Context, msgID []int) (*tg.MessagesChan
 	}
 	return w.getChannelMessages(ctx, channel, msgID)
 }
-func (w *Worker) UpdateDocAccHash(doc *Document, ctx context.Context) error {
+func (w *Worker) GetDocAccHash(doc *Document, ctx context.Context) (int64, error) {
 	w.accCacheLock.Lock()
 	defer w.accCacheLock.Unlock()
 	accHash, ok := w.accCache.Get(doc.ID)
 	if !ok {
-		msg, err := w.GetMessages(ctx, []int{doc.MessageID})
+		accHash, err := w.getDocAccHash(ctx, doc)
 		if err != nil {
-			return fmt.Errorf("error getting message of document: %s", err)
+			return 0, err
 		}
-		newDoc := Document{}
-		if err := newDoc.FromMessage(msg.Messages[0]); err != nil {
-			return fmt.Errorf("error getting document of message of document: %s", err)
-		}
-		accHash = newDoc.AccessHash
 		w.accCache.Add(doc.ID, accHash)
+		return accHash, nil
 	}
-	doc.AccessHash = accHash
-	return nil
+	return accHash, nil
 }
 func (w *Worker) DeleteMessages(msgID []int) error {
 	return w.Client.CreateContext().DeleteMessages(w.TargetChannelId, msgID)
@@ -73,7 +75,7 @@ func (w *Worker) GetThumbnail(doc *Document, ctx context.Context) ([]byte, error
 	thmb := doc.Thumbs[0].(*tg.PhotoSize)
 	size := thmb.Type
 	loc_ := tg.InputDocumentFileLocation{}
-	err := w.UpdateDocAccHash(doc, ctx)
+	_, err := w.GetDocAccHash(doc, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error updating access hash: %s", err)
 	}
@@ -96,28 +98,25 @@ func (w *Worker) getLogger() *logrus.Entry {
 	return logrus.WithField("worker", s)
 }
 func (w *Worker) getInputChannel(ctx context.Context) (tg.InputChannelClass, error) {
-	if w.inputChannel == nil {
-		chatList, err := w.Client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.TargetChannelId}})
-		if err != nil {
-			return nil, fmt.Errorf("can not get channel")
-		}
-		var channel tg.InputChannelClass
-		for _, cht := range chatList.GetChats() {
-			if cht.GetID() == w.TargetChannelId {
-				if chn, ok := cht.(*tg.Channel); !ok {
-					return nil, fmt.Errorf("target channel is not a channel")
-				} else {
-					channel = chn.AsInput()
-					break
-				}
+	chatList, err := w.Client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.TargetChannelId}})
+	if err != nil {
+		return nil, fmt.Errorf("can not get channel")
+	}
+	var channel tg.InputChannelClass
+	for _, cht := range chatList.GetChats() {
+		if cht.GetID() == w.TargetChannelId {
+			if chn, ok := cht.(*tg.Channel); !ok {
+				return nil, fmt.Errorf("target channel is not a channel")
+			} else {
+				channel = chn.AsInput()
+				break
 			}
 		}
-		if channel == nil {
-			return nil, fmt.Errorf("target channel not found")
-		}
-		w.inputChannel = channel
 	}
-	return w.inputChannel, nil
+	if channel == nil {
+		return nil, fmt.Errorf("target channel not found")
+	}
+	return channel, nil
 }
 func (w *Worker) getChannelMessages(ctx context.Context, channel tg.InputChannelClass, msgID []int) (*tg.MessagesChannelMessages, error) {
 	inputMsgList := []tg.InputMessageClass{}
@@ -133,6 +132,17 @@ func (w *Worker) getChannelMessages(ctx context.Context, channel tg.InputChannel
 		return nil, fmt.Errorf("class of messages is %T, not MessagesChannelMessages", allMsgsCls)
 	}
 	return allMsgs, nil
+}
+func (w *Worker) getDocAccHash(ctx context.Context, doc *Document) (int64, error) {
+	msg, err := w.GetMessages(ctx, []int{doc.MessageID})
+	if err != nil {
+		return 0, fmt.Errorf("error getting message of document: %s", err)
+	}
+	newDoc := Document{}
+	if err := newDoc.FromMessage(msg.Messages[0]); err != nil {
+		return 0, fmt.Errorf("error getting document of message of document: %s", err)
+	}
+	return newDoc.AccessHash, nil
 }
 
 // ...
