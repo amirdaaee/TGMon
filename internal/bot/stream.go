@@ -104,7 +104,7 @@ func (r *TGReader) readMedia(offset int64, limit int, loc *tg.InputDocumentFileL
 		Limit:    limit,
 		Location: loc,
 	}
-	res, err := r.worker.client.API().UploadGetFile(r.ctx, req)
+	res, err := r.worker.cl.UploadGetFile(r.ctx, req)
 	if err != nil {
 		return nil, err
 	}
