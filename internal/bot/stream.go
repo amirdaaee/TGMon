@@ -150,7 +150,7 @@ func NewTelegramReader(
 	pl := NewBotProfiler(profileFile, document.ID, worker.cl.GetName())
 	// ...
 	sTime := time.Now()
-	if _, err := worker.GetDocAccHash(document, ctx); err != nil {
+	if _, err := worker.GetDocAccHash(ctx, document); err != nil {
 		return nil, fmt.Errorf("can not update access hash: %s", err)
 	}
 	pl.record(sTime, "update acc hash")

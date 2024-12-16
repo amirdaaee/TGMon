@@ -185,7 +185,13 @@ func (w *Worker) GetChannelMessages(ctx context.Context, msgID []int) (*tg.Messa
 func (w *Worker) DeleteMessages(msgID []int) error {
 	return w.cl.DeleteMessages(msgID)
 }
-func (w *Worker) GetDocAccHash(doc *TelegramDocument, ctx context.Context) (int64, error) {
+func (w *Worker) GetDocAccHash(ctx context.Context, doc *TelegramDocument) (int64, error) {
+	if doc == nil {
+		return 0, fmt.Errorf("doc is nil")
+	}
+	if doc.Document == nil {
+		return 0, fmt.Errorf("doc.Document is nil")
+	}
 	w.accCacheLock.Lock()
 	defer w.accCacheLock.Unlock()
 	accHash, ok := w.accCache.Get(doc.ID)
@@ -199,11 +205,11 @@ func (w *Worker) GetDocAccHash(doc *TelegramDocument, ctx context.Context) (int6
 	}
 	return accHash, nil
 }
-func (w *Worker) GetThumbnail(doc *TelegramDocument, ctx context.Context) ([]byte, error) {
+func (w *Worker) GetThumbnail(ctx context.Context, doc *TelegramDocument) ([]byte, error) {
 	thmb := doc.Thumbs[0].(*tg.PhotoSize)
 	size := thmb.Type
 	loc_ := tg.InputDocumentFileLocation{}
-	_, err := w.GetDocAccHash(doc, ctx)
+	_, err := w.GetDocAccHash(ctx, doc)
 	if err != nil {
 		return nil, fmt.Errorf("error updating access hash: %s", err)
 	}
@@ -372,7 +378,7 @@ func (mstr *Master) handle(ctx *ext.Context, u *ext.Update) error {
 	defer cl.Disconnect(ctx)
 	// ...
 	mediaDoc := mstr.dbDocFromMessage(&doc)
-	thumb, err := mstr.Bot.GetThumbnail(&doc, ctx)
+	thumb, err := mstr.Bot.GetThumbnail(ctx, &doc)
 	if err != nil {
 		ll.WithError(err).Error("can not get thumbnail")
 	}
