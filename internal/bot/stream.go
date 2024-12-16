@@ -147,7 +147,7 @@ func NewTelegramReader(
 	chunkSize int64,
 	profileFile string,
 ) (*TGReader, error) {
-	pl := NewBotProfiler(profileFile, document.ID, worker.token)
+	pl := NewBotProfiler(profileFile, document.ID, worker.cl.GetName())
 	// ...
 	sTime := time.Now()
 	if _, err := worker.GetDocAccHash(document, ctx); err != nil {

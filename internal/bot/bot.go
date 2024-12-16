@@ -151,14 +151,12 @@ func NewTgClient(token string, sessConfig *SessionConfig) IClient {
 
 // ...
 type Worker struct {
-	token            string
 	cl               IClient
 	targetChannelId  int64
 	inputChannel     tg.InputChannelClass
 	inputChannelLock sync.Mutex
 	accCache         *lru.Cache[int64, int64]
 	accCacheLock     sync.Mutex
-	sessCfg          *SessionConfig
 }
 
 func (w *Worker) GetChannel(ctx context.Context) (tg.InputChannelClass, error) {
@@ -224,8 +222,7 @@ func (w *Worker) getLogger() *logrus.Entry {
 	if w.cl != nil {
 		botUsername = w.cl.GetName()
 	}
-	s := fmt.Sprintf("{Worker (%s|@%s)}", w.token, botUsername)
-	return logrus.WithField("worker", s)
+	return logrus.WithField("worker", botUsername)
 }
 func (w *Worker) getInputChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	chatList, err := w.cl.ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.targetChannelId}})
@@ -274,12 +271,12 @@ func (w *Worker) getDocAccHash(ctx context.Context, doc *TelegramDocument) (int6
 	}
 	return newDoc.AccessHash, nil
 }
-func NewWorker(token string, sessCfg *SessionConfig, client IClient) (*Worker, error) {
+func NewWorker(sessCfg *SessionConfig, client IClient) (*Worker, error) {
 	accCache, err := lru.New[int64, int64](128)
 	if err != nil {
 		return nil, fmt.Errorf("can not create worker accCache: %s", err)
 	}
-	w := &Worker{token: token, targetChannelId: sessCfg.ChannelId, accCache: accCache, sessCfg: sessCfg, cl: client}
+	w := &Worker{targetChannelId: sessCfg.ChannelId, accCache: accCache, cl: client}
 	return w, nil
 }
 
@@ -312,7 +309,7 @@ func NewWorkerPool(tokens []string, sessCfg *SessionConfig, clientFactory tgClie
 			ll := logrus.WithField("worker", _i)
 			ll.Info("initiating worker")
 			cl := clientFactory(_i, sessCfg)
-			w, err := NewWorker(_i, sessCfg, cl)
+			w, err := NewWorker(sessCfg, cl)
 			if err != nil {
 				ll.WithError(err).Warn("can not create worker")
 				return
@@ -349,8 +346,7 @@ func (mstr *Master) getLogger() *logrus.Entry {
 	if mstr.Bot.cl != nil {
 		mstrUsername = mstr.Bot.cl.GetName()
 	}
-	s := fmt.Sprintf("{Master (%s|@%s)}", mstr.Bot.token, mstrUsername)
-	return logrus.WithField("worker", s)
+	return logrus.WithField("master", mstrUsername)
 }
 func (mstr *Master) handle(ctx *ext.Context, u *ext.Update) error {
 	effMsg := u.EffectiveMessage
@@ -422,7 +418,7 @@ func NewMaster(token string, sessCfg *SessionConfig, facade *facade.MediaFacade,
 		clientFactory = NewTgClient
 	}
 	cl := clientFactory(token, sessCfg)
-	w, err := NewWorker(token, sessCfg, cl)
+	w, err := NewWorker(sessCfg, cl)
 	if err != nil {
 		return nil, fmt.Errorf("can not create client: %s", err)
 	}
