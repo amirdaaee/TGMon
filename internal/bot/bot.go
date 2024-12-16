@@ -175,12 +175,15 @@ func (w *Worker) GetChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	}
 	return w.inputChannel, nil
 }
-func (w *Worker) GetMessages(ctx context.Context, msgID []int) (*tg.MessagesChannelMessages, error) {
+func (w *Worker) GetChannelMessages(ctx context.Context, msgID []int) (*tg.MessagesChannelMessages, error) {
 	channel, err := w.GetChannel(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("can not get channel while getting messages: %s", err)
 	}
 	return w.getChannelMessages(ctx, channel, msgID)
+}
+func (w *Worker) DeleteMessages(msgID []int) error {
+	return w.cl.DeleteMessages(msgID)
 }
 func (w *Worker) GetDocAccHash(doc *TelegramDocument, ctx context.Context) (int64, error) {
 	w.accCacheLock.Lock()
@@ -195,9 +198,6 @@ func (w *Worker) GetDocAccHash(doc *TelegramDocument, ctx context.Context) (int6
 		return accHash, nil
 	}
 	return accHash, nil
-}
-func (w *Worker) DeleteMessages(msgID []int) error {
-	return w.cl.DeleteMessages(msgID)
 }
 func (w *Worker) GetThumbnail(doc *TelegramDocument, ctx context.Context) ([]byte, error) {
 	thmb := doc.Thumbs[0].(*tg.PhotoSize)
@@ -232,21 +232,20 @@ func (w *Worker) getInputChannel(ctx context.Context) (tg.InputChannelClass, err
 	targetChannelId := w.cl.GetChannelID()
 	chatList, err := w.cl.ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: targetChannelId}})
 	if err != nil {
-		return nil, fmt.Errorf("can not get channel")
+		return nil, fmt.Errorf("can not get channel: %s", err)
 	}
 	var channel tg.InputChannelClass
 	for _, cht := range chatList.GetChats() {
 		if cht.GetID() == targetChannelId {
 			if chn, ok := cht.(*tg.Channel); !ok {
-				return nil, fmt.Errorf("target channel is not a channel")
+				return nil, fmt.Errorf("target channel is not a channel: %T", cht)
 			} else {
 				channel = chn.AsInput()
 				break
 			}
+		} else {
+			return nil, fmt.Errorf("chat id mismatch: %d vs %d", cht.GetID(), targetChannelId)
 		}
-	}
-	if channel == nil {
-		return nil, fmt.Errorf("target channel not found")
 	}
 	return channel, nil
 }
@@ -266,7 +265,7 @@ func (w *Worker) getChannelMessages(ctx context.Context, channel tg.InputChannel
 	return allMsgs, nil
 }
 func (w *Worker) getDocAccHash(ctx context.Context, doc *TelegramDocument) (int64, error) {
-	msg, err := w.GetMessages(ctx, []int{doc.MessageID})
+	msg, err := w.GetChannelMessages(ctx, []int{doc.MessageID})
 	if err != nil {
 		return 0, fmt.Errorf("error getting message of document: %s", err)
 	}
