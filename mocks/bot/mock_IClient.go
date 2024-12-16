@@ -189,17 +189,17 @@ func (_c *MockIClient_Connect_Call) RunAndReturn(run func() error) *MockIClient_
 	return _c
 }
 
-// DeleteMessages provides a mock function with given fields: chatId, messageIDs
-func (_m *MockIClient) DeleteMessages(chatId int64, messageIDs []int) error {
-	ret := _m.Called(chatId, messageIDs)
+// DeleteMessages provides a mock function with given fields: messageIDs
+func (_m *MockIClient) DeleteMessages(messageIDs []int) error {
+	ret := _m.Called(messageIDs)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteMessages")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(int64, []int) error); ok {
-		r0 = rf(chatId, messageIDs)
+	if rf, ok := ret.Get(0).(func([]int) error); ok {
+		r0 = rf(messageIDs)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -213,15 +213,14 @@ type MockIClient_DeleteMessages_Call struct {
 }
 
 // DeleteMessages is a helper method to define mock.On call
-//   - chatId int64
 //   - messageIDs []int
-func (_e *MockIClient_Expecter) DeleteMessages(chatId interface{}, messageIDs interface{}) *MockIClient_DeleteMessages_Call {
-	return &MockIClient_DeleteMessages_Call{Call: _e.mock.On("DeleteMessages", chatId, messageIDs)}
+func (_e *MockIClient_Expecter) DeleteMessages(messageIDs interface{}) *MockIClient_DeleteMessages_Call {
+	return &MockIClient_DeleteMessages_Call{Call: _e.mock.On("DeleteMessages", messageIDs)}
 }
 
-func (_c *MockIClient_DeleteMessages_Call) Run(run func(chatId int64, messageIDs []int)) *MockIClient_DeleteMessages_Call {
+func (_c *MockIClient_DeleteMessages_Call) Run(run func(messageIDs []int)) *MockIClient_DeleteMessages_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(int64), args[1].([]int))
+		run(args[0].([]int))
 	})
 	return _c
 }
@@ -231,7 +230,52 @@ func (_c *MockIClient_DeleteMessages_Call) Return(_a0 error) *MockIClient_Delete
 	return _c
 }
 
-func (_c *MockIClient_DeleteMessages_Call) RunAndReturn(run func(int64, []int) error) *MockIClient_DeleteMessages_Call {
+func (_c *MockIClient_DeleteMessages_Call) RunAndReturn(run func([]int) error) *MockIClient_DeleteMessages_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetChannelID provides a mock function with given fields:
+func (_m *MockIClient) GetChannelID() int64 {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetChannelID")
+	}
+
+	var r0 int64
+	if rf, ok := ret.Get(0).(func() int64); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+
+	return r0
+}
+
+// MockIClient_GetChannelID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetChannelID'
+type MockIClient_GetChannelID_Call struct {
+	*mock.Call
+}
+
+// GetChannelID is a helper method to define mock.On call
+func (_e *MockIClient_Expecter) GetChannelID() *MockIClient_GetChannelID_Call {
+	return &MockIClient_GetChannelID_Call{Call: _e.mock.On("GetChannelID")}
+}
+
+func (_c *MockIClient_GetChannelID_Call) Run(run func()) *MockIClient_GetChannelID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockIClient_GetChannelID_Call) Return(_a0 int64) *MockIClient_GetChannelID_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockIClient_GetChannelID_Call) RunAndReturn(run func() int64) *MockIClient_GetChannelID_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -64,7 +64,7 @@ func (sessCfg *SessionConfig) getSocksDialer() (*dcs.Resolver, error) {
 
 // ...
 type IClient interface {
-	DeleteMessages(chatId int64, messageIDs []int) error
+	DeleteMessages(messageIDs []int) error
 	UploadGetFile(ctx context.Context, request *tg.UploadGetFileRequest) (tg.UploadFileClass, error)
 	ChannelsGetChannels(ctx context.Context, id []tg.InputChannelClass) (tg.MessagesChatsClass, error)
 	ChannelsGetMessages(ctx context.Context, request *tg.ChannelsGetMessagesRequest) (tg.MessagesMessagesClass, error)
@@ -73,16 +73,18 @@ type IClient interface {
 	GetDispatcher() dispatcher.Dispatcher
 	GetName() string
 	GetLogger() *logrus.Entry
+	GetChannelID() int64
 }
 
 type TgClient struct {
-	sessCfg *SessionConfig
-	token   string
-	client  *gotgproto.Client
+	sessCfg         *SessionConfig
+	token           string
+	client          *gotgproto.Client
+	targetChannelId int64
 }
 
-func (tg *TgClient) DeleteMessages(chatId int64, messageIDs []int) error {
-	return tg.client.CreateContext().DeleteMessages(chatId, messageIDs)
+func (tg *TgClient) DeleteMessages(messageIDs []int) error {
+	return tg.client.CreateContext().DeleteMessages(tg.GetChannelID(), messageIDs)
 }
 func (tg *TgClient) UploadGetFile(ctx context.Context, request *tg.UploadGetFileRequest) (tg.UploadFileClass, error) {
 	return tg.client.API().UploadGetFile(ctx, request)
@@ -139,6 +141,9 @@ func (tg *TgClient) GetName() string {
 func (tg *TgClient) GetLogger() *logrus.Entry {
 	return logrus.WithField("bot", tg.GetName())
 }
+func (tg *TgClient) GetChannelID() int64 {
+	return tg.targetChannelId
+}
 
 type tgClientFactory func(token string, sessConfig *SessionConfig) IClient
 
@@ -152,7 +157,6 @@ func NewTgClient(token string, sessConfig *SessionConfig) IClient {
 // ...
 type Worker struct {
 	cl               IClient
-	targetChannelId  int64
 	inputChannel     tg.InputChannelClass
 	inputChannelLock sync.Mutex
 	accCache         *lru.Cache[int64, int64]
@@ -193,7 +197,7 @@ func (w *Worker) GetDocAccHash(doc *TelegramDocument, ctx context.Context) (int6
 	return accHash, nil
 }
 func (w *Worker) DeleteMessages(msgID []int) error {
-	return w.cl.DeleteMessages(w.targetChannelId, msgID)
+	return w.cl.DeleteMessages(msgID)
 }
 func (w *Worker) GetThumbnail(doc *TelegramDocument, ctx context.Context) ([]byte, error) {
 	thmb := doc.Thumbs[0].(*tg.PhotoSize)
@@ -225,13 +229,14 @@ func (w *Worker) getLogger() *logrus.Entry {
 	return logrus.WithField("worker", botUsername)
 }
 func (w *Worker) getInputChannel(ctx context.Context) (tg.InputChannelClass, error) {
-	chatList, err := w.cl.ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.targetChannelId}})
+	targetChannelId := w.cl.GetChannelID()
+	chatList, err := w.cl.ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: targetChannelId}})
 	if err != nil {
 		return nil, fmt.Errorf("can not get channel")
 	}
 	var channel tg.InputChannelClass
 	for _, cht := range chatList.GetChats() {
-		if cht.GetID() == w.targetChannelId {
+		if cht.GetID() == targetChannelId {
 			if chn, ok := cht.(*tg.Channel); !ok {
 				return nil, fmt.Errorf("target channel is not a channel")
 			} else {
@@ -271,12 +276,12 @@ func (w *Worker) getDocAccHash(ctx context.Context, doc *TelegramDocument) (int6
 	}
 	return newDoc.AccessHash, nil
 }
-func NewWorker(sessCfg *SessionConfig, client IClient) (*Worker, error) {
+func NewWorker(client IClient) (*Worker, error) {
 	accCache, err := lru.New[int64, int64](128)
 	if err != nil {
 		return nil, fmt.Errorf("can not create worker accCache: %s", err)
 	}
-	w := &Worker{targetChannelId: sessCfg.ChannelId, accCache: accCache, cl: client}
+	w := &Worker{accCache: accCache, cl: client}
 	return w, nil
 }
 
@@ -309,7 +314,7 @@ func NewWorkerPool(tokens []string, sessCfg *SessionConfig, clientFactory tgClie
 			ll := logrus.WithField("worker", _i)
 			ll.Info("initiating worker")
 			cl := clientFactory(_i, sessCfg)
-			w, err := NewWorker(sessCfg, cl)
+			w, err := NewWorker(cl)
 			if err != nil {
 				ll.WithError(err).Warn("can not create worker")
 				return
@@ -397,7 +402,7 @@ func (mstr *Master) filter(u *ext.Update, ll *logrus.Entry) bool {
 	ll = ll.WithField("at", "filter")
 	chatId := u.EffectiveChat().GetID()
 	effMsg := u.EffectiveMessage
-	if chatId != mstr.Bot.targetChannelId {
+	if chatId != mstr.Bot.cl.GetChannelID() {
 		ll.Debug("message not in channel")
 		return false
 	}
@@ -418,7 +423,7 @@ func NewMaster(token string, sessCfg *SessionConfig, facade *facade.MediaFacade,
 		clientFactory = NewTgClient
 	}
 	cl := clientFactory(token, sessCfg)
-	w, err := NewWorker(sessCfg, cl)
+	w, err := NewWorker(cl)
 	if err != nil {
 		return nil, fmt.Errorf("can not create client: %s", err)
 	}
