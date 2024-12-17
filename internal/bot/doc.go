@@ -58,5 +58,4 @@ func (d *TelegramDocument) GetMetadata() *TelegramDocumentMetadata {
 	meta.MimeType = d.MimeType
 	meta.Location = d.AsInputDocumentFileLocation()
 	return &meta
-
 }

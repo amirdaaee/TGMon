@@ -101,7 +101,9 @@ func (tg *TgClient) Connect() error {
 		tg.GetLogger().Warn("client is already connected")
 		return nil
 	}
-	os.Mkdir(sessCfg.SessionDir, os.ModePerm)
+	if err := os.Mkdir(sessCfg.SessionDir, os.ModePerm); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("can not create session dir: %s", err)
+	}
 	sessionDBPath := fmt.Sprintf("%s/worker-%s.sqlite3", sessCfg.SessionDir, strings.Split(tg.token, ":")[0])
 	sessionType := sessionMaker.SqlSession(sqlite.Open(sessionDBPath))
 	clOpts := gotgproto.ClientOpts{
@@ -206,7 +208,13 @@ func (w *Worker) GetDocAccHash(ctx context.Context, doc *TelegramDocument) (int6
 	return accHash, nil
 }
 func (w *Worker) GetThumbnail(ctx context.Context, doc *TelegramDocument) ([]byte, error) {
-	thmb := doc.Thumbs[0].(*tg.PhotoSize)
+	if len(doc.Thumbs) == 0 {
+		return nil, fmt.Errorf("doc doesnt have any thumbnail")
+	}
+	thmb, ok := doc.Thumbs[0].(*tg.PhotoSize)
+	if !ok {
+		return nil, fmt.Errorf("unexpected thumb type: %T (expected tg.PhotoSize)", doc.Thumbs[0])
+	}
 	size := thmb.Type
 	loc_ := tg.InputDocumentFileLocation{}
 	_, err := w.GetDocAccHash(ctx, doc)
@@ -298,6 +306,9 @@ type WorkerPool struct {
 }
 
 func (wp *WorkerPool) SelectNextWorker() *Worker {
+	if len(wp.Bots) == 0 {
+		return nil
+	}
 	wp.mut.Lock()
 	defer wp.mut.Unlock()
 	index := (wp.curIndex + 1) % len(wp.Bots)
