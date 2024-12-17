@@ -28,8 +28,8 @@ var _ = Describe("Bot", func() {
 		tgClMock.AssertExpectations(GinkgoT())
 	}
 
-	assertTgCl_ChannelsGetChannels := func(ret tg.ChatClass, err error) {
-		tgClMock.EXPECT().ChannelsGetChannels(mock.Anything, mock.Anything).RunAndReturn(
+	assertTgCl_ChannelsGetChannels := func(ret tg.ChatClass, err error) *mockBot.MockIClient_ChannelsGetChannels_Call {
+		return tgClMock.EXPECT().ChannelsGetChannels(mock.Anything, mock.Anything).RunAndReturn(
 			func(ctx context.Context, icc []tg.InputChannelClass) (tg.MessagesChatsClass, error) {
 				Expect(icc).To(HaveLen(1))
 				Expect(icc[0]).To(HaveField("ChannelID", testChannelId))
@@ -43,8 +43,8 @@ var _ = Describe("Bot", func() {
 			},
 		)
 	}
-	assertTgCl_ChannelsGetMessages := func(inputIds []int, ret tg.MessagesMessagesClass, err error) {
-		tgClMock.EXPECT().ChannelsGetMessages(mock.Anything, mock.Anything).RunAndReturn(
+	assertTgCl_ChannelsGetMessages := func(inputIds []int, ret tg.MessagesMessagesClass, err error) *mockBot.MockIClient_ChannelsGetMessages_Call {
+		return tgClMock.EXPECT().ChannelsGetMessages(mock.Anything, mock.Anything).RunAndReturn(
 			func(ctx context.Context, cgmr *tg.ChannelsGetMessagesRequest) (tg.MessagesMessagesClass, error) {
 				expectedHaveField := []types.GomegaMatcher{}
 				for _, i := range inputIds {
@@ -294,6 +294,111 @@ var _ = Describe("Bot", func() {
 						GinkgoWriter.Println(err.Error())
 					} else {
 						Expect(err).NotTo(HaveOccurred())
+					}
+				})
+			}
+		})
+		Describe("GetDocAccHash", Label("GetDocAccHash"), func() {
+			type testCase struct {
+				description                 string
+				tType                       TestCaseType
+				inputDoc                    bot.TelegramDocument     // input value to function
+				extraCall                   bool                     // call GetDocAccHash twice
+				tgClChannelsGetChannelsCall bool                     // whether or not expect call ChannelsGetChannels
+				tgClChannelsGetChannelsErr  error                    // error calling ChannelsGetChannels
+				tgClChannelsGetMessagesCall bool                     // whether or not expect call ChannelsGetMessages
+				tgClChannelsGetMessagesRet  tg.MessagesMessagesClass // returrned value from ChannelsGetMessages
+				tgClChannelsGetMessagesErr  error                    // error calling ChannelsGetMessages
+				expectErr                   bool                     // whether or not expect failure
+			}
+			// ...
+			BeforeEach(func() {
+				resetMock()
+			})
+
+			AfterEach(func() {
+				asserMockCall()
+			})
+			// ...
+			createResMessage := func(med tg.MessageMediaClass) tg.MessagesMessagesClass {
+				msg := &tg.Message{Media: med}
+				return &tg.MessagesChannelMessages{Count: 1, Messages: []tg.MessageClass{msg}}
+			}
+			// ...
+			tests := []testCase{
+				{
+					description:                 "successfully get access hash",
+					tType:                       HAPPY_PATH,
+					inputDoc:                    bot.TelegramDocument{MessageID: 10, Document: &tg.Document{ID: 100}},
+					tgClChannelsGetChannelsCall: true,
+					tgClChannelsGetMessagesCall: true,
+					tgClChannelsGetMessagesRet:  createResMessage(&tg.MessageMediaDocument{Document: &tg.Document{}}),
+				},
+				{
+					description:                 "use cache to get access hash",
+					tType:                       HAPPY_PATH,
+					extraCall:                   true,
+					inputDoc:                    bot.TelegramDocument{MessageID: 10, Document: &tg.Document{ID: 100}},
+					tgClChannelsGetChannelsCall: true,
+					tgClChannelsGetMessagesCall: true,
+					tgClChannelsGetMessagesRet:  createResMessage(&tg.MessageMediaDocument{Document: &tg.Document{}}),
+				},
+				{
+					description: "failure with nill input document",
+					tType:       FAILURE,
+					expectErr:   true,
+				},
+				{
+					description:                 "failure with nil document on result message",
+					tType:                       FAILURE,
+					inputDoc:                    bot.TelegramDocument{MessageID: 10, Document: &tg.Document{ID: 100}},
+					tgClChannelsGetChannelsCall: true,
+					tgClChannelsGetMessagesCall: true,
+					expectErr:                   true,
+				},
+				{
+					description:                 "failure with photo document on result message",
+					tType:                       FAILURE,
+					inputDoc:                    bot.TelegramDocument{MessageID: 10, Document: &tg.Document{ID: 100}},
+					tgClChannelsGetChannelsCall: true,
+					tgClChannelsGetMessagesCall: true,
+					tgClChannelsGetMessagesRet:  createResMessage(&tg.MessageMediaPhoto{Photo: &tg.Photo{}}),
+					expectErr:                   true,
+				},
+				{
+					description:                 "failure with empty document on result message",
+					tType:                       FAILURE,
+					inputDoc:                    bot.TelegramDocument{MessageID: 10, Document: &tg.Document{ID: 100}},
+					tgClChannelsGetChannelsCall: true,
+					tgClChannelsGetMessagesCall: true,
+					tgClChannelsGetMessagesRet:  createResMessage(&tg.MessageMediaEmpty{}),
+					expectErr:                   true,
+				},
+			}
+			// ...
+			for _, tc := range tests {
+				tc := tc
+				It(tc.description, Label(string(tc.tType)), func() {
+					// Arrange
+					wrkr := workerFactory()
+					if tc.tgClChannelsGetChannelsCall {
+						assertTgCl_ChannelsGetChannels(nil, tc.tgClChannelsGetChannelsErr).Once()
+					}
+					if tc.tgClChannelsGetMessagesCall {
+						assertTgCl_ChannelsGetMessages([]int{tc.inputDoc.MessageID}, tc.tgClChannelsGetMessagesRet, tc.tgClChannelsGetMessagesErr).Once()
+					}
+					// Act
+					res, err := wrkr.GetDocAccHash(testContext, &tc.inputDoc)
+					if tc.extraCall {
+						res, err = wrkr.GetDocAccHash(testContext, &tc.inputDoc)
+					}
+					// Assert
+					if tc.expectErr {
+						Expect(err).To(HaveOccurred())
+						GinkgoWriter.Println(err.Error())
+					} else {
+						Expect(err).NotTo(HaveOccurred())
+						Expect(res).NotTo(BeNil())
 					}
 				})
 			}
