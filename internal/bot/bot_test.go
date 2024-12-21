@@ -71,6 +71,10 @@ var _ = Describe("Bot", func() {
 			return err
 		})
 	}
+	createResMediaMessage := func(med tg.MessageMediaClass) tg.MessagesMessagesClass {
+		msg := &tg.Message{Media: med}
+		return &tg.MessagesChannelMessages{Count: 1, Messages: []tg.MessageClass{msg}}
+	}
 	Describe("Worker", Label("Worker"), func() {
 		resetMock := func() {
 			resetTgClMock()
@@ -320,11 +324,6 @@ var _ = Describe("Bot", func() {
 				asserMockCall()
 			})
 			// ...
-			createResMessage := func(med tg.MessageMediaClass) tg.MessagesMessagesClass {
-				msg := &tg.Message{Media: med}
-				return &tg.MessagesChannelMessages{Count: 1, Messages: []tg.MessageClass{msg}}
-			}
-			// ...
 			tests := []testCase{
 				{
 					description:                 "successfully get access hash",
@@ -332,7 +331,7 @@ var _ = Describe("Bot", func() {
 					inputDoc:                    bot.TelegramDocument{MessageID: 10, Document: &tg.Document{ID: 100}},
 					tgClChannelsGetChannelsCall: true,
 					tgClChannelsGetMessagesCall: true,
-					tgClChannelsGetMessagesRet:  createResMessage(&tg.MessageMediaDocument{Document: &tg.Document{}}),
+					tgClChannelsGetMessagesRet:  createResMediaMessage(&tg.MessageMediaDocument{Document: &tg.Document{}}),
 				},
 				{
 					description:                 "use cache to get access hash",
@@ -341,7 +340,7 @@ var _ = Describe("Bot", func() {
 					inputDoc:                    bot.TelegramDocument{MessageID: 10, Document: &tg.Document{ID: 100}},
 					tgClChannelsGetChannelsCall: true,
 					tgClChannelsGetMessagesCall: true,
-					tgClChannelsGetMessagesRet:  createResMessage(&tg.MessageMediaDocument{Document: &tg.Document{}}),
+					tgClChannelsGetMessagesRet:  createResMediaMessage(&tg.MessageMediaDocument{Document: &tg.Document{}}),
 				},
 				{
 					description: "failure with nill input document",
@@ -362,7 +361,7 @@ var _ = Describe("Bot", func() {
 					inputDoc:                    bot.TelegramDocument{MessageID: 10, Document: &tg.Document{ID: 100}},
 					tgClChannelsGetChannelsCall: true,
 					tgClChannelsGetMessagesCall: true,
-					tgClChannelsGetMessagesRet:  createResMessage(&tg.MessageMediaPhoto{Photo: &tg.Photo{}}),
+					tgClChannelsGetMessagesRet:  createResMediaMessage(&tg.MessageMediaPhoto{Photo: &tg.Photo{}}),
 					expectErr:                   true,
 				},
 				{
@@ -371,7 +370,7 @@ var _ = Describe("Bot", func() {
 					inputDoc:                    bot.TelegramDocument{MessageID: 10, Document: &tg.Document{ID: 100}},
 					tgClChannelsGetChannelsCall: true,
 					tgClChannelsGetMessagesCall: true,
-					tgClChannelsGetMessagesRet:  createResMessage(&tg.MessageMediaEmpty{}),
+					tgClChannelsGetMessagesRet:  createResMediaMessage(&tg.MessageMediaEmpty{}),
 					expectErr:                   true,
 				},
 			}
