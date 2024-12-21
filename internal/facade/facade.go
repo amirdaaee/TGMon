@@ -50,14 +50,6 @@ func (f *baseFacade[T]) baseRead(ctx context.Context, filter *primitive.M, cl db
 	return docs, err
 }
 
-//	func (f *baseFacade[T]) baseUpdate(ctx context.Context, filter *primitive.M, doc T, cl db.IMongoClient) (T, errs.IMongoErr) {
-//		ds := f.getDatastore()
-//		newDoc, err := ds.Replace(ctx, filter, doc, cl)
-//		if err != nil {
-//			return *new(T), err
-//		}
-//		return newDoc, err
-//	}
 func (f *baseFacade[T]) baseDelete(ctx context.Context, filter *primitive.M, cl db.IMongoClient) errs.IMongoErr {
 	ds := f.getDatastore()
 	return ds.Delete(ctx, filter, cl)

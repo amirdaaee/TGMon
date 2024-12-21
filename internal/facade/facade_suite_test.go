@@ -383,7 +383,7 @@ var _ = Describe("Facade", func() {
 				withVttMedia       bool             // doc has Vtt
 				withSpriteMedia    bool             // doc has Sprite
 				findErr            error            // error calling jobDs.find
-				jobDeleteManyError bool             // error calling jobDs.deleteMany
+				jobDeleteManyError error            // error calling jobDs.deleteMany
 				minioRmError       bool             // error calling minio.rmFile
 				expectDelete       bool             // expect ds.delete
 				expectJob          bool             // expect job purge
@@ -416,11 +416,7 @@ var _ = Describe("Facade", func() {
 					jobDSMock.EXPECT().DeleteMany(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
 						func(ctx context.Context, d *primitive.M, c db.IMongoClient) errs.IMongoErr {
 							Expect(*d).To(Equal(primitive.M{"MediaID": tc.outputDoc.ID}))
-							err := new(error)
-							if tc.jobDeleteManyError {
-								*err = fmt.Errorf("mock mediaDSMock.DeleteMany err")
-							}
-							return *err
+							return tc.jobDeleteManyError
 						})
 				}
 			}
@@ -575,7 +571,7 @@ var _ = Describe("Facade", func() {
 				})
 				testCases := []testCase{
 					{
-						description:        "Successfully Delete media while error creating job",
+						description:        "Successfully Delete media while error delete job",
 						outputDoc:          newFakeMediaDoc(),
 						filter:             *newBsonIDFilter(),
 						withThumbMedia:     true,
@@ -584,7 +580,19 @@ var _ = Describe("Facade", func() {
 						expectDelete:       true,
 						expectJob:          true,
 						expectMinioRm:      true,
-						jobDeleteManyError: true,
+						jobDeleteManyError: fmt.Errorf("mock jobDs.DeleteMany error"),
+					},
+					{
+						description:        "Successfully Delete media while no job found",
+						outputDoc:          newFakeMediaDoc(),
+						filter:             *newBsonIDFilter(),
+						withThumbMedia:     true,
+						withVttMedia:       true,
+						withSpriteMedia:    true,
+						expectDelete:       true,
+						expectJob:          true,
+						expectMinioRm:      true,
+						jobDeleteManyError: errs.NewMongoObjectNotfound(primitive.M{}),
 					},
 					{
 						description:     "Successfully Delete media while error rm minio files",
@@ -1352,8 +1360,70 @@ var _ = Describe("Facade", func() {
 						jobDsDeleteErr:       errs.NewMongoOpErr(fmt.Errorf("mock jobDS.Delete err")),
 						expectErr:            false,
 					},
-					// TODO: MongoDB issues.
-					// TODO: Minio issues.
+					{
+						description: "mongo JobDs.Find failure",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(false, false, false),
+						data: facade.MediaMinioFile{
+							ThumbData: []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						jobDsFindErr:         fmt.Errorf("mock jobDs.Find error"),
+						expectJobDsDelete:    false,
+						expectMediaDsFind:    false,
+						expectMediaDsReplace: false,
+						expectminioAddFile:   false,
+						expectminioRmFile:    false,
+						expectErr:            true,
+					},
+					{
+						description: "success while mongo JobDs.Delete failure",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(false, false, false),
+						data: facade.MediaMinioFile{
+							ThumbData: []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						jobDsDeleteErr:       fmt.Errorf("mock JobDs.Delete error"),
+						expectMediaDsFind:    true,
+						expectMediaDsReplace: true,
+						expectminioAddFile:   true,
+						expectminioRmFile:    false,
+						expectErr:            false,
+					},
+					{
+						description: "mongo MediaDs.Find failure",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(false, false, false),
+						data: facade.MediaMinioFile{
+							ThumbData: []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						expectMediaDsFind:    true,
+						mediaDsFindErr:       fmt.Errorf("mock mediaDs.find error"),
+						expectMediaDsReplace: false,
+						expectminioAddFile:   false,
+						expectminioRmFile:    false,
+						expectErr:            false,
+					},
+					{
+						description: "success while mongo MediaDs.Replace failure",
+						jobDoc:      newFakeJobDoc(db.THUMBNAILJobType),
+						mediaDoc:    newFakeMediaDoc(false, false, false),
+						data: facade.MediaMinioFile{
+							ThumbData: []byte("thumb-data"),
+						},
+						expectJobDsFind:      true,
+						expectJobDsDelete:    true,
+						expectMediaDsFind:    true,
+						expectMediaDsReplace: true,
+						mediaDsReplaceErr:    fmt.Errorf("mock MediaDs.Replace error"),
+						expectminioAddFile:   true,
+						expectminioRmFile:    false,
+						expectErr:            false,
+					},
 				}
 				// ...
 
