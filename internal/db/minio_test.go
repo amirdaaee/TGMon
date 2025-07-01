@@ -24,9 +24,13 @@ var _ = Describe("Minio", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		testContext = context.Background()
 		mockMinio = mockDB.NewMockIMinioCl(ctrl)
-		db.DefaultMinioManager.InitMinioClient(testContext, &db.MinioConfig{MinioBucket: "mock_bucket"}, func(s string, o *minio.Options) (db.IMinioCl, error) {
-			return mockMinio, nil
-		}, true)
+
+		db.DefaultMinioRegistry.InitMinioClient(testContext,
+			&db.MinioConfig{MinioBucket: "mock_bucket"},
+			true,
+			func(s string, o *minio.Options) (db.IMinioCl, error) {
+				return mockMinio, nil
+			}, nil)
 	})
 	// ================================
 	Describe("MinioClient", Label("MinioClient"), func() {
@@ -88,7 +92,7 @@ var _ = Describe("Minio", func() {
 				tc := tc
 				It(tc.description, Label(string(tc.tType)), func() {
 					// Arrange
-					cl := db.DefaultMinioManager.GetMinioClient()
+					cl := db.DefaultMinioRegistry.GetMinioClient()
 					assertMinio_BucketExists(tc)
 					assertMinio_MakeBucket(tc)
 					// Act
@@ -150,7 +154,7 @@ var _ = Describe("Minio", func() {
 				tc := tc
 				It(tc.description, Label(string(tc.tType)), func() {
 					// Arrange
-					cl := db.DefaultMinioManager.GetMinioClient()
+					cl := db.DefaultMinioRegistry.GetMinioClient()
 					assertMinio_PutObjec(tc)
 					// Act
 					err := cl.FileAdd(testContext, tc.filename, tc.data)
@@ -211,7 +215,7 @@ var _ = Describe("Minio", func() {
 				tc := tc
 				It(tc.description, Label(string(tc.tType)), func() {
 					// Arrange
-					cl := db.DefaultMinioManager.GetMinioClient()
+					cl := db.DefaultMinioRegistry.GetMinioClient()
 					assertMinio_PutObjec(tc)
 					// Act
 					err := cl.FileAddStr(testContext, tc.filename, tc.data)
@@ -259,7 +263,7 @@ var _ = Describe("Minio", func() {
 				tc := tc
 				It(tc.description, Label(string(tc.tType)), func() {
 					// Arrange
-					cl := db.DefaultMinioManager.GetMinioClient()
+					cl := db.DefaultMinioRegistry.GetMinioClient()
 					assertMinio_RemoveObject(tc)
 					// Act
 					err := cl.FileRm(testContext, tc.filename)

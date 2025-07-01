@@ -144,20 +144,21 @@ func (cl *MinioClient) FileRm(ctx context.Context, fileName string) error {
 
 var _ IMinioClient = (*MinioClient)(nil)
 
-// MinioClientManager manages MinioClient instances in a thread-safe manner.
+// MinioClientRegistry manages MinioClient instances in a thread-safe manner.
 // It provides safe concurrent access to MinIO client operations and handles
 // client lifecycle management. This is the recommended approach for managing
 // MinIO clients in production applications.
-type MinioClientManager struct {
+type MinioClientRegistry struct {
 	mu     sync.RWMutex
-	client *MinioClient
+	client IMinioClient
+	x      IMongoClient
 }
 
-// NewMinioClientManager creates a new MinioClientManager instance.
+// NewMinioClientRegistry creates a new MinioClientManager instance.
 // The manager starts uninitialized and requires a call to InitMinioClient
 // before it can be used to serve client requests.
-func NewMinioClientManager() *MinioClientManager {
-	return &MinioClientManager{}
+func NewMinioClientRegistry() *MinioClientRegistry {
+	return &MinioClientRegistry{}
 }
 
 // InitMinioClient initializes the managed MinIO client with the provided configuration.
@@ -170,26 +171,34 @@ func NewMinioClientManager() *MinioClientManager {
 //   - skipAssertBucket: If true, skips bucket creation during initialization
 //
 // Returns an error if client initialization or bucket creation fails.
-func (m *MinioClientManager) InitMinioClient(ctx context.Context, minioCfg *MinioConfig, factory func(string, *minio.Options) (IMinioCl, error), skipAssertBucket bool) error {
+func (m *MinioClientRegistry) InitMinioClient(
+	ctx context.Context,
+	minioCfg *MinioConfig,
+	skipAssertBucket bool,
+	minioClFactory func(string, *minio.Options) (IMinioCl, error),
+	minioClientFactory func(IMinioCl, string) IMinioClient,
+) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.client != nil {
 		m.getLogger("InitMinioClient").Warn("client already initialized. re-initializing...")
 	}
-	if factory == nil {
-		factory = defaultMinioClFactory
+	if minioClFactory == nil {
+		minioClFactory = defaultMinioClFactory
 	}
 
-	minioClient, err := factory(minioCfg.MinioEndpoint, &minio.Options{
+	minioClient, err := minioClFactory(minioCfg.MinioEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(minioCfg.MinioAccessKey, minioCfg.MinioSecretKey, ""),
 		Secure: minioCfg.MinioSecure,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize minio client: %w", err)
 	}
-
-	cl := &MinioClient{IMinioCl: minioClient, bucket: minioCfg.MinioBucket}
-
+	// ...
+	if minioClientFactory == nil {
+		minioClientFactory = defaultMinioClientFactory
+	}
+	cl := minioClientFactory(minioClient, minioCfg.MinioBucket)
 	if !skipAssertBucket {
 		if err := cl.CreateBucket(ctx); err != nil {
 			return fmt.Errorf("failed to create bucket during initialization: %w", err)
@@ -203,7 +212,7 @@ func (m *MinioClientManager) InitMinioClient(ctx context.Context, minioCfg *Mini
 // GetMinioClient returns the managed MinIO client instance.
 // This method is thread-safe and can be called concurrently.
 // Returns an error if the client has not been initialized.
-func (m *MinioClientManager) GetMinioClient() *MinioClient {
+func (m *MinioClientRegistry) GetMinioClient() IMinioClient {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.client == nil {
@@ -211,7 +220,7 @@ func (m *MinioClientManager) GetMinioClient() *MinioClient {
 	}
 	return m.client
 }
-func (m *MinioClientManager) getLogger(fn string) *logrus.Entry {
+func (m *MinioClientRegistry) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.DBModule).WithField("fn", fmt.Sprintf("%T.%s", m, fn))
 }
 
@@ -220,7 +229,10 @@ func (m *MinioClientManager) getLogger(fn string) *logrus.Entry {
 func defaultMinioClFactory(endpoint string, opts *minio.Options) (IMinioCl, error) {
 	return minio.New(endpoint, opts)
 }
+func defaultMinioClientFactory(minioCl IMinioCl, bucket string) IMinioClient {
+	return &MinioClient{IMinioCl: minioCl, bucket: bucket}
+}
 
 // Global instance for backward compatibility (deprecated)
 // TODO: Remove this and use dependency injection instead
-var DefaultMinioManager = NewMinioClientManager()
+var DefaultMinioRegistry = NewMinioClientRegistry()

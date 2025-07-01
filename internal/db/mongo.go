@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/chenmingyong0423/go-mongox/v2"
 	"github.com/chenmingyong0423/go-mongox/v2/aggregator"
@@ -20,27 +19,62 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
+// IMongoClient defines the interface for MongoDB client operations.
+// This interface provides methods for managing MongoDB client connections
+// and creating database instances. It is designed to be mockable for testing purposes.
+//
 //go:generate mockgen -source=mongo.go -destination=../../mocks/db/mongo.go -package=mocks
-type IClient interface {
+type IMongoClient interface {
+	// Disconnect gracefully closes the MongoDB client connection.
+	// The context parameter controls the timeout and cancellation behavior.
 	Disconnect(context.Context) error
+
+	// NewDatabase creates a new database instance with the specified name.
+	// Returns an IDatabase interface for database-level operations.
 	NewDatabase(string) IDatabase
 }
-type Client struct {
+
+// MongoClient implements the IMongoClient interface and wraps a go-mongox client.
+// It provides the connection management functionality for MongoDB operations.
+type MongoClient struct {
 	xCl *mongox.Client
 }
 
-func (c *Client) Disconnect(ctx context.Context) error {
+// Disconnect gracefully closes the MongoDB client connection.
+// This method delegates to the underlying go-mongox client's Disconnect method.
+//
+// Parameters:
+//   - ctx: Context to control the disconnect timeout and cancellation
+//
+// Returns an error if the disconnect operation fails.
+func (c *MongoClient) Disconnect(ctx context.Context) error {
 	return c.xCl.Disconnect(ctx)
 }
-func (c *Client) NewDatabase(name string) IDatabase {
+
+// NewDatabase creates a new database instance with the specified name.
+// This method wraps the go-mongox client's NewDatabase functionality.
+//
+// Parameters:
+//   - name: The name of the database to create
+//
+// Returns an IDatabase interface for database-level operations.
+func (c *MongoClient) NewDatabase(name string) IDatabase {
 	return &Database{xDb: c.xCl.NewDatabase(name)}
 }
 
-var _ IClient = (*Client)(nil)
+var _ IMongoClient = (*MongoClient)(nil)
 
+// IDatabase defines the interface for MongoDB database operations.
+// This interface provides access to database-level functionality and is designed
+// to be extensible for future database operations.
+//
 //go:generate mockgen -source=mongo.go -destination=../../mocks/db/mongo.go -package=mocks
 type IDatabase interface {
+	// Future database-level operations can be added here
 }
+
+// Database implements the IDatabase interface and wraps a go-mongox database.
+// It provides the foundation for database-level operations.
 type Database struct {
 	xDb *mongox.Database
 }
@@ -140,7 +174,7 @@ func (c *Collection[T]) Distinct(ctx context.Context, key string) ([]string, err
 type DBase struct {
 	uri         string
 	name        string
-	client      IClient
+	client      IMongoClient
 	db          IDatabase
 	pingTimeout time.Duration
 }
@@ -174,33 +208,17 @@ func (d *DBase) CloseWithTimeout(timeout time.Duration) error {
 	return d.Close(ctx)
 }
 
-// DatastoreType represents the type of datastore available in the system.
-// This enum-like type is used to identify and retrieve specific datastores
-// by their logical type rather than their generic parameter type.
-type DatastoreType string
-
-const (
-	// MediaDatastore represents the datastore for media file documents
-	MediaDatastore DatastoreType = "media"
-
-	// JobReqDatastore represents the datastore for job request documents
-	JobReqDatastore DatastoreType = "jobreq"
-
-	// JobResDatastore represents the datastore for job result documents
-	JobResDatastore DatastoreType = "jobres"
-)
-
-// DatastoreManager manages all datastores in a thread-safe manner.
+// CollectionRegistry manages all datastores in a thread-safe manner.
 // It provides centralized access to different datastore instances and ensures
 // proper initialization and lifecycle management. This manager follows the
 // dependency injection pattern and is the recommended way to access datastores
 // in production applications.
-type DatastoreManager struct {
-	mu     sync.RWMutex
-	baseDB *DBase
+type CollectionRegistry struct {
+	mu    sync.RWMutex
+	dbase *DBase
 }
 
-// NewDatastoreManager creates a new DatastoreManager instance with the provided database connection.
+// NewCollectionRegistry creates a new DatastoreManager instance with the provided database connection.
 // The manager starts in an uninitialized state and requires a call to InitDatastores
 // before it can serve datastore requests.
 //
@@ -208,60 +226,21 @@ type DatastoreManager struct {
 //   - dbase: The database connection to use for all managed datastores
 //
 // Returns a new DatastoreManager instance.
-func NewDatastoreManager() *DatastoreManager {
-	return &DatastoreManager{}
+func NewCollectionRegistry() *CollectionRegistry {
+	return &CollectionRegistry{}
 }
 
-// InitDatastores initializes all managed datastores with their respective collection configurations.
-// This method is thread-safe and idempotent - calling it multiple times will not cause issues.
-// It sets up datastores for media files, job requests, and job results with their
-// corresponding MongoDB collection names.
+// defaultMongoClientFactory creates a new MongoDB client with the provided connection URI.
+// This factory function establishes a connection to MongoDB, performs a ping test to verify
+// connectivity, and returns a wrapped client instance. If the ping fails, it ensures
+// proper cleanup by disconnecting the client to prevent resource leaks.
 //
-// Returns an error if initialization fails, though the current implementation
-// cannot fail and always returns nil.
-func (dm *DatastoreManager) InitDatastores(
-	uri string,
-	dbName string,
-	pingTimeout time.Duration,
-	mongoClFactory func(uri string, pingTimeout time.Duration) (IClient, error),
-	mongoDbFactory func(client IClient, name string) (IDatabase, error),
-) error {
-	dm.mu.Lock()
-	defer dm.mu.Unlock()
-	if dm.baseDB != nil {
-		dm.getLogger("InitDatastores").Warn("datastores already initialized. re-initializing...")
-	}
-	dm.baseDB = &DBase{
-		uri:         uri,
-		name:        dbName,
-		pingTimeout: pingTimeout,
-	}
-	if mongoClFactory == nil {
-		mongoClFactory = defaultMongoClientFactory
-	}
-	if mongoDbFactory == nil {
-		mongoDbFactory = defaultMongoDatabaseFactory
-	}
-	// ...
-	xCl, err := mongoClFactory(dm.baseDB.uri, dm.baseDB.pingTimeout)
-	if err != nil {
-		return fmt.Errorf("failed to create mongo client: %w", err)
-	}
-	dm.baseDB.client = xCl
-	// ...
-	xDb, err := mongoDbFactory(dm.baseDB.client, dm.baseDB.name)
-	if err != nil {
-		return fmt.Errorf("failed to create mongo database: %w", err)
-	}
-	dm.baseDB.db = xDb
-	return nil
-}
-
-func (dm *DatastoreManager) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.DBModule).WithField("fn", fmt.Sprintf("%T.%s", dm, fn))
-}
-
-func defaultMongoClientFactory(uri string, pingTimeout time.Duration) (IClient, error) {
+// Parameters:
+//   - uri: MongoDB connection URI (e.g., "mongodb://localhost:27017")
+//   - pingTimeout: Maximum duration to wait for the ping operation to complete
+//
+// Returns a new IMongoClient instance and any error encountered during connection or ping.
+func defaultMongoClientFactory(uri string, pingTimeout time.Duration) (IMongoClient, error) {
 	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to mongo: %w", err)
@@ -278,26 +257,120 @@ func defaultMongoClientFactory(uri string, pingTimeout time.Duration) (IClient, 
 		return nil, fmt.Errorf("error pinging mongo: %w", err)
 	}
 	xCl := mongox.NewClient(client, &mongox.Config{})
-	return &Client{xCl: xCl}, nil
+	return &MongoClient{xCl: xCl}, nil
 }
-func defaultMongoDatabaseFactory(client IClient, name string) (IDatabase, error) {
+
+// defaultMongoDatabaseFactory creates a new database instance using the provided client.
+// This factory function wraps the client's NewDatabase method and provides a consistent
+// interface for database creation. The current implementation cannot fail and always
+// returns nil for the error.
+//
+// Parameters:
+//   - client: The MongoDB client to use for database creation
+//   - name: The name of the database to create
+//
+// Returns a new IDatabase instance and nil error.
+func defaultMongoDatabaseFactory(client IMongoClient, name string) (IDatabase, error) {
 	return client.NewDatabase(name), nil
 }
-func defaultMongoCollectionFactory[T types.IMongoDoc](db IDatabase, name string) (ICollection[T], error) {
+
+// defaultMongoCollectionFactory creates a new collection instance for the specified document type.
+// This factory function creates a go-mongox collection and wraps it in a Collection struct
+// that implements the ICollection interface. The function is generic and works with any
+// type that implements IMongoDoc.
+//
+// Parameters:
+//   - db: The database instance to create the collection in
+//   - name: The name of the collection to create
+//
+// Returns a new ICollection instance for the specified document type.
+// defaultMongoCollectionFactory creates a new collection instance for the specified document type.
+// This factory function creates a go-mongox collection and wraps it in a Collection struct
+// that implements the ICollection interface. The function is generic and works with any
+// type that implements IMongoDoc.
+//
+// Parameters:
+//   - db: The database instance to create the collection in
+//   - name: The name of the collection to create
+//
+// Returns a new ICollection instance for the specified document type.
+func defaultMongoCollectionFactory[T types.IMongoDoc](db IDatabase, name string) ICollection[T] {
 	xCol := mongox.NewCollection[T](db.(*mongox.Database), name)
-	return &Collection[T]{xColl: xCol}, nil
+	return &Collection[T]{xColl: xCol}
 }
 
-var defaultDsManager = NewDatastoreManager()
+var DefaultCollectionRegistry = NewCollectionRegistry()
 
-func GetCollection[T types.IMongoDoc](dsMan *DatastoreManager, collectionFactory func(db IDatabase, name string) (ICollection[T], error)) (ICollection[T], error) {
-	if dsMan == nil {
-		dsMan = defaultDsManager
+// InitDatastores initializes all managed datastores with their respective collection configurations.
+// This method is thread-safe and idempotent - calling it multiple times will not cause issues.
+// It sets up datastores for media files, job requests, and job results with their
+// corresponding MongoDB collection names.
+//
+// Returns an error if initialization fails, though the current implementation
+// cannot fail and always returns nil.
+func InitDatastoreRegistry(
+	reg *CollectionRegistry,
+	uri string,
+	dbName string,
+	pingTimeout time.Duration,
+	mongoClFactory func(uri string, pingTimeout time.Duration) (IMongoClient, error),
+	mongoDbFactory func(client IMongoClient, name string) (IDatabase, error),
+	collectionFactory func(db IDatabase, name string) any,
+) error {
+	if reg == nil {
+		reg = DefaultCollectionRegistry
 	}
-	dsMan.mu.RLock()
-	defer dsMan.mu.RUnlock()
-	if dsMan.baseDB == nil {
-		return nil, fmt.Errorf("datastores not initialized")
+	reg.mu.Lock()
+	defer reg.mu.Unlock()
+	if reg.dbase != nil {
+		logrus.Warn("datastores already initialized. re-initializing...")
+	}
+
+	reg.dbase = &DBase{
+		uri:         uri,
+		name:        dbName,
+		pingTimeout: pingTimeout,
+	}
+	if mongoClFactory == nil {
+		mongoClFactory = defaultMongoClientFactory
+	}
+	if mongoDbFactory == nil {
+		mongoDbFactory = defaultMongoDatabaseFactory
+	}
+	// ...
+	xCl, err := mongoClFactory(reg.dbase.uri, reg.dbase.pingTimeout)
+	if err != nil {
+		return fmt.Errorf("failed to create mongo client: %w", err)
+	}
+	reg.dbase.client = xCl
+	// ...
+	xDb, err := mongoDbFactory(reg.dbase.client, reg.dbase.name)
+	if err != nil {
+		return fmt.Errorf("failed to create mongo database: %w", err)
+	}
+	reg.dbase.db = xDb
+	return nil
+}
+
+// GetCollection returns a MongoDB collection for the specified document type from the given registry.
+// This function determines the collection name based on the type of the document and uses the provided
+// collectionFactory to create the collection instance. If the registry is nil, it uses the default registry.
+// If the collectionFactory is nil, it uses the defaultMongoCollectionFactory.
+//
+// Parameters:
+//   - reg: The collection registry to use (if nil, uses DefaultCollectionRegistry)
+//   - collectionFactory: Optional factory function to create the collection (if nil, uses default)
+//
+// Returns an ICollection instance for the specified document type. Panics if the registry is not initialized
+// or if the document type is unknown.
+func GetCollection[T types.IMongoDoc](reg *CollectionRegistry, collectionFactory func(db IDatabase, name string) ICollection[T]) ICollection[T] {
+	if reg == nil {
+		reg = DefaultCollectionRegistry
+	}
+	reg.mu.RLock()
+	defer reg.mu.RUnlock()
+	if reg.dbase == nil {
+		logrus.Fatal("datastores not initialized")
 	}
 	if collectionFactory == nil {
 		collectionFactory = defaultMongoCollectionFactory[T]
@@ -312,7 +385,7 @@ func GetCollection[T types.IMongoDoc](dsMan *DatastoreManager, collectionFactory
 	case *types.JobResDoc:
 		collName = "jobres"
 	default:
-		return nil, fmt.Errorf("unknown datastore type %T", any(*new(T)))
+		logrus.Fatalf("unknown datastore type %T", any(*new(T)))
 	}
-	return collectionFactory(dsMan.baseDB.db, collName)
+	return collectionFactory(reg.dbase.db, collName)
 }
