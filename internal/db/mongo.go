@@ -2,320 +2,180 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
-	"github.com/amirdaaee/TGMon/internal/errs"
+	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/chenmingyong0423/go-mongox/v2"
+	"github.com/chenmingyong0423/go-mongox/v2/aggregator"
+	"github.com/chenmingyong0423/go-mongox/v2/creator"
+	"github.com/chenmingyong0423/go-mongox/v2/deleter"
+	"github.com/chenmingyong0423/go-mongox/v2/finder"
+	"github.com/chenmingyong0423/go-mongox/v2/updater"
 	"github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
-type IMongoClient interface {
-	Disconnect(context.Context) error
-	Database(name string, opts ...*options.DatabaseOptions) *mongo.Database
-}
-type IMongoCollection interface {
-	Aggregate(ctx context.Context, pipeline interface{}, opts ...*options.AggregateOptions) (*mongo.Cursor, error)
-	BulkWrite(ctx context.Context, models []mongo.WriteModel, opts ...*options.BulkWriteOptions) (*mongo.BulkWriteResult, error)
-	CountDocuments(ctx context.Context, filter interface{}, opts ...*options.CountOptions) (int64, error)
-	Database() *mongo.Database
-	DeleteMany(ctx context.Context, filter interface{}, opts ...*options.DeleteOptions) (*mongo.DeleteResult, error)
-	DeleteOne(ctx context.Context, filter interface{}, opts ...*options.DeleteOptions) (*mongo.DeleteResult, error)
-	Distinct(ctx context.Context, fieldName string, filter interface{}, opts ...*options.DistinctOptions) ([]interface{}, error)
-	Drop(ctx context.Context) error
-	EstimatedDocumentCount(ctx context.Context, opts ...*options.EstimatedDocumentCountOptions) (int64, error)
-	Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (cur *mongo.Cursor, err error)
-	FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult
-	FindOneAndDelete(ctx context.Context, filter interface{}, opts ...*options.FindOneAndDeleteOptions) *mongo.SingleResult
-	FindOneAndReplace(ctx context.Context, filter interface{}, replacement interface{}, opts ...*options.FindOneAndReplaceOptions) *mongo.SingleResult
-	FindOneAndUpdate(ctx context.Context, filter interface{}, update interface{}, opts ...*options.FindOneAndUpdateOptions) *mongo.SingleResult
-	Indexes() mongo.IndexView
-	InsertMany(ctx context.Context, documents []interface{}, opts ...*options.InsertManyOptions) (*mongo.InsertManyResult, error)
-	InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error)
-	Name() string
-	ReplaceOne(ctx context.Context, filter interface{}, replacement interface{}, opts ...*options.ReplaceOptions) (*mongo.UpdateResult, error)
-	SearchIndexes() mongo.SearchIndexView
-	UpdateByID(ctx context.Context, id interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
-	UpdateMany(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
-	UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
-	Watch(ctx context.Context, pipeline interface{}, opts ...*options.ChangeStreamOptions) (*mongo.ChangeStream, error)
-}
-type IMongo interface {
-	GetCollection(cl IMongoClient) IMongoCollection
-	GetClient() (IMongoClient, error)
-}
-type Mongo struct {
-	IMng                IMongo
-	DBUri               string
-	DBName              string
-	MediaCollectionName string
-	JobCollectionName   string
-}
-
-func (m *Mongo) GetClient() (IMongoClient, error) {
-	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
-	opts := options.Client().ApplyURI(m.DBUri).SetServerAPIOptions(serverAPI)
-	cl, err := mongo.Connect(context.TODO(), opts)
-	if err != nil {
-		return nil, err
-	}
-	return cl, nil
-}
-func (m *Mongo) assertClient(cl IMongoClient) (IMongoClient, func(context.Context) error, error) {
-	if cl != nil {
-		return cl, func(context.Context) error { return nil }, nil
-	}
-	cl, err := m.GetClient()
-	if err != nil {
-		return nil, nil, err
-	}
-	return cl, cl.Disconnect, nil
-}
-func (m *Mongo) DocAdd(ctx context.Context, doc interface{}, cl IMongoClient) (*mongo.InsertOneResult, error) {
-	cl, disc, err := m.assertClient(cl)
-	if err != nil {
-		return nil, err
-	}
-	defer disc(ctx)
-	return m.IMng.GetCollection(cl).InsertOne(ctx, doc)
-}
-func (m *Mongo) DocAddMany(ctx context.Context, doc []interface{}, cl IMongoClient) (*mongo.InsertManyResult, error) {
-	cl, disc, err := m.assertClient(cl)
-	if err != nil {
-		return nil, err
-	}
-	defer disc(ctx)
-	return m.IMng.GetCollection(cl).InsertMany(ctx, doc)
-}
-func (m *Mongo) DocGetById(ctx context.Context, docID string, result interface{}, cl IMongoClient) error {
-	cl, disc, err := m.assertClient(cl)
-	if err != nil {
-		return err
-	}
-	defer disc(ctx)
-	filter, err := FilterById(docID)
-	if err != nil {
-		return err
-	}
-	return m.IMng.GetCollection(cl).FindOne(ctx, filter).Decode(result)
-}
-func (m *Mongo) DocDelById(ctx context.Context, docID string, cl IMongoClient) error {
-	cl, disc, err := m.assertClient(cl)
-	if err != nil {
-		return err
-	}
-	defer disc(ctx)
-	filter, err := FilterById(docID)
-	if err != nil {
-		return err
-	}
-	_, err = m.IMng.GetCollection(cl).DeleteOne(ctx, filter)
-	return err
-}
-func (m *Mongo) DocGetAll(ctx context.Context, result interface{}, cl IMongoClient, opts ...*options.FindOptions) error {
-	cl, disc, err := m.assertClient(cl)
-	if err != nil {
-		return err
-	}
-	defer disc(ctx)
-	cur_, err := m.IMng.GetCollection(cl).Find(ctx, bson.D{}, opts...)
-	if err != nil {
-		return err
-	}
-	if err = cur_.All(ctx, result); err != nil {
-		return err
-	}
-	return nil
-}
-func (m *Mongo) DocGetNeighbour(ctx context.Context, mediaDoc MediaFileDoc, cl IMongoClient) (*MediaFileDoc, *MediaFileDoc, error) {
-	ll := logrus.WithField("module", "DocGetNeighbour").WithField("target", mediaDoc.ID)
-	cl, disc, err := m.assertClient(cl)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer disc(ctx)
-	collection := m.IMng.GetCollection(cl)
+//go:generate mockgen -source=mongo.go -destination=../../mocks/db/mongo.go -package=mocks
+type ICollection[T types.IMongoDoc] interface {
+	Aggregator() aggregator.IAggregator[T]
+	Creator() creator.ICreator[T]
+	Deleter() deleter.IDeleter[T]
+	Finder() finder.IFinder[T]
+	Updater() updater.IUpdater[T]
 	// ...
-	prevOpts := options.FindOne().SetSort(bson.D{{Key: "DateAdded", Value: -1}, {Key: "FileID", Value: 1}})
-	nextOpts := options.FindOne().SetSort(bson.D{{Key: "DateAdded", Value: 1}, {Key: "FileID", Value: -1}})
-	prevFilter := bson.M{"DateAdded": bson.M{"$lt": mediaDoc.DateAdded}}
-	nextFilter := bson.M{"DateAdded": bson.M{"$gt": mediaDoc.DateAdded}}
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-	var nextDoc, prevDoc MediaFileDoc
-	go func() {
-		defer wg.Done()
-		if err := collection.FindOne(ctx, prevFilter, prevOpts).Decode(&prevDoc); err != nil && err != mongo.ErrNoDocuments {
-			ll.WithError(err).Error("error getting previous doc")
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		if err := collection.FindOne(ctx, nextFilter, nextOpts).Decode(&nextDoc); err != nil && err != mongo.ErrNoDocuments {
-			ll.WithError(err).Error("error getting next doc")
-		}
-	}()
-	wg.Wait()
-	return &prevDoc, &nextDoc, nil
+	Distinct(context.Context, string) ([]string, error)
+}
+type Collection[T types.IMongoDoc] struct {
+	xColl *mongox.Collection[T]
 }
 
-func (m *Mongo) GetMediaMongo() *Mongo {
-	mng := *m
-	mng.IMng = &mediaMongo{&mng}
-	return &mng
-}
-func (m *Mongo) GetJobMongo() *Mongo {
-	mng := *m
-	mng.IMng = &jobMongo{&mng}
-	return &mng
-}
+var _ ICollection[types.IMongoDoc] = (*Collection[types.IMongoDoc])(nil)
 
-// ....
-type mediaMongo struct {
-	*Mongo
+func (c *Collection[T]) Aggregator() aggregator.IAggregator[T] {
+	return c.xColl.Aggregator()
 }
-type jobMongo struct {
-	*Mongo
+func (c *Collection[T]) Creator() creator.ICreator[T] {
+	return c.xColl.Creator()
 }
-
-func (m *mediaMongo) GetCollection(cl IMongoClient) IMongoCollection {
-	return cl.Database(m.DBName).Collection(m.MediaCollectionName)
+func (c *Collection[T]) Deleter() deleter.IDeleter[T] {
+	return c.xColl.Deleter()
 }
-func (m *jobMongo) GetCollection(cl IMongoClient) IMongoCollection {
-	return cl.Database(m.DBName).Collection(m.JobCollectionName)
+func (c *Collection[T]) Finder() finder.IFinder[T] {
+	return c.xColl.Finder()
 }
-
-// ...
-func FilterById(docID string) (*bson.D, error) {
-	docId, err := primitive.ObjectIDFromHex(docID)
-	if err != nil {
-		return nil, err
+func (c *Collection[T]) Updater() updater.IUpdater[T] {
+	return c.xColl.Updater()
+}
+func (c *Collection[T]) Distinct(ctx context.Context, key string) ([]string, error) {
+	res := c.Finder().Distinct(ctx, key)
+	if err := res.Err(); err != nil {
+		return nil, fmt.Errorf("error calling mongo distinct: %w", err)
 	}
-	return &bson.D{{Key: "_id", Value: docId}}, err
+	resData := []string{}
+	if err := res.Decode(&resData); err != nil {
+		return nil, fmt.Errorf("error decoding distinct result: %w", err)
+	}
+	return resData, nil
 }
 
 // ---
-type IDataStore[T IMongoDoc] interface {
-	GetCollection(cl IMongoClient) IMongoCollection
-	Create(ctx context.Context, doc T, cl IMongoClient) (T, errs.IMongoErr)
-	Find(ctx context.Context, filter *primitive.M, cl IMongoClient) (T, errs.IMongoErr)
-	FindMany(ctx context.Context, filter *primitive.M, cl IMongoClient) ([]T, errs.IMongoErr)
-	Delete(ctx context.Context, filter *primitive.M, cl IMongoClient) errs.IMongoErr
-	DeleteMany(ctx context.Context, filter *primitive.M, cl IMongoClient) errs.IMongoErr
-	Replace(ctx context.Context, filter *primitive.M, doc T, cl IMongoClient) (T, errs.IMongoErr)
-	WithCollectionFactory(factory func(IMongoClient) IMongoCollection) IDataStore[T]
+// DBase represents a MongoDB database connection handler.
+// It encapsulates connection details and provides basic connectivity operations.
+type DBase struct {
+	uri         string
+	name        string
+	client      *mongo.Client
+	pingTimeout time.Duration
 }
 
-type DataStore[T IMongoDoc] struct {
-	dbName            string
-	collectionName    string
-	collectionFactory func(IMongoClient) IMongoCollection
+// NewClient establishes a new MongoDB client connection and verifies it.
+// Returns:
+// - *mongo.Client: Connected MongoDB client instance
+// - error: If connection or ping fails
+func (d *DBase) NewClient() (*mongo.Client, error) {
+	client, err := mongo.Connect(options.Client().ApplyURI(d.uri))
+	if err != nil {
+		return nil, fmt.Errorf("error connecting to mongo: %w", err)
+	}
+	ctx, ctxCancel := context.WithTimeout(context.Background(), d.pingTimeout)
+	defer ctxCancel()
+	err = client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		return nil, fmt.Errorf("error pinging mongo: %w", err)
+	}
+	return client, nil
 }
 
-func (m *DataStore[T]) GetCollection(cl IMongoClient) IMongoCollection {
-	if m.collectionFactory != nil {
-		return m.collectionFactory(cl)
+// Close gracefully disconnects the MongoDB client.
+// Returns error if disconnection fails.
+func (d *DBase) Close() error {
+	if d.client == nil {
+		return nil
 	}
-	return cl.Database(m.dbName).Collection(m.collectionName)
-}
-func (m *DataStore[T]) Create(ctx context.Context, doc T, cl IMongoClient) (T, errs.IMongoErr) {
-	res, err := m.GetCollection(cl).InsertOne(ctx, doc)
-	if err != nil {
-		return doc, errs.NewMongoOpErr(err)
-	}
-	id := res.InsertedID.(primitive.ObjectID)
-	doc.SetID(id)
-	return doc, nil
-}
-func (m *DataStore[T]) Find(ctx context.Context, filter *primitive.M, cl IMongoClient) (T, errs.IMongoErr) {
-	doc := new(T)
-	if err := m.assertSingleDoc(ctx, filter, cl); err != nil {
-		return *doc, err
-	}
-	res := m.GetCollection(cl).FindOne(ctx, filter)
-	if res.Err() != nil {
-		return *doc, errs.NewMongoOpErr(res.Err())
-	}
-	if err := res.Decode(doc); err != nil {
-		return *doc, errs.NewMongoUnMarshalErr(err)
-	}
-	return *doc, nil
-}
-func (m *DataStore[T]) FindMany(ctx context.Context, filter *primitive.M, cl IMongoClient) ([]T, errs.IMongoErr) {
-	cursor, err := m.GetCollection(cl).Find(ctx, filter)
-	if err != nil {
-		return nil, errs.NewMongoOpErr(err)
-	}
-	res := new([]T)
-	if err := cursor.All(ctx, res); err != nil {
-		return *res, errs.NewMongoUnMarshalErr(err)
-	}
-	return *res, nil
-}
-func (m *DataStore[T]) Delete(ctx context.Context, filter *primitive.M, cl IMongoClient) errs.IMongoErr {
-	if err := m.assertSingleDoc(ctx, filter, cl); err != nil {
-		return err
-	}
-	if _, err := m.GetCollection(cl).DeleteOne(ctx, filter); err != nil {
-		return errs.NewMongoOpErr(err)
-	}
-	return nil
-}
-func (m *DataStore[T]) DeleteMany(ctx context.Context, filter *primitive.M, cl IMongoClient) errs.IMongoErr {
-	if _, err := m.GetCollection(cl).DeleteMany(ctx, filter); err != nil {
-		return errs.NewMongoOpErr(err)
-	}
-	return nil
-}
-func (m *DataStore[T]) Replace(ctx context.Context, filter *primitive.M, doc T, cl IMongoClient) (T, errs.IMongoErr) {
-	res, err := m.GetCollection(cl).ReplaceOne(ctx, filter, doc)
-	if err != nil {
-		return doc, err
-	}
-	if res.MatchedCount == 0 {
-		return doc, errs.NewMongoObjectNotfound(*filter)
-	}
-	return doc, nil
-}
-func (m *DataStore[T]) Count(ctx context.Context, filter *primitive.M, cl IMongoClient) (int64, error) {
-	res, err := m.GetCollection(cl).CountDocuments(ctx, filter)
-	if err != nil {
-		return 0, errs.NewMongoOpErr(err)
-	}
-	return res, nil
-}
-func (m *DataStore[T]) assertSingleDoc(ctx context.Context, filter *primitive.M, cl IMongoClient) error {
-	if cnt, err := m.Count(ctx, filter, cl); err != nil {
-		return err
-	} else if cnt == 0 {
-		return errs.NewMongoObjectNotfound(*filter)
-	} else if cnt > 1 {
-		return errs.NewMongoMultipleObjectfound(*filter)
-	}
-	return nil
-}
-func (m *DataStore[T]) WithCollectionFactory(factory func(IMongoClient) IMongoCollection) IDataStore[T] {
-	m.collectionFactory = factory
-	return m
-}
-func NewDatastore[T IMongoDoc](dbName string, collectionName string) IDataStore[T] {
-	return &DataStore[T]{
-		dbName:         dbName,
-		collectionName: collectionName,
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return d.client.Disconnect(ctx)
 }
 
-// ...
+// ---
 type DatastoreEnum int
 
 const (
 	MEDIA_DS DatastoreEnum = iota
-	JOB_DS
+	JOB_REQ_DS
+	JOB_RES_DS
 )
 
-// ...
-func GetIDFilter(id primitive.ObjectID) *primitive.M {
-	return &bson.M{"_id": id}
+type Datastore[T types.IMongoDoc] struct {
+	baseDB         *DBase
+	collectionName string
+	Collection     *mongox.Collection[T]
 }
+
+var DsLock = sync.RWMutex{}
+var mediads *Datastore[*types.MediaFileDoc]
+var jobreqds *Datastore[*types.JobReqDoc]
+var jobresds *Datastore[*types.JobResDoc]
+
+func InitDatastores(dbase *DBase) {
+	DsLock.Lock()
+	defer DsLock.Unlock()
+	mediads = &Datastore[*types.MediaFileDoc]{
+		baseDB:         dbase,
+		collectionName: "files",
+	}
+	jobreqds = &Datastore[*types.JobReqDoc]{
+		baseDB:         dbase,
+		collectionName: "jobs",
+	}
+	jobresds = &Datastore[*types.JobResDoc]{
+		baseDB:         dbase,
+		collectionName: "jobres",
+	}
+}
+func GetDatastore[T types.IMongoDoc]() *Datastore[T] {
+	DsLock.RLock()
+	defer DsLock.RUnlock()
+	if mediads == nil || jobreqds == nil || jobresds == nil {
+		logrus.Fatal("datastores not initialized")
+	}
+	var zeroT T
+	var an any
+	switch any(zeroT).(type) {
+	case *types.MediaFileDoc:
+		an = any(mediads)
+	case *types.JobReqDoc:
+		an = any(jobreqds)
+	case *types.JobResDoc:
+		an = any(jobresds)
+	default:
+		logrus.Fatalf("unknown datastore type %T", any(*new(T)))
+		return nil
+	}
+	res, ok := an.(*Datastore[T])
+	if !ok {
+		logrus.Fatalf("failed to cast datastore to %T", any(*new(T)))
+		return nil
+	}
+	return res
+}
+
+func NewDatabase(uri string, name string, pingTimeout time.Duration) (*DBase, error) {
+	d := DBase{
+		uri:         uri,
+		name:        name,
+		pingTimeout: pingTimeout,
+	}
+	dCl, err := d.NewClient()
+	if err != nil {
+		return nil, err
+	}
+	d.client = dCl
+	return &d, nil
+}
+
+// ...

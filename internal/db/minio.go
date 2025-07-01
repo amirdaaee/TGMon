@@ -6,17 +6,22 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/sirupsen/logrus"
 )
 
+//go:generate mockgen -source=minio.go -destination=../../mocks/db/minio.go -package=mocks
 type IMinioCl interface {
 	BucketExists(ctx context.Context, bucketName string) (bool, error)
 	MakeBucket(ctx context.Context, bucketName string, opts minio.MakeBucketOptions) (err error)
 	PutObject(ctx context.Context, bucketName string, objectName string, reader io.Reader, objectSize int64, opts minio.PutObjectOptions) (info minio.UploadInfo, err error)
 	RemoveObject(ctx context.Context, bucketName string, objectName string, opts minio.RemoveObjectOptions) error
 }
+
+//go:generate mockgen -source=minio.go -destination=../../mocks/db/minio.go -package=mocks
 type IMinioClient interface {
 	CreateBucket(ctx context.Context) error
 	FileAdd(ctx context.Context, fileName string, data []byte) error
@@ -35,28 +40,6 @@ type MinioConfig struct {
 	MinioSecure    bool
 }
 
-func NewMinioClient(minioCfg *MinioConfig, factory func(string, *minio.Options) (IMinioCl, error), skipAssertBucket bool) (IMinioClient, error) {
-	if factory == nil {
-		factory = newMinioCl
-	}
-	minioClient, err := factory(minioCfg.MinioEndpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(minioCfg.MinioAccessKey, minioCfg.MinioSecretKey, ""),
-		Secure: minioCfg.MinioSecure,
-	})
-	if err != nil {
-		return nil, err
-	}
-	cl := MinioClient{IMinioCl: minioClient, bucket: minioCfg.MinioBucket}
-	if !skipAssertBucket {
-		if err := cl.CreateBucket(context.TODO()); err != nil {
-			return nil, err
-		}
-	}
-	return &cl, nil
-}
-func newMinioCl(endpoint string, opts *minio.Options) (IMinioCl, error) {
-	return minio.New(endpoint, opts)
-}
 func (cl *MinioClient) CreateBucket(ctx context.Context) error {
 	if exists, err := cl.BucketExists(ctx, cl.bucket); err != nil {
 		return fmt.Errorf("can not check bucket existance: %s", err)
@@ -89,4 +72,42 @@ func (cl *MinioClient) FileRm(ctx context.Context, fileName string) error {
 		return fmt.Errorf("error removing object: %s", err)
 	}
 	return nil
+}
+
+// ...
+var minioCl *MinioClient
+var minioClLock = sync.RWMutex{}
+
+func InitMinioClient(minioCfg *MinioConfig, factory func(string, *minio.Options) (IMinioCl, error), skipAssertBucket bool) {
+	minioClLock.Lock()
+	defer minioClLock.Unlock()
+	if factory == nil {
+		factory = newMinioCl
+	}
+	minioClient, err := factory(minioCfg.MinioEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(minioCfg.MinioAccessKey, minioCfg.MinioSecretKey, ""),
+		Secure: minioCfg.MinioSecure,
+	})
+	if err != nil {
+		logrus.Fatalf("failed to init minio client: %s", err)
+	}
+	cl := MinioClient{IMinioCl: minioClient, bucket: minioCfg.MinioBucket}
+	if !skipAssertBucket {
+		if err := cl.CreateBucket(context.TODO()); err != nil {
+			logrus.Fatalf("failed to create bucket: %s", err)
+		}
+	}
+	minioCl = &cl
+}
+func newMinioCl(endpoint string, opts *minio.Options) (IMinioCl, error) {
+	return minio.New(endpoint, opts)
+}
+
+func GetMinioClient() *MinioClient {
+	minioClLock.RLock()
+	defer minioClLock.RUnlock()
+	if minioCl == nil {
+		logrus.Fatal("minio client not initialized")
+	}
+	return minioCl
 }
