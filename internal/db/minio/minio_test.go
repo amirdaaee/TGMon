@@ -1,13 +1,14 @@
-package db_test
+package minio_test
 
 import (
 	"context"
 	"fmt"
 	"io"
 
-	"github.com/amirdaaee/TGMon/internal/db"
-	mockDB "github.com/amirdaaee/TGMon/mocks/db"
-	"github.com/minio/minio-go/v7"
+	mnio "github.com/minio/minio-go/v7"
+
+	"github.com/amirdaaee/TGMon/internal/db/minio"
+	mockDB "github.com/amirdaaee/TGMon/mocks/db/minio"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	gomock "go.uber.org/mock/gomock"
@@ -15,22 +16,19 @@ import (
 
 var _ = Describe("Minio", func() {
 	var (
-		mockMinio   *mockDB.MockIMinioCl
-		testContext context.Context
-		ctrl        *gomock.Controller
+		ctrl           *gomock.Controller
+		mockMinio      *mockDB.MockIMinioCl
+		testContext    context.Context
+		mnioCl         *minio.MinioClient
+		testBucketName string
 	)
 	// ...
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		testContext = context.Background()
 		mockMinio = mockDB.NewMockIMinioCl(ctrl)
-
-		db.DefaultMinioRegistry.InitMinioClient(testContext,
-			&db.MinioConfig{MinioBucket: "mock_bucket"},
-			true,
-			func(s string, o *minio.Options) (db.IMinioCl, error) {
-				return mockMinio, nil
-			}, nil)
+		testBucketName = "mock_bucket"
+		mnioCl = minio.NewMinioClient(mockMinio, testBucketName)
 	})
 	// ================================
 	Describe("MinioClient", Label("MinioClient"), func() {
@@ -92,11 +90,10 @@ var _ = Describe("Minio", func() {
 				tc := tc
 				It(tc.description, Label(string(tc.tType)), func() {
 					// Arrange
-					cl := db.DefaultMinioRegistry.GetMinioClient()
 					assertMinio_BucketExists(tc)
 					assertMinio_MakeBucket(tc)
 					// Act
-					err := cl.CreateBucket(testContext)
+					err := mnioCl.CreateBucket(testContext)
 					// Assert
 					if tc.expectErr {
 						Expect(err).To(HaveOccurred())
@@ -119,14 +116,14 @@ var _ = Describe("Minio", func() {
 			// ...
 			assertMinio_PutObjec := func(tc testCase) {
 				mockMinio.EXPECT().PutObject(gomock.Any(), tc.bucketName, tc.filename, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-					func(ctx context.Context, s1, s2 string, r io.Reader, i int64, poo minio.PutObjectOptions) (minio.UploadInfo, error) {
+					func(ctx context.Context, s1, s2 string, r io.Reader, i int64, poo mnio.PutObjectOptions) (mnio.UploadInfo, error) {
 						d := make([]byte, len(tc.data))
 						n, err := r.Read(d)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(d).To(Equal(tc.data))
 						Expect(i).To(BeEquivalentTo(n))
 						Expect(i).To(BeEquivalentTo(len(tc.data)))
-						return minio.UploadInfo{}, tc.expectPutObjectErr
+						return mnio.UploadInfo{}, tc.expectPutObjectErr
 					},
 				)
 			}
@@ -154,10 +151,9 @@ var _ = Describe("Minio", func() {
 				tc := tc
 				It(tc.description, Label(string(tc.tType)), func() {
 					// Arrange
-					cl := db.DefaultMinioRegistry.GetMinioClient()
 					assertMinio_PutObjec(tc)
 					// Act
-					err := cl.FileAdd(testContext, tc.filename, tc.data)
+					err := mnioCl.FileAdd(testContext, tc.filename, tc.data)
 					// Assert
 					if tc.expectErr {
 						Expect(err).To(HaveOccurred())
@@ -180,14 +176,14 @@ var _ = Describe("Minio", func() {
 			// ...
 			assertMinio_PutObjec := func(tc testCase) {
 				mockMinio.EXPECT().PutObject(gomock.Any(), tc.bucketName, tc.filename, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-					func(ctx context.Context, s1, s2 string, r io.Reader, i int64, poo minio.PutObjectOptions) (minio.UploadInfo, error) {
+					func(ctx context.Context, s1, s2 string, r io.Reader, i int64, poo mnio.PutObjectOptions) (mnio.UploadInfo, error) {
 						d := make([]byte, len(tc.data))
 						n, err := r.Read(d)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(d).To(Equal([]byte(tc.data)))
 						Expect(i).To(BeEquivalentTo(n))
 						Expect(i).To(BeEquivalentTo(len(tc.data)))
-						return minio.UploadInfo{}, tc.expectPutObjectErr
+						return mnio.UploadInfo{}, tc.expectPutObjectErr
 					},
 				)
 			}
@@ -215,10 +211,9 @@ var _ = Describe("Minio", func() {
 				tc := tc
 				It(tc.description, Label(string(tc.tType)), func() {
 					// Arrange
-					cl := db.DefaultMinioRegistry.GetMinioClient()
 					assertMinio_PutObjec(tc)
 					// Act
-					err := cl.FileAddStr(testContext, tc.filename, tc.data)
+					err := mnioCl.FileAddStr(testContext, tc.filename, tc.data)
 					// Assert
 					if tc.expectErr {
 						Expect(err).To(HaveOccurred())
@@ -263,10 +258,9 @@ var _ = Describe("Minio", func() {
 				tc := tc
 				It(tc.description, Label(string(tc.tType)), func() {
 					// Arrange
-					cl := db.DefaultMinioRegistry.GetMinioClient()
 					assertMinio_RemoveObject(tc)
 					// Act
-					err := cl.FileRm(testContext, tc.filename)
+					err := mnioCl.FileRm(testContext, tc.filename)
 					// Assert
 					if tc.expectErr {
 						Expect(err).To(HaveOccurred())

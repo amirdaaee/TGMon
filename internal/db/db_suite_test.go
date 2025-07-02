@@ -11,11 +11,3 @@ func TestDb(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Db Suite")
 }
-
-// ...
-type TestCaseType string
-
-const (
-	HAPPY_PATH TestCaseType = "Happy"
-	FAILURE    TestCaseType = "Failure"
-)

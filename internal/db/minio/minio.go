@@ -1,6 +1,6 @@
 // Package db provides database abstraction layers for MinIO object storage and MongoDB.
 // It includes client managers for thread-safe operations and backward-compatible global functions.
-package db
+package minio
 
 import (
 	"bytes"
@@ -8,19 +8,15 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 
-	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/sirupsen/logrus"
 )
 
 // IMinioCl defines the interface for MinIO client operations.
 // This interface wraps the essential MinIO operations needed for object storage management.
 // It is designed to be mockable for testing purposes.
 //
-//go:generate mockgen -source=minio.go -destination=../../mocks/db/minio.go -package=mocks
+//go:generate mockgen -source=minio.go -destination=../../../mocks/db/minio/minio.go -package=mocks
 type IMinioCl interface {
 	// BucketExists checks if a bucket with the given name exists.
 	// Returns true if the bucket exists, false otherwise, and any error encountered.
@@ -43,7 +39,7 @@ type IMinioCl interface {
 // This interface provides simplified methods for common file operations on a specific bucket.
 // It abstracts away the underlying MinIO complexity and provides a more user-friendly API.
 //
-//go:generate mockgen -source=minio.go -destination=../../mocks/db/minio.go -package=mocks
+//go:generate mockgen -source=minio.go -destination=../../../mocks/db/minio/minio.go -package=mocks
 type IMinioClient interface {
 	// CreateBucket creates the configured bucket if it doesn't already exist.
 	// This is typically called during initialization to ensure the bucket is available.
@@ -144,95 +140,19 @@ func (cl *MinioClient) FileRm(ctx context.Context, fileName string) error {
 
 var _ IMinioClient = (*MinioClient)(nil)
 
-// MinioClientRegistry manages MinioClient instances in a thread-safe manner.
-// It provides safe concurrent access to MinIO client operations and handles
-// client lifecycle management. This is the recommended approach for managing
-// MinIO clients in production applications.
-type MinioClientRegistry struct {
-	mu     sync.RWMutex
-	client IMinioClient
-	x      IMongoClient
-}
-
-// NewMinioClientRegistry creates a new MinioClientManager instance.
-// The manager starts uninitialized and requires a call to InitMinioClient
-// before it can be used to serve client requests.
-func NewMinioClientRegistry() *MinioClientRegistry {
-	return &MinioClientRegistry{}
-}
-
-// InitMinioClient initializes the managed MinIO client with the provided configuration.
-// This method is thread-safe and will replace any existing client instance.
+// NewMinioClient creates a new MinioClient instance with the specified low-level client and bucket name.
+// This constructor function wraps a low-level IMinioCl implementation to provide high-level file operations
+// for a specific bucket. The returned client will operate exclusively on the specified bucket.
 //
 // Parameters:
-//   - ctx: Context for the initialization operation and bucket creation
-//   - minioCfg: Configuration parameters for the MinIO connection
-//   - factory: Optional factory function for creating IMinioCl instances (uses default if nil)
-//   - skipAssertBucket: If true, skips bucket creation during initialization
+//   - iCl: The low-level MinIO client interface implementation that handles the actual MinIO operations
+//   - bucketName: The name of the bucket that this client will operate on for all file operations
 //
-// Returns an error if client initialization or bucket creation fails.
-func (m *MinioClientRegistry) InitMinioClient(
-	ctx context.Context,
-	minioCfg *MinioConfig,
-	skipAssertBucket bool,
-	minioClFactory func(string, *minio.Options) (IMinioCl, error),
-	minioClientFactory func(IMinioCl, string) IMinioClient,
-) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.client != nil {
-		m.getLogger("InitMinioClient").Warn("client already initialized. re-initializing...")
+// Returns:
+//   - *MinioClient: A configured high-level MinIO client ready for file operations
+func NewMinioClient(iCl IMinioCl, bucketName string) *MinioClient {
+	return &MinioClient{
+		IMinioCl: iCl,
+		bucket:   bucketName,
 	}
-	if minioClFactory == nil {
-		minioClFactory = defaultMinioClFactory
-	}
-
-	minioClient, err := minioClFactory(minioCfg.MinioEndpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(minioCfg.MinioAccessKey, minioCfg.MinioSecretKey, ""),
-		Secure: minioCfg.MinioSecure,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to initialize minio client: %w", err)
-	}
-	// ...
-	if minioClientFactory == nil {
-		minioClientFactory = defaultMinioClientFactory
-	}
-	cl := minioClientFactory(minioClient, minioCfg.MinioBucket)
-	if !skipAssertBucket {
-		if err := cl.CreateBucket(ctx); err != nil {
-			return fmt.Errorf("failed to create bucket during initialization: %w", err)
-		}
-	}
-
-	m.client = cl
-	return nil
 }
-
-// GetMinioClient returns the managed MinIO client instance.
-// This method is thread-safe and can be called concurrently.
-// Returns an error if the client has not been initialized.
-func (m *MinioClientRegistry) GetMinioClient() IMinioClient {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	if m.client == nil {
-		m.getLogger("GetMinioClient").Fatal("minio client not initialized")
-	}
-	return m.client
-}
-func (m *MinioClientRegistry) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.DBModule).WithField("fn", fmt.Sprintf("%T.%s", m, fn))
-}
-
-// defaultMinioClFactory is the default factory function for creating MinIO client instances.
-// It creates a new minio.Client with the provided endpoint and options.
-func defaultMinioClFactory(endpoint string, opts *minio.Options) (IMinioCl, error) {
-	return minio.New(endpoint, opts)
-}
-func defaultMinioClientFactory(minioCl IMinioCl, bucket string) IMinioClient {
-	return &MinioClient{IMinioCl: minioCl, bucket: bucket}
-}
-
-// Global instance for backward compatibility (deprecated)
-// TODO: Remove this and use dependency injection instead
-var DefaultMinioRegistry = NewMinioClientRegistry()
