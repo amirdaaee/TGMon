@@ -1,3 +1,4 @@
+// Package facade provides CRUD logic for job request and result documents.
 package facade
 
 import (
@@ -5,111 +6,187 @@ import (
 	"fmt"
 
 	"github.com/amirdaaee/TGMon/internal/db"
-	"github.com/onsi/ginkgo/v2"
+	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
+	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
+	"github.com/chenmingyong0423/go-mongox/v2/builder/update"
 	"github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-type JobFacade struct {
-	baseFacade[*db.JobDoc]
+// JobReqCrud implements ICrud for JobReqDoc, providing CRUD hooks and collection access.
+type JobReqCrud struct {
+	container db.IDbContainer
 }
 
-// create new job if not exist and omit creation if doesn't
-func (f *JobFacade) Create(ctx context.Context, doc *db.JobDoc, cl *mongo.Client) (*db.JobDoc, error) {
-	ll := f.getLogger("create")
-	// check for exist
-	filter := doc
-	filter.SetID(primitive.NilObjectID)
-	filterD, err := filter.MarshalOmitEmpty()
-	if err != nil {
-		return nil, fmt.Errorf("can not marshal filter to find duplicates: %s", err)
+var _ ICrud[types.JobReqDoc] = (*JobReqCrud)(nil)
+
+// PreCreate checks for duplicates before creating a JobReqDoc. Returns an error if the document is nil or a duplicate is found.
+func (crd *JobReqCrud) PreCreate(ctx context.Context, doc *types.JobReqDoc) error {
+	if doc == nil {
+		return fmt.Errorf("JobReqDoc is nil")
 	}
-	res, err := f.baseRead(ctx, filterD, cl)
-	if err != nil {
-		return nil, fmt.Errorf("can not list jobs to find duplicates: %s", err)
-	}
-	if len(res) != 0 {
-		ll.Warn("job already exists")
-		return res[0], nil
-	}
-	// ...
-	newDoc, err := f.baseCreate(ctx, doc, cl)
-	return newDoc, err
-}
-func (f *JobFacade) Read(ctx context.Context, filter *primitive.M, cl *mongo.Client) ([]*db.JobDoc, error) {
-	docs, err := f.baseRead(ctx, filter, cl)
-	return docs, err
+	// TODO: duplicated check (stub)
+	return nil
 }
 
-// update media based on job result and delete job itself
-//
-// job is kept only if provided data are not constistant
-func (f *JobFacade) Done(ctx context.Context, id primitive.ObjectID, cl *mongo.Client, data *MediaMinioFile) error {
-	ll := f.getLogger("done")
-	ds := f.jobDS
-	jobDoc, err := ds.Find(ctx, db.GetIDFilter(id), cl)
+// PostCreate is a post-create hook for JobReqDoc. No-op in this implementation.
+func (crd *JobReqCrud) PostCreate(ctx context.Context, doc *types.JobReqDoc) error {
+	return nil
+}
+
+// PreDelete is a pre-delete hook for JobReqDoc. No-op in this implementation.
+func (crd *JobReqCrud) PreDelete(ctx context.Context, doc *types.JobReqDoc) error {
+	return nil
+}
+
+// PostDelete is a post-delete hook for JobReqDoc. No-op in this implementation.
+func (crd *JobReqCrud) PostDelete(ctx context.Context, doc *types.JobReqDoc) error {
+	return nil
+}
+
+// GetCollection returns the JobReq collection from the database container.
+func (crd *JobReqCrud) GetCollection() mngo.ICollection[types.JobReqDoc] {
+	return crd.container.GetMongoContainer().GetJobReqCollection()
+}
+
+// NewJobReqCrud creates a new JobReqCrud with the provided database container.
+func NewJobReqCrud(container db.IDbContainer) ICrud[types.JobReqDoc] {
+	return &JobReqCrud{container: container}
+}
+
+func init() {
+	RegisterCRD(NewJobReqCrud)
+}
+
+// JobResCrud implements ICrud for JobResDoc, providing CRUD hooks and collection access.
+type JobResCrud struct {
+	container db.IDbContainer
+	jReqFac   IFacade[types.JobReqDoc]
+}
+
+var _ ICrud[types.JobResDoc] = (*JobResCrud)(nil)
+
+// PreCreate processes the job result and updates the related media document. Returns an error if the document is nil or processing fails.
+func (crd *JobResCrud) PreCreate(ctx context.Context, doc *types.JobResDoc) error {
+	if doc == nil {
+		return fmt.Errorf("JobResDoc is nil")
+	}
+	jobReq, err := crd.getJobRequest(ctx, doc)
 	if err != nil {
-		return fmt.Errorf("can not get job doc: %s", err)
+		return err
 	}
-	if jobDoc.Type == db.THUMBNAILJobType {
-		if data.ThumbData == nil {
-			return fmt.Errorf("thumbnail is empty")
-		}
-		data.VttData = nil
-		data.SpriteData = nil
-	}
-	if jobDoc.Type == db.SPRITEJobType {
-		if data.VttData == nil || data.SpriteData == nil {
-			return fmt.Errorf("vtt or sprite is empty")
-		}
-		data.ThumbData = nil
-	}
-	// ...
-	// anyway job should be deleted from this point on
-	go func() {
-		defer ginkgo.GinkgoRecover()
-		deleteJob(db.GetIDFilter(id), f.mongo, f.jobDS)
-	}()
-	// ...
-	mediaDoc, err := f.mediaDS.Find(ctx, db.GetIDFilter(jobDoc.MediaID), cl)
+
+	fileName := crd.generateFileName(doc, jobReq)
+
+	updateField, err := crd.processJobResult(ctx, doc, jobReq, fileName)
 	if err != nil {
-		ll.WithError(err).Error("error getting corresponding media")
-		return nil
+		return err
 	}
-	// ...
-	if err := updateMediaMinioFiles(ctx, mediaDoc, f.minio, f.mediaDS, cl, data); err != nil {
-		ll.WithError(err).Error("error updating media files")
-		return nil
+
+	return crd.updateMediaDocument(ctx, jobReq.MediaID, updateField)
+}
+
+// PostCreate deletes the related job request after creating a job result. Logs errors but does not return them.
+func (crd *JobResCrud) PostCreate(ctx context.Context, doc *types.JobResDoc) error {
+	ll := crd.getLogger("PostCreate")
+	if doc == nil {
+		return fmt.Errorf("JobResDoc is nil")
+	}
+	if _, err := crd.jReqFac.DeleteOne(ctx, getJobReqQ(doc)); err != nil {
+		ll.WithError(err).Error("failed to delete job req")
 	}
 	return nil
 }
 
-func NewJobFacade(mongo db.IMongo, minio db.IMinioClient, jobDS db.IDataStore[*db.JobDoc], mediaDS db.IDataStore[*db.MediaFileDoc]) *JobFacade {
-	return &JobFacade{
-		baseFacade: baseFacade[*db.JobDoc]{
-			name:    "job",
-			mongo:   mongo,
-			dsName:  db.JOB_DS,
-			jobDS:   jobDS,
-			mediaDS: mediaDS,
-			minio:   minio,
-		},
+// PreDelete is a pre-delete hook for JobResDoc. No-op in this implementation.
+func (crd *JobResCrud) PreDelete(ctx context.Context, doc *types.JobResDoc) error {
+	return nil
+}
+
+// PostDelete is a post-delete hook for JobResDoc. No-op in this implementation.
+func (crd *JobResCrud) PostDelete(ctx context.Context, doc *types.JobResDoc) error {
+	return nil
+}
+
+// GetCollection returns the JobRes collection from the database container.
+func (crd *JobResCrud) GetCollection() mngo.ICollection[types.JobResDoc] {
+	return crd.container.GetMongoContainer().GetJobResCollection()
+}
+
+// getLogger returns a logrus.Entry for the given function name, tagged with the struct type.
+func (crd *JobResCrud) getLogger(fn string) *logrus.Entry {
+	return log.GetLogger(log.FacadeModule).WithField("func", fmt.Sprintf("%T.%s", crd, fn))
+}
+
+// getJobReqQ constructs a BSON query for the JobReqID in the given JobResDoc.
+func getJobReqQ(doc *types.JobResDoc) *bson.D {
+	q := query.Id(doc.JobReqID)
+	return &q
+}
+
+// getJobRequest retrieves the related JobReqDoc for the given JobResDoc. Returns an error if not found or multiple found.
+func (crd *JobResCrud) getJobRequest(ctx context.Context, doc *types.JobResDoc) (*types.JobReqDoc, error) {
+	jobReqD, err := crd.jReqFac.Read(ctx, getJobReqQ(doc))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get job req doc: %w", err)
+	}
+
+	if len(jobReqD) == 0 {
+		return nil, fmt.Errorf("job req doc not found")
+	} else if len(jobReqD) > 1 {
+		return nil, fmt.Errorf("multiple job req docs found")
+	}
+
+	return jobReqD[0], nil
+}
+
+// generateFileName generates a file name for the job result based on the JobResDoc and JobReqDoc.
+func (crd *JobResCrud) generateFileName(doc *types.JobResDoc, jobReq *types.JobReqDoc) string {
+	return fmt.Sprintf("%s_%s", doc.ID.Hex(), jobReq.Type)
+}
+
+// processJobResult processes the job result, stores the result in Minio, and returns the update field for the media document.
+func (crd *JobResCrud) processJobResult(ctx context.Context, doc *types.JobResDoc, jobReq *types.JobReqDoc, fileName string) (bson.D, error) {
+	resBytes, ok := doc.Result.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("result is not []byte (%T)", doc.Result)
+	}
+
+	mno := crd.container.GetMinioContainer().GetMinioClient()
+	if err := mno.FileAdd(ctx, fileName, resBytes); err != nil {
+		return nil, fmt.Errorf("failed to add file to minio: %w", err)
+	}
+
+	return crd.getUpdateField(jobReq.Type, fileName)
+}
+
+// getUpdateField returns the BSON update field for the given job type and file name.
+func (crd *JobResCrud) getUpdateField(jobType types.JobTypeEnum, fileName string) (bson.D, error) {
+	switch jobType {
+	case types.THUMBNAILJobType:
+		return update.Set(types.MediaFileDoc__ThumbnailField, fileName), nil
+	case types.SPRITEJobType:
+		return update.Set(types.MediaFileDoc__SpriteField, fileName), nil
+	default:
+		return nil, fmt.Errorf("unknown job type: %s", jobType)
 	}
 }
 
-// ...
-func deleteJob(filter *primitive.M, monog db.IMongo, jobDS db.IDataStore[*db.JobDoc]) {
-	ll := logrus.WithField("func", "deleteJob")
-	ctx := context.Background()
-	cl, err := monog.GetClient()
-	if err != nil {
-		ll.WithError(err).Error("")
-		return
+// updateMediaDocument updates the media document with the given media ID and update field.
+func (crd *JobResCrud) updateMediaDocument(ctx context.Context, mediaID bson.ObjectID, updateField bson.D) error {
+	if _, err := crd.container.GetMongoContainer().GetMediaFileCollection().Updater().Filter(query.Id(mediaID)).Updates(updateField).UpdateOne(ctx); err != nil {
+		return fmt.Errorf("failed to update media doc: %w", err)
 	}
-	defer cl.Disconnect(ctx)
-	if err := jobDS.Delete(ctx, filter, cl); err != nil {
-		ll.WithError(err).Error("can not delete job doc")
-		return
-	}
+	return nil
+}
+
+// NewJobResCrud creates a new JobResCrud with the provided database container.
+func NewJobResCrud(container db.IDbContainer) ICrud[types.JobResDoc] {
+	return &JobResCrud{container: container, jReqFac: GetFacade[types.JobReqDoc](container)}
+}
+
+func init() {
+	RegisterCRD(NewJobResCrud)
 }

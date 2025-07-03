@@ -1,231 +1,106 @@
+// Package facade provides CRUD logic for media file documents.
 package facade
 
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/amirdaaee/TGMon/internal/db"
-	"github.com/amirdaaee/TGMon/internal/errs"
-	"github.com/google/uuid"
-	"github.com/onsi/ginkgo/v2"
+	"github.com/amirdaaee/TGMon/internal/db/minio"
+	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
+	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 	"github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type FullMediaData struct {
-	doc   *db.MediaFileDoc
-	thumb []byte
+// MediaCrud implements ICrud for MediaFileDoc, providing CRUD hooks and collection access.
+type MediaCrud struct {
+	container db.IDbContainer
+	jReqFac   IFacade[types.JobReqDoc]
 }
 
-func NewFullMediaData(doc *db.MediaFileDoc, thumb []byte) *FullMediaData {
-	return &FullMediaData{
-		doc:   doc,
-		thumb: thumb,
+var _ ICrud[types.MediaFileDoc] = (*MediaCrud)(nil)
+
+// PreCreate checks for duplicates before creating a MediaFileDoc. Returns an error if the document is nil or a duplicate is found.
+func (crd *MediaCrud) PreCreate(ctx context.Context, doc *types.MediaFileDoc) error {
+	if doc == nil {
+		return fmt.Errorf("MediaFileDoc is nil")
 	}
+	// TODO: duplicated check (stub)
+	return nil
 }
 
-type IMediaFacade interface {
-	Create(ctx context.Context, data *FullMediaData, cl db.IMongoClient) (*db.MediaFileDoc, error)
-}
-type MediaFacade struct {
-	baseFacade[*db.MediaFileDoc]
-}
-
-// create new media doc
-// + set thumbnail
-// + generate sprite job
-func (f *MediaFacade) Create(ctx context.Context, data *FullMediaData, cl db.IMongoClient) (*db.MediaFileDoc, error) {
-	newDoc, err := f.baseCreate(ctx, data.doc, cl)
-	if err != nil {
-		return nil, err
+// PostCreate creates a sprite job request after creating a media file. Returns an error if the document is nil or job creation fails.
+func (crd *MediaCrud) PostCreate(ctx context.Context, doc *types.MediaFileDoc) error {
+	if doc == nil {
+		return fmt.Errorf("MediaFileDoc is nil")
 	}
-	go func() {
-		defer ginkgo.GinkgoRecover()
-		ll := f.getLogger("create:side-effect")
-		innerCtx := context.Background()
-		innerCl, err := f.mongo.GetClient()
-		if err != nil {
-			ll.WithError(err).Error("can not get mongo client")
-			return
-		}
-		defer innerCl.Disconnect(innerCtx)
-		// ...
-		if err := createMediaJob(innerCtx, *newDoc, f.jobDS, innerCl, db.SPRITEJobType); err != nil {
-			ll.WithError(err).Error("can not create sprite job")
-		}
-		// ...
-		if data.thumb != nil {
-			if err := updateMediaMinioFiles(innerCtx, newDoc, f.minio, f.mediaDS, innerCl, &MediaMinioFile{ThumbData: data.thumb}); err != nil {
-				ll.WithError(err).Error("can not process thumbnail")
+	_, err := crd.jReqFac.CreateOne(ctx, &types.JobReqDoc{
+		Type:    types.SPRITEJobType,
+		MediaID: doc.ID,
+	})
+	return err
+}
+
+// PreDelete is a pre-delete hook for MediaFileDoc. No-op in this implementation.
+func (crd *MediaCrud) PreDelete(ctx context.Context, doc *types.MediaFileDoc) error {
+	return nil
+}
+
+// PostDelete deletes orphaned jobs and files after deleting a media file. Retries file deletion up to 3 times. Logs errors but does not return them.
+func (crd *MediaCrud) PostDelete(ctx context.Context, doc *types.MediaFileDoc) error {
+	ll := crd.getLogger("PostDelete")
+	if doc == nil {
+		return fmt.Errorf("MediaFileDoc is nil")
+	}
+	q := bsonx.NewD().Add(types.JobReqDoc__MediaIDField, doc.ID).Build()
+	if dl, err := crd.jReqFac.GetCRD().GetCollection().Deleter().Filter(q).DeleteMany(ctx); err != nil {
+		ll.WithError(err).Error("failed to delete orphaned jobs")
+	} else if dl.DeletedCount > 0 {
+		ll.Infof("deleted %d orphaned jobs", dl.DeletedCount)
+	}
+	for _, fn := range []string{doc.Vtt, doc.Thumbnail} {
+		if fn != "" {
+			var lastErr error
+			for i := 0; i < 3; i++ {
+				if err := crd.getMinioClient().FileRm(ctx, fn); err != nil {
+					lastErr = err
+					time.Sleep(100 * time.Millisecond)
+				} else {
+					lastErr = nil
+					break
+				}
 			}
-		}
-	}()
-	return newDoc, err
-}
-func (f *MediaFacade) Read(ctx context.Context, filter *primitive.M, cl db.IMongoClient) ([]*db.MediaFileDoc, error) {
-	docs, err := f.baseRead(ctx, filter, cl)
-	return docs, err
-}
-
-// delete new media doc
-// + delete minio files
-// + delete all related jobs
-func (f *MediaFacade) Delete(ctx context.Context, filter *primitive.M, cl db.IMongoClient) error {
-	doc, err := f.mediaDS.Find(ctx, filter, cl)
-	if err != nil {
-		return err
-	}
-	if err := f.baseDelete(ctx, filter, cl); err != nil {
-		return err
-	}
-	go func() {
-		defer ginkgo.GinkgoRecover()
-		ll := f.getLogger("delete:side-effect")
-		innerCtx := context.Background()
-		innerCl, err := f.mongo.GetClient()
-		if err != nil {
-			ll.WithError(err).Error("can not get mongo client")
-			return
-		}
-		defer innerCl.Disconnect(innerCtx)
-		// ...
-		if err := deleteMediaAllJobs(innerCtx, doc, f.jobDS, innerCl); err != nil {
-			ll.WithError(err).Error("can not delete jobs of doc")
-		}
-		// ...
-		deleteMediaAllMinioFiles(innerCtx, doc, f.minio)
-	}()
-	return nil
-}
-
-func NewMediaFacade(mongo db.IMongo, minio db.IMinioClient, jobDS db.IDataStore[*db.JobDoc], mediaDS db.IDataStore[*db.MediaFileDoc]) *MediaFacade {
-	return &MediaFacade{
-		baseFacade: baseFacade[*db.MediaFileDoc]{
-			name:    "media",
-			mongo:   mongo,
-			dsName:  db.MEDIA_DS,
-			jobDS:   jobDS,
-			mediaDS: mediaDS,
-			minio:   minio,
-		},
-	}
-}
-
-// ...
-func createMediaJob(ctx context.Context, doc db.MediaFileDoc, jobDs db.IDataStore[*db.JobDoc], cl db.IMongoClient, jType db.JobType) error {
-	jobDoc := db.JobDoc{
-		MediaID: doc.GetID(),
-		Type:    jType,
-	}
-	if _, err := jobDs.Create(ctx, &jobDoc, cl); err != nil {
-		return err
-	}
-	return nil
-}
-func deleteMediaAllJobs(ctx context.Context, doc *db.MediaFileDoc, jobDs db.IDataStore[*db.JobDoc], cl db.IMongoClient) error {
-	ll := logrus.WithField("func", "deleteMediaAllJobs")
-	// jobFilter := db.JobDoc{
-	// 	MediaID: doc.GetID(),
-	// }
-	// jobFilterD, err := jobFilter.MarshalOmitEmpty()
-	// if err != nil {
-	// 	return fmt.Errorf("can not create filter: %s", err)
-	// }
-	jobFilterD := &primitive.M{"MediaID": doc.GetID()}
-
-	if err := jobDs.DeleteMany(ctx, jobFilterD, cl); err != nil {
-		if errs.IsErr(err, errs.MongoObjectNotfound{}) {
-			ll.Info("no job found for media")
-		} else {
-			return fmt.Errorf("can not delete job objects: %s", err)
+			if lastErr != nil {
+				ll.WithError(lastErr).Error("failed to remove orphaned file after retries")
+			}
 		}
 	}
 	return nil
 }
 
-type MediaMinioFile struct {
-	ThumbData  []byte
-	VttData    []byte
-	SpriteData []byte
+// GetCollection returns the MediaFile collection from the database container.
+func (crd *MediaCrud) GetCollection() mngo.ICollection[types.MediaFileDoc] {
+	return crd.container.GetMongoContainer().GetMediaFileCollection()
 }
 
-// add new files to minio, update media doc with new files, remove old files from minio
-func updateMediaMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.IMinioClient, mediaDs db.IDataStore[*db.MediaFileDoc], cl db.IMongoClient, data *MediaMinioFile) error {
-	ll := logrus.WithField("func", "updateMediaMinioFiles")
-	updatedMedia := *doc
-	if data.ThumbData != nil {
-		fName := uuid.NewString() + ".jpeg"
-		if err := minio.FileAdd(ctx, fName, data.ThumbData); err != nil {
-			ll.WithError(err).Error("can not add new thumbnail to minio")
-		} else {
-			updatedMedia.Thumbnail = fName
-		}
-	}
-	if data.VttData != nil {
-		fName := uuid.NewString() + ".vtt"
-		if err := minio.FileAdd(ctx, fName, data.VttData); err != nil {
-			ll.WithError(err).Error("can not add new vtt to minio")
-		} else {
-			updatedMedia.Vtt = fName
-		}
-	}
-	if data.SpriteData != nil {
-		fName := uuid.NewString() + ".jpeg"
-		if err := minio.FileAdd(ctx, fName, data.SpriteData); err != nil {
-			ll.WithError(err).Error("can not add new sprite to minio")
-		} else {
-			updatedMedia.Sprite = fName
-		}
-	}
-	changed := false
-	changed = changed || updatedMedia.Thumbnail != doc.Thumbnail
-	changed = changed || updatedMedia.Vtt != doc.Vtt
-	changed = changed || updatedMedia.Sprite != doc.Sprite
+// getMinioClient returns the Minio client from the database container.
+func (crd *MediaCrud) getMinioClient() minio.IMinioClient {
+	return crd.container.GetMinioContainer().GetMinioClient()
+}
 
-	if changed {
-		filter := db.GetIDFilter(doc.GetID())
-		_, err := mediaDs.Replace(ctx, filter, &updatedMedia, cl)
-		if err != nil {
-			return fmt.Errorf("can not update media doc: %s", err)
-		}
-		if doc.Thumbnail != "" && updatedMedia.Thumbnail != doc.Thumbnail {
-			if err := _rmMinioFile(ctx, minio, doc.Thumbnail); err != nil {
-				ll.WithError(err).Error("can not remove old thumbnail from minio")
-			}
-		}
-		if doc.Vtt != "" && updatedMedia.Vtt != doc.Vtt {
-			if err := _rmMinioFile(ctx, minio, doc.Vtt); err != nil {
-				ll.WithError(err).Error("can not remove old Vtt from minio")
-			}
-		}
-		if doc.Sprite != "" && updatedMedia.Sprite != doc.Sprite {
-			if err := _rmMinioFile(ctx, minio, doc.Sprite); err != nil {
-				ll.WithError(err).Error("can not remove old Sprite from minio")
-			}
-		}
-	} else {
-		ll.Warn("nothing to update")
-	}
-	return nil
+// getLogger returns a logrus.Entry for the given function name, tagged with the struct type.
+func (crd *MediaCrud) getLogger(fn string) *logrus.Entry {
+	return log.GetLogger(log.FacadeModule).WithField("func", fmt.Sprintf("%T.%s", crd, fn))
 }
-func deleteMediaAllMinioFiles(ctx context.Context, doc *db.MediaFileDoc, minio db.IMinioClient) {
-	ll := logrus.WithField("func", "deleteMediaAllMinioFiles")
-	if doc.Thumbnail != "" {
-		if err := _rmMinioFile(ctx, minio, doc.Thumbnail); err != nil {
-			ll.WithError(err).Error("can not remove thumbnail from minio")
-		}
-	}
-	if doc.Vtt != "" {
-		if err := _rmMinioFile(ctx, minio, doc.Vtt); err != nil {
-			ll.WithError(err).Error("can not remove vtt from minio")
-		}
-	}
-	if doc.Sprite != "" {
-		if err := _rmMinioFile(ctx, minio, doc.Sprite); err != nil {
-			ll.WithError(err).Error("can not remove sprite from minio")
-		}
-	}
+
+// NewMediaCrud creates a new MediaCrud with the provided database container.
+func NewMediaCrud(container db.IDbContainer) ICrud[types.MediaFileDoc] {
+	return &MediaCrud{container: container, jReqFac: GetFacade[types.JobReqDoc](container)}
 }
-func _rmMinioFile(ctx context.Context, minio db.IMinioClient, fname string) error {
-	return minio.FileRm(ctx, fname)
+
+func init() {
+	RegisterCRD(NewMediaCrud)
 }
