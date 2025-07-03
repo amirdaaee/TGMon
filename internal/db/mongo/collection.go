@@ -1,7 +1,6 @@
 package mongo
 
 import (
-	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/chenmingyong0423/go-mongox/v2"
 	"github.com/chenmingyong0423/go-mongox/v2/aggregator"
 	"github.com/chenmingyong0423/go-mongox/v2/creator"
@@ -24,7 +23,7 @@ const (
 // The interface is generic and works with any type that implements IMongoDoc.
 //
 //go:generate mockgen -source=collection.go -destination=../../../mocks/db/mongo/collection.go -package=mocks
-type ICollection[T types.IMongoDoc] interface {
+type ICollection[T any] interface {
 	// Aggregator returns an aggregator for building and executing aggregation pipelines.
 	Aggregator() aggregator.IAggregator[T]
 
@@ -44,12 +43,12 @@ type ICollection[T types.IMongoDoc] interface {
 // Collection implements the ICollection interface and provides MongoDB collection operations.
 // It wraps a go-mongox Collection to provide a consistent interface for database operations.
 // The struct is generic and can work with any document type that implements IMongoDoc.
-type Collection[T types.IMongoDoc] struct {
+type Collection[T any] struct {
 	xColl *mongox.Collection[T]
 }
 
 // Compile-time check to ensure Collection implements ICollection
-var _ ICollection[types.IMongoDoc] = (*Collection[types.IMongoDoc])(nil)
+var _ ICollection[any] = (*Collection[any])(nil)
 
 // Aggregator returns an aggregator instance for building and executing aggregation pipelines.
 // This provides access to MongoDB's aggregation framework through the go-mongox library.
