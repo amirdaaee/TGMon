@@ -56,10 +56,6 @@ func NewJobReqCrud(container db.IDbContainer) ICrud[types.JobReqDoc] {
 	return &JobReqCrud{container: container}
 }
 
-func init() {
-	RegisterCRD(NewJobReqCrud)
-}
-
 // JobResCrud implements ICrud for JobResDoc, providing CRUD hooks and collection access.
 type JobResCrud struct {
 	container db.IDbContainer
@@ -184,9 +180,6 @@ func (crd *JobResCrud) updateMediaDocument(ctx context.Context, mediaID bson.Obj
 
 // NewJobResCrud creates a new JobResCrud with the provided database container.
 func NewJobResCrud(container db.IDbContainer) ICrud[types.JobResDoc] {
-	return &JobResCrud{container: container, jReqFac: GetFacade[types.JobReqDoc](container)}
-}
-
-func init() {
-	RegisterCRD(NewJobResCrud)
+	jobReqFacade := NewFacade(NewJobReqCrud(container))
+	return &JobResCrud{container: container, jReqFac: jobReqFacade}
 }

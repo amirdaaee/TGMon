@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/amirdaaee/TGMon/internal/facade"
-	"github.com/amirdaaee/TGMon/internal/types"
 	mDb "github.com/amirdaaee/TGMon/mocks/db"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -19,23 +18,6 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-var _ = Describe("GetFacade", func() {
-	It("should return a facade for media file doc", func() {
-		fac := facade.GetFacade[types.MediaFileDoc](nil)
-		Expect(fac).ToNot(BeNil())
-		Expect(fac).To(BeAssignableToTypeOf(&facade.BaseFacade[types.MediaFileDoc]{}))
-	})
-	It("should return a facade for job req doc", func() {
-		fac := facade.GetFacade[types.JobReqDoc](nil)
-		Expect(fac).ToNot(BeNil())
-		Expect(fac).To(BeAssignableToTypeOf(&facade.BaseFacade[types.JobReqDoc]{}))
-	})
-	It("should return a facade for job res doc", func() {
-		fac := facade.GetFacade[types.JobResDoc](nil)
-		Expect(fac).ToNot(BeNil())
-		Expect(fac).To(BeAssignableToTypeOf(&facade.BaseFacade[types.JobResDoc]{}))
-	})
-})
 var _ = Describe("BaseFacade", func() {
 	type testDoc struct{}
 	var (
@@ -76,7 +58,6 @@ var _ = Describe("BaseFacade", func() {
 	})
 	Describe("CreateOne", func() {
 		type testCase struct {
-			desc          string
 			nilDoc        bool
 			expectPreErr  bool
 			expectPostErr bool
@@ -163,7 +144,6 @@ var _ = Describe("BaseFacade", func() {
 	})
 	Describe("DeleteOne", func() {
 		type testCase struct {
-			desc           string
 			nilQuery       bool
 			findOneErr     bool
 			expectPreErr   bool
@@ -330,7 +310,6 @@ var _ = Describe("BaseFacade", func() {
 	})
 	Describe("Read", func() {
 		type testCase struct {
-			desc      string
 			finderErr bool
 			nilFilter bool
 			expectErr bool

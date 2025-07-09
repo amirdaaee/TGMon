@@ -4,10 +4,7 @@ package facade
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"sync"
 
-	"github.com/amirdaaee/TGMon/internal/db"
 	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/sirupsen/logrus"
@@ -125,39 +122,6 @@ func (f *BaseFacade[T]) getLogger(fn string) *logrus.Entry {
 // getCollection returns the collection for type T from the underlying CRUD implementation.
 func (f *BaseFacade[T]) getCollection() mngo.ICollection[T] {
 	return f.crd.GetCollection()
-}
-
-// --- Registration-based CRD factory ---
-
-var (
-	crdRegistry   = make(map[reflect.Type]func(db.IDbContainer) any)
-	crdRegistryMu sync.RWMutex
-)
-
-// RegisterCRD registers a CRD constructor for a type T in the global registry.
-func RegisterCRD[T any](ctor func(db.IDbContainer) ICrud[T]) {
-	t := reflect.TypeOf((*T)(nil)).Elem()
-	crdRegistryMu.Lock()
-	defer crdRegistryMu.Unlock()
-	crdRegistry[t] = func(container db.IDbContainer) any { return ctor(container) }
-}
-
-// GetCRD returns a registered CRD for type T, or panics if not found.
-func GetCRD[T any](container db.IDbContainer) ICrud[T] {
-	t := reflect.TypeOf((*T)(nil)).Elem()
-	crdRegistryMu.RLock()
-	ctor, ok := crdRegistry[t]
-	crdRegistryMu.RUnlock()
-	if !ok {
-		logrus.Fatalf("unknown datastore type %v", t)
-	}
-	return ctor(container).(ICrud[T])
-}
-
-// GetFacade returns a new facade for type T using the registered CRD.
-func GetFacade[T any](container db.IDbContainer) IFacade[T] {
-	crd := GetCRD[T](container)
-	return NewFacade(crd)
 }
 
 // NewFacade returns a new BaseFacade for the given CRD implementation.

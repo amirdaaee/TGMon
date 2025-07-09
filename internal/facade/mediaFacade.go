@@ -98,9 +98,6 @@ func (crd *MediaCrud) getLogger(fn string) *logrus.Entry {
 
 // NewMediaCrud creates a new MediaCrud with the provided database container.
 func NewMediaCrud(container db.IDbContainer) ICrud[types.MediaFileDoc] {
-	return &MediaCrud{container: container, jReqFac: GetFacade[types.JobReqDoc](container)}
-}
-
-func init() {
-	RegisterCRD(NewMediaCrud)
+	jobReqFacade := NewFacade(NewJobReqCrud(container))
+	return &MediaCrud{container: container, jReqFac: jobReqFacade}
 }
