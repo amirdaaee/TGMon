@@ -51,10 +51,10 @@ func (c *fileCache[T]) GetOrSet(key string, fn func() (T, error)) (T, error) {
 	ll := c.getLogger("GetOrSet").WithField("key", c.getCacheKey(key))
 	var value T
 	if v, err := c.Get(key); err == nil {
-		ll.Info("cache hit")
+		ll.Debug("cache hit")
 		return v, nil
 	} else {
-		ll.Infof("cache miss: (%s)", err)
+		ll.Debugf("cache miss: (%s)", err)
 		v, err := fn()
 		if err != nil {
 			return v, err
