@@ -16,6 +16,7 @@ const (
 	MediaFileDoc__VttField       = "Vtt"
 	MediaFileDoc__SpriteField    = "Sprite"
 	MediaFileDoc__ThumbnailField = "Thumbnail"
+	MediaFileDoc__FileIDField    = "Meta.FileID"
 )
 
 type MediaFileMeta struct {

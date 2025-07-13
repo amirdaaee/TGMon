@@ -30,10 +30,15 @@ var _ ICrud[types.MediaFileDoc] = (*MediaCrud)(nil)
 
 // PreCreate checks for duplicates before creating a MediaFileDoc. Returns an error if the document is nil or a duplicate is found.
 func (crd *MediaCrud) PreCreate(ctx context.Context, doc *types.MediaFileDoc) error {
+	ll := crd.getLogger("PreCreate")
 	if doc == nil {
 		return fmt.Errorf("MediaFileDoc is nil")
 	}
-	// TODO: duplicated check (stub)
+	if n, err := crd.GetCollection().Finder().Filter(bsonx.NewD().Add(types.MediaFileDoc__FileIDField, doc.Meta.FileID)).Count(ctx); err != nil {
+		ll.WithError(err).Error("failed to check for duplicates")
+	} else if n > 0 {
+		return ErrFileAlreadyExists
+	}
 	return nil
 }
 
