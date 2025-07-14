@@ -153,7 +153,7 @@ func (mr *MockIFacadeMockRecorder[T]) CreateOne(ctx, doc any) *gomock.Call {
 }
 
 // DeleteOne mocks base method.
-func (m *MockIFacade[T]) DeleteOne(ctx context.Context, filter *bson.D) (*T, error) {
+func (m *MockIFacade[T]) DeleteOne(ctx context.Context, filter bson.D) (*T, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteOne", ctx, filter)
 	ret0, _ := ret[0].(*T)
@@ -182,7 +182,7 @@ func (mr *MockIFacadeMockRecorder[T]) GetCRD() *gomock.Call {
 }
 
 // Read mocks base method.
-func (m *MockIFacade[T]) Read(ctx context.Context, filter *bson.D) ([]*T, error) {
+func (m *MockIFacade[T]) Read(ctx context.Context, filter bson.D) ([]*T, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Read", ctx, filter)
 	ret0, _ := ret[0].([]*T)

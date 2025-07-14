@@ -27,8 +27,8 @@ type ICrud[T any] interface {
 //go:generate mockgen -source=facade.go -destination=../../mocks/facade/facade.go -package=mocks
 type IFacade[T any] interface {
 	CreateOne(ctx context.Context, doc *T) (*T, error)
-	DeleteOne(ctx context.Context, filter *bson.D) (*T, error)
-	Read(ctx context.Context, filter *bson.D) ([]*T, error)
+	DeleteOne(ctx context.Context, filter bson.D) (*T, error)
+	Read(ctx context.Context, filter bson.D) ([]*T, error)
 	GetCRD() ICrud[T]
 }
 
@@ -64,7 +64,7 @@ func (f *BaseFacade[T]) CreateOne(ctx context.Context, doc *T) (*T, error) {
 }
 
 // Read returns documents matching the filter from the collection.
-func (f *BaseFacade[T]) Read(ctx context.Context, filter *bson.D) ([]*T, error) {
+func (f *BaseFacade[T]) Read(ctx context.Context, filter bson.D) ([]*T, error) {
 	ll := f.getLogger("Read")
 	ll.Info("Reading documents")
 	docs, err := f.getCollection().Finder().Filter(filter).Find(ctx)
@@ -75,7 +75,7 @@ func (f *BaseFacade[T]) Read(ctx context.Context, filter *bson.D) ([]*T, error) 
 }
 
 // DeleteOne deletes a single document matching the filter after running pre-delete hooks. Post-delete hooks run in a goroutine; errors are logged but not returned.
-func (f *BaseFacade[T]) DeleteOne(ctx context.Context, filter *bson.D) (*T, error) {
+func (f *BaseFacade[T]) DeleteOne(ctx context.Context, filter bson.D) (*T, error) {
 	ll := f.getLogger("DeleteOne")
 	ll.Info("Deleting document")
 	fnd := f.getCollection().Finder().Filter(filter)

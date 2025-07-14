@@ -32,14 +32,14 @@ var _ = Describe("BaseFacade", func() {
 		ctrl               *gomock.Controller
 		fac                facade.IFacade[testDoc]
 		tDoc               *testDoc
-		testQ              *bson.D
+		testQ              bson.D
 	)
 	// ...
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		testContext = context.Background()
 		tDoc = &testDoc{}
-		testQ = &bson.D{}
+		testQ = bson.D{}
 		// ...
 		mockCreator = mMongoX.NewMockICreator[testDoc](ctrl)
 		mockDeleter = mMongoX.NewMockIDeleter[testDoc](ctrl)

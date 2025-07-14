@@ -117,9 +117,9 @@ func (crd *JobResCrud) getLogger(fn string) *logrus.Entry {
 }
 
 // getJobReqQ constructs a BSON query for the JobReqID in the given JobResDoc.
-func getJobReqQ(doc *types.JobResDoc) *bson.D {
+func getJobReqQ(doc *types.JobResDoc) bson.D {
 	q := query.Id(doc.JobReqID)
-	return &q
+	return q
 }
 
 // getJobRequest retrieves the related JobReqDoc for the given JobResDoc. Returns an error if not found or multiple found.
