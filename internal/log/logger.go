@@ -12,6 +12,7 @@ const (
 	TlgModule    LogModule = "tlg"
 	BotModule    LogModule = "bot"
 	StreamModule LogModule = "stream"
+	WebModule    LogModule = "web"
 )
 
 func GetLogger(module LogModule) *logrus.Entry {

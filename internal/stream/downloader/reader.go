@@ -3,6 +3,7 @@ package downloader
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/amirdaaee/TGMon/internal/log"
@@ -11,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const defaultPartSize = 512 * 1024 // 512 kb
+const defaultPartSize = 256 * 1024 // 512 kb
 const maxFloodWaitSec = 5
 
 type schema interface {
@@ -29,9 +30,9 @@ type Block struct {
 	partSize int
 }
 
-func (b Block) Last() bool {
-	return len(b.data) < b.partSize
-}
+//	func (b Block) Last() bool {
+//		return len(b.data) < b.partSize
+//	}
 func (b Block) Data() []byte {
 	return b.data
 }
@@ -41,6 +42,7 @@ type Reader struct {
 	partSize  int    // immutable
 	offset    int64
 	offsetMux sync.Mutex
+	fileSize  int64
 }
 
 func (r *Reader) Next(ctx context.Context, client *tg.Client) (*Block, error) {
@@ -54,7 +56,15 @@ func (r *Reader) Next(ctx context.Context, client *tg.Client) (*Block, error) {
 
 func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limit int) (*Block, error) {
 	ll := r.getLogger("next")
-	for {
+	for { // for floodWait and timeout
+		if ctx.Err() != nil {
+			return nil, nil
+		}
+		limit = r.adjustLimit(limit, offset)
+		ll.Debugf("limit=%d, offset=%d, fileSize=%d", limit, offset, r.fileSize)
+		if limit <= 0 {
+			return nil, io.EOF
+		}
 		ch, err := r.sch.Chunk(ctx, client, offset, limit)
 		if d, ok := tgerr.AsFloodWait(err); ok {
 			sec := d.Seconds()
@@ -82,11 +92,27 @@ func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limi
 	}
 }
 
+func (r *Reader) adjustLimit(limit int, offset int64) int {
+	ll := r.getLogger("adjustLimit")
+	limitDiv := 4 * 1024
+	if offset+int64(limit) > r.fileSize {
+		limit = int(r.fileSize - offset)
+		limit = limit - (limit % limitDiv)
+		for {
+			if limit <= 0 || 1048576%limit == 0 {
+				break
+			}
+			limit += limitDiv
+		}
+		ll.Debugf("limit adjusted to %d", limit)
+	}
+	return limit
+}
 func (r *Reader) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", r, fn))
 }
 
-func NewReader(offset int64, loc *tg.InputDocumentFileLocation) *Reader {
+func NewReader(offset int64, loc *tg.InputDocumentFileLocation, fileSize int64) *Reader {
 	// TODO: client as arg in Next function and passed to master
 	master := master{
 		precise:  false,
@@ -97,5 +123,6 @@ func NewReader(offset int64, loc *tg.InputDocumentFileLocation) *Reader {
 		sch:      master,
 		partSize: defaultPartSize,
 		offset:   offset,
+		fileSize: fileSize,
 	}
 }

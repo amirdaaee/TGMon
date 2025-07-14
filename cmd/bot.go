@@ -16,13 +16,15 @@ var botCmd = &cobra.Command{
 	Short: "Start TGmon bot",
 	Run: func(cmd *cobra.Command, args []string) {
 		setupLogger()
-		ll := logrus.WithField("at", "main")
+		ll := logrus.WithField("at", "bot")
 		ll.Info("starting bot")
+		// ...
 		dbContainer, err := buildDbContainer()
 		if err != nil {
 			logrus.WithError(err).Fatal("can not build db container")
 		}
 		ll.Info("db container built")
+		// ...
 		tgClient, err := buildTgClient()
 		if err != nil {
 			logrus.WithError(err).Fatal("can not build tg client")
@@ -34,13 +36,14 @@ var botCmd = &cobra.Command{
 			logrus.WithError(err).Fatal("can not build worker pool")
 		}
 		// ...
+		mediafacade := buildMediaFacade(dbContainer, wp)
+		ll.Info("media facade built")
+		// ...
 		myBot, err := bot.NewBot(tgClient)
 		if err != nil {
 			logrus.WithError(err).Fatal("can not build bot")
 		}
 		ll.Info("bot built")
-		// ...
-		mediafacade := buildMediaFacade(dbContainer, wp)
 		// ...
 		hndler := bot.NewHandler(mediafacade, config.Config().ChannelID, wp)
 		ll.Info("handler built")

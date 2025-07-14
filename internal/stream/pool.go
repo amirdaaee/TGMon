@@ -17,6 +17,7 @@ import (
 //go:generate mockgen -source=pool.go -destination=../../mocks/stream/pool.go -package=mocks
 type IWorkerPool interface {
 	GetNextWorker() IWorker
+	Stream(ctx context.Context, msgID int, offset int64, writer io.Writer) error
 }
 type workerPool struct {
 	Bots     []IWorker
@@ -47,7 +48,7 @@ func (wp *workerPool) Stream(ctx context.Context, msgID int, offset int64, write
 	}
 	dataChan := make(chan *downloader.Block, 10)
 	loc := doc.AsInputDocumentFileLocation()
-	reader := downloader.NewReader(offset, loc)
+	reader := downloader.NewReader(offset, loc, doc.GetSize())
 	errG, ctx := errgroup.WithContext(ctx)
 	errG.Go(func() error {
 		ll.Debug("starting stream")
@@ -71,14 +72,20 @@ func (wp *workerPool) Stream(ctx context.Context, msgID int, offset int64, write
 			return fmt.Errorf("error streaming: %w", err)
 		}
 	}
+	ll.Debug("stream finished")
 	return nil
 }
 func (wp *workerPool) writeBuffer(ctx context.Context, writer io.Writer, dataChan <-chan *downloader.Block) error {
+	ll := wp.getLogger("writeBuffer")
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case block := <-dataChan:
+			if block == nil {
+				ll.Debug("nil block received. stopping write buffer")
+				return nil
+			}
 			if _, err := writer.Write(block.Data()); err != nil {
 				return fmt.Errorf("error writing to buffer: %w", err)
 			}

@@ -1,98 +1,92 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
-	"github.com/amirdaaee/TGMon/internal/bot"
 	"github.com/amirdaaee/TGMon/internal/db"
+	"github.com/amirdaaee/TGMon/internal/facade"
+	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/stream"
+	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
 	"github.com/gin-gonic/gin"
 	range_parser "github.com/quantumsheep/range-parser"
+	"github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-type mediaMetaData struct {
-	start         int64
-	end           int64
-	contentLength int64
-	mimeType      string
-	fileSize      int64
-	filename      string
+type Streamhandler struct {
+	dbContainer db.IDbContainer
+	mediaFacade facade.IFacade[types.MediaFileDoc]
+	streamPool  stream.IWorkerContainer
 }
 
-func steam(ctx *gin.Context, mediaReq streamReq, wp *bot.WorkerPool, mongo *db.Mongo, chunckSize int64, profileFile string) error {
-	r := ctx.Request
-	mediaID := mediaReq.ID
-	var medDoc db.MediaFileDoc
-	// ...
-	if err := mongo.DocGetById(ctx, mediaID, &medDoc, nil); err != nil {
-		return fmt.Errorf("error DocGetById: %s", err)
+func (s *Streamhandler) Stream(g *gin.Context) {
+	ll := s.getLogger("Stream")
+	r := g.Request
+	var req StreamReq
+	if err := g.ShouldBindUri(&req); err != nil {
+		g.AbortWithError(http.StatusBadRequest, err)
+		return
 	}
-	metaData, err := getMetaData(ctx, medDoc)
+	media := s.getMedia(g, req.ID)
+	if media == nil {
+		// s.getMedia should have already aborted the request with error
+		return
+	}
+	meta, err := s.getStreamMetaData(r, *media)
 	if err != nil {
-		return fmt.Errorf("error getMetaData: %s", err)
+		g.AbortWithError(http.StatusInternalServerError, err)
+		return
 	}
-	status, headers := getStreamHeaders(ctx, metaData)
-	//...
+	status, headers := s.getStreamHeaders(r, meta, g.Query("d") == "true")
+	g.Writer.WriteHeader(status)
+	for k, v := range headers {
+		g.Header(k, v)
+	}
 	if r.Method == "HEAD" {
-		ctx.Writer.WriteHeader(status)
-		for k, v := range headers {
-			ctx.Header(k, v)
-		}
+		return
+	}
+	wp := s.streamPool.GetWorkerPool()
+	if err := wp.Stream(g.Request.Context(), media.MessageID, meta.Start, g.Writer); err != nil {
+		ll.WithError(err).Error("error streaming media")
+	}
+	ll.Debug("stream finished")
+}
+func (s *Streamhandler) getMedia(g *gin.Context, id string) *types.MediaFileDoc {
+	if id == "" {
+		g.AbortWithError(http.StatusBadRequest, errors.New("mediaID is required"))
 		return nil
 	}
-
-	worker := wp.SelectNextWorker()
-	if worker == nil {
-		return fmt.Errorf("no worker is available")
-	}
-	docMsg, err := worker.GetChannelMessages(ctx, []int{medDoc.MessageID})
+	idObj, err := bson.ObjectIDFromHex(id)
 	if err != nil {
-		return fmt.Errorf("error GetMessages: %s", err)
+		g.AbortWithError(http.StatusBadRequest, fmt.Errorf("error parsing mediaID: %w", err))
+		return nil
 	}
-	doc := bot.TelegramDocument{}
-	doc.FromMessage(docMsg.Messages[0])
-	lr, err := bot.NewTelegramReader(ctx, worker, &doc, metaData.start, metaData.end, metaData.contentLength, chunckSize, profileFile)
+	media, err := s.mediaFacade.Read(g.Request.Context(), query.Id(idObj))
 	if err != nil {
-		return fmt.Errorf("error NewTelegramReader: %s", err)
-
+		g.AbortWithError(http.StatusInternalServerError, err)
+		return nil
 	}
-	go lr.StartReading()
-	// DONT return error after this
-	ctx.DataFromReader(status, metaData.contentLength, metaData.mimeType, lr, headers)
-	return nil
+	if len(media) == 0 {
+		g.AbortWithError(http.StatusNotFound, fmt.Errorf("media (%s) not found", id))
+		return nil
+	}
+	return media[0]
 }
-func getStreamHeaders(ctx *gin.Context, meta *mediaMetaData) (int, map[string]string) {
-	r := ctx.Request
-	rangeHeader := r.Header.Get("Range")
-	head := map[string]string{}
-	var status int
-	if rangeHeader == "" {
-		status = http.StatusOK
-	} else {
-		status = http.StatusPartialContent
-		head["Content-Range"] = fmt.Sprintf("bytes %d-%d/%d", meta.start, meta.end, meta.fileSize)
-	}
-	disposition := "inline"
-	if ctx.Query("d") == "true" {
-		disposition = "attachment"
-	}
-	head["Content-Disposition"] = fmt.Sprintf("%s; filename=\"%s\"", disposition, meta.filename)
-	head["Content-Type"] = meta.mimeType
-	head["Content-Length"] = strconv.FormatInt(meta.contentLength, 10)
-
-	return status, head
-}
-func getMetaData(ctx *gin.Context, media db.MediaFileDoc) (*mediaMetaData, error) {
-	r := ctx.Request
-
+func (s *Streamhandler) getStreamMetaData(req *http.Request, media types.MediaFileDoc) (*StreamMetaData, error) {
+	ll := s.getLogger("getStreamMetaData")
 	var start, end int64
-	rangeHeader := r.Header.Get("Range")
+	rangeHeader := req.Header.Get("Range")
+	fileSize := media.Meta.FileSize
 	if rangeHeader == "" {
 		start = 0
-		end = media.FileSize - 1
+		end = fileSize - 1
 	} else {
-		ranges, err := range_parser.Parse(media.FileSize, r.Header.Get("Range"))
+		ranges, err := range_parser.Parse(fileSize, rangeHeader)
 		if err != nil {
 			return nil, err
 		}
@@ -100,16 +94,51 @@ func getMetaData(ctx *gin.Context, media db.MediaFileDoc) (*mediaMetaData, error
 		end = ranges[0].End
 	}
 	contentLength := end - start + 1
-	metaData := mediaMetaData{
-		start:         start,
-		end:           end,
-		contentLength: contentLength,
-		mimeType:      media.MimeType,
-		fileSize:      media.FileSize,
-		filename:      media.FileName,
+	metaData := StreamMetaData{
+		Start:         start,
+		End:           end,
+		ContentLength: contentLength,
+		MimeType:      media.Meta.MimeType,
+		FileSize:      media.Meta.FileSize,
+		Filename:      media.Meta.FileName,
 	}
-	if metaData.mimeType == "" {
-		metaData.mimeType = "application/octet-stream"
+
+	if metaData.MimeType == "" {
+		metaData.MimeType = "application/octet-stream"
 	}
+	ll.Debugf("meta data: %+v", metaData)
 	return &metaData, nil
+}
+func (s *Streamhandler) getStreamHeaders(req *http.Request, meta *StreamMetaData, download bool) (int, map[string]string) {
+	ll := s.getLogger("getStreamHeaders")
+	rangeHeader := req.Header.Get("Range")
+	head := map[string]string{}
+	var status int
+	if rangeHeader == "" {
+		status = http.StatusOK
+	} else {
+		status = http.StatusPartialContent
+		head["Content-Range"] = fmt.Sprintf("bytes %d-%d/%d", meta.Start, meta.End, meta.FileSize)
+	}
+	disposition := ""
+	if download {
+		disposition = "attachment"
+	} else {
+		disposition = "inline"
+	}
+	head["Content-Disposition"] = fmt.Sprintf("%s; filename=\"%s\"", disposition, meta.Filename)
+	head["Content-Type"] = meta.MimeType
+	head["Content-Length"] = strconv.FormatInt(meta.ContentLength, 10)
+	ll.Debugf("stream response headers: %+v", head)
+	return status, head
+}
+func (s *Streamhandler) getLogger(fn string) *logrus.Entry {
+	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", s, fn))
+}
+func NewStreamHandler(dbContainer db.IDbContainer, mediaFacade facade.IFacade[types.MediaFileDoc], wp stream.IWorkerContainer) *Streamhandler {
+	return &Streamhandler{
+		dbContainer: dbContainer,
+		mediaFacade: mediaFacade,
+		streamPool:  wp,
+	}
 }

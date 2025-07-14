@@ -3,7 +3,6 @@ package stream
 import (
 	"context"
 	"fmt"
-	"io"
 	"sync"
 
 	"github.com/amirdaaee/TGMon/internal/log"
@@ -91,17 +90,17 @@ func (w *worker) GetDoc(ctx context.Context, messageID int) (*tg.Document, error
 	return &doc, nil
 }
 func (w *worker) Stream(ctx context.Context, reader *downloader.Reader, writer chan *downloader.Block) error {
-	ll := w.getLogger("Stream")
+	// ll := w.getLogger("Stream")
 	for {
 		block, err := reader.Next(ctx, w.getTgApi())
 		if err != nil {
 			return fmt.Errorf("error getting block: %w", err)
 		}
 		writer <- block
-		if block.Last() {
-			ll.Debug("last block received")
-			return io.EOF
-		}
+		// if block.Last() {
+		// 	ll.Debug("last block received")
+		// 	return io.EOF
+		// }
 	}
 }
 func (w *worker) getChannel(ctx context.Context) (tg.InputChannelClass, error) {
