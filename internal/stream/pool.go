@@ -1,12 +1,17 @@
 package stream
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/stream/downloader"
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:generate mockgen -source=pool.go -destination=../../mocks/stream/pool.go -package=mocks
@@ -32,6 +37,68 @@ func (wp *workerPool) GetNextWorker() IWorker {
 	worker := wp.Bots[index]
 	wp.getLogger("GetNextWorker").Debugf("using worker (%d/%d)", index+1, len(wp.Bots))
 	return worker
+}
+func (wp *workerPool) Stream(ctx context.Context, msgID int, offset int64, writer io.Writer) error {
+	ll := wp.getLogger("Stream")
+	wrkr := wp.GetNextWorker()
+	doc, err := wrkr.GetDoc(ctx, msgID)
+	if err != nil {
+		return fmt.Errorf("error getting doc: %w", err)
+	}
+	dataChan := make(chan *downloader.Block, 10)
+	loc := doc.AsInputDocumentFileLocation()
+	reader := downloader.NewReader(offset, loc)
+	errG, ctx := errgroup.WithContext(ctx)
+	errG.Go(func() error {
+		ll.Debug("starting stream")
+		if err := wp.startStream(ctx, dataChan, reader); err != nil {
+			return fmt.Errorf("error starting stream: %w", err)
+		}
+		return nil
+	})
+	errG.Go(func() error {
+		ll.Debug("starting write buffer")
+		if err := wp.writeBuffer(ctx, writer, dataChan); err != nil {
+			return fmt.Errorf("error writing buffer: %w", err)
+		}
+		return nil
+	})
+	if err := errG.Wait(); err != nil {
+		if errors.Is(err, io.EOF) {
+			ll.Debug("end of file reached")
+			return nil
+		} else {
+			return fmt.Errorf("error streaming: %w", err)
+		}
+	}
+	return nil
+}
+func (wp *workerPool) writeBuffer(ctx context.Context, writer io.Writer, dataChan <-chan *downloader.Block) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case block := <-dataChan:
+			if _, err := writer.Write(block.Data()); err != nil {
+				return fmt.Errorf("error writing to buffer: %w", err)
+			}
+		}
+	}
+}
+func (wp *workerPool) startStream(ctx context.Context, dataChan chan *downloader.Block, reader *downloader.Reader) error {
+	ll := wp.getLogger("startStream")
+	defer close(dataChan)
+	for {
+		wrkr := wp.GetNextWorker()
+		if err := wrkr.Stream(ctx, reader, dataChan); err != nil {
+			if errors.Is(err, &downloader.ErrFloodWaitTooLong{}) {
+				ll.Warn("flood wait. using next worker")
+				continue
+			} else {
+				return fmt.Errorf("error streaming: %w", err)
+			}
+		}
+	}
 }
 func (wp *workerPool) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", wp, fn))

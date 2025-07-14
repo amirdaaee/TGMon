@@ -16,7 +16,7 @@ import (
 
 //go:generate mockgen -source=handler.go -destination=../../mocks/bot/handler.go -package=mocks
 type IHandler interface {
-	Register(b *bot)
+	Register(b *Bot)
 }
 type handler struct {
 	channelID       int64
@@ -24,7 +24,7 @@ type handler struct {
 	workerContainer stream.IWorkerContainer
 }
 
-func (h *handler) Register(b *bot) {
+func (h *handler) Register(b *Bot) {
 	ll := h.getLogger("Register")
 	ll.Info("registering handler")
 	dispatcher := h.getDispatcher(b)
@@ -76,7 +76,7 @@ func (h *handler) sendSuccessMsg(ctx *ext.Context, u *ext.Update, doc *types.Med
 	}
 	return nil
 }
-func (h *handler) getDispatcher(b *bot) dispatcher.Dispatcher {
+func (h *handler) getDispatcher(b *Bot) dispatcher.Dispatcher {
 	return b.cl.GetClient().Dispatcher
 }
 

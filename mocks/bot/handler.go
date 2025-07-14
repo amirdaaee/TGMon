@@ -12,6 +12,7 @@ package mocks
 import (
 	reflect "reflect"
 
+	bot "github.com/amirdaaee/TGMon/internal/bot"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -40,7 +41,7 @@ func (m *MockIHandler) EXPECT() *MockIHandlerMockRecorder {
 }
 
 // Register mocks base method.
-func (m *MockIHandler) Register(b *bot) {
+func (m *MockIHandler) Register(b *bot.Bot) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Register", b)
 }

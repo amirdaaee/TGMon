@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	downloader "github.com/amirdaaee/TGMon/internal/stream/downloader"
 	tg "github.com/gotd/td/tg"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -69,4 +70,18 @@ func (m *MockIWorker) GetThumbnail(ctx context.Context, messageID int) ([]byte, 
 func (mr *MockIWorkerMockRecorder) GetThumbnail(ctx, messageID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetThumbnail", reflect.TypeOf((*MockIWorker)(nil).GetThumbnail), ctx, messageID)
+}
+
+// Stream mocks base method.
+func (m *MockIWorker) Stream(ctx context.Context, reader *downloader.Reader, writer chan *downloader.Block) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Stream", ctx, reader, writer)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Stream indicates an expected call of Stream.
+func (mr *MockIWorkerMockRecorder) Stream(ctx, reader, writer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stream", reflect.TypeOf((*MockIWorker)(nil).Stream), ctx, reader, writer)
 }

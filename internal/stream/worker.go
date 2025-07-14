@@ -3,18 +3,23 @@ package stream
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 
+	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/stream/downloader"
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	"github.com/celestix/gotgproto"
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/tg"
+	"github.com/sirupsen/logrus"
 )
 
 //go:generate mockgen -source=worker.go -destination=../../mocks/stream/worker.go -package=mocks
 type IWorker interface {
 	GetThumbnail(ctx context.Context, messageID int) ([]byte, error)
 	GetDoc(ctx context.Context, messageID int) (*tg.Document, error)
+	Stream(ctx context.Context, reader *downloader.Reader, writer chan *downloader.Block) error
 }
 type worker struct {
 	cl            tlg.IClient
@@ -84,6 +89,20 @@ func (w *worker) GetDoc(ctx context.Context, messageID int) (*tg.Document, error
 		return nil, fmt.Errorf("error decoding document: %w", err)
 	}
 	return &doc, nil
+}
+func (w *worker) Stream(ctx context.Context, reader *downloader.Reader, writer chan *downloader.Block) error {
+	ll := w.getLogger("Stream")
+	for {
+		block, err := reader.Next(ctx, w.getTgApi())
+		if err != nil {
+			return fmt.Errorf("error getting block: %w", err)
+		}
+		writer <- block
+		if block.Last() {
+			ll.Debug("last block received")
+			return io.EOF
+		}
+	}
 }
 func (w *worker) getChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	w.tgChannelLock.Lock()
@@ -183,6 +202,9 @@ func (w *worker) retrieveChannelMessageDoc(ctx context.Context, messageID int) (
 }
 func (w *worker) cacheNamePrefix(s int) string {
 	return fmt.Sprintf("%d-%d", w.getTg().Self.GetID(), s)
+}
+func (w *worker) getLogger(fn string) *logrus.Entry {
+	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", w, fn))
 }
 func NewWorker(tok string, sessCfg *tlg.SessionConfig, channelID int64, cacheRoot string) (IWorker, error) {
 	cache := NewAccessHashCache(cacheRoot)
