@@ -4,6 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"github.com/amirdaaee/TGMon/internal/config"
 	"github.com/amirdaaee/TGMon/internal/web"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -31,11 +32,21 @@ var webCmd = &cobra.Command{
 		}
 		// ...
 		mediafacade := buildMediaFacade(dbContainer, wp)
+		jobReqFacade := buildJobReqFacade(dbContainer)
+		jobResFacade := buildJobResFacade(dbContainer)
 		ll.Info("media facade built")
 		// ...
 		g := gin.Default()
 		streamHandler := web.NewStreamHandler(dbContainer, mediafacade, wp)
-		web.RegisterRoutes(g, streamHandler)
+		mediaHandler := web.MediaHandler{}
+		jobReqHandler := web.JobReqHandler{}
+		jobResHandler := web.JobResHandler{}
+		hndlrs := web.HandlerContainer{
+			MediaHandler:  web.NewApiHandler(&mediaHandler, mediafacade, "media"),
+			JobReqHandler: web.NewApiHandler(&jobReqHandler, jobReqFacade, "jobReq"),
+			JobResHandler: web.NewApiHandler(&jobResHandler, jobResFacade, "jobRes"),
+		}
+		web.RegisterRoutes(g, streamHandler, hndlrs, config.Config().ApiToken)
 		ll.Warn("starting server")
 		g.Run(":8080")
 	},
@@ -43,14 +54,4 @@ var webCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(webCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// webCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// webCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

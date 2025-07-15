@@ -29,7 +29,7 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 	r := g.Request
 	var req StreamReq
 	if err := g.ShouldBindUri(&req); err != nil {
-		g.AbortWithError(http.StatusBadRequest, err)
+		g.Error(NewHttpError(err, http.StatusBadRequest))
 		return
 	}
 	media := s.getMedia(g, req.ID)
@@ -39,7 +39,7 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 	}
 	meta, err := s.getStreamMetaData(r, *media)
 	if err != nil {
-		g.AbortWithError(http.StatusInternalServerError, err)
+		g.Error(NewHttpError(err, http.StatusInternalServerError))
 		return
 	}
 	status, headers := s.getStreamHeaders(r, meta, g.Query("d") == "true")
@@ -58,21 +58,21 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 }
 func (s *Streamhandler) getMedia(g *gin.Context, id string) *types.MediaFileDoc {
 	if id == "" {
-		g.AbortWithError(http.StatusBadRequest, errors.New("mediaID is required"))
+		g.Error(NewHttpError(errors.New("mediaID is required"), http.StatusBadRequest))
 		return nil
 	}
 	idObj, err := bson.ObjectIDFromHex(id)
 	if err != nil {
-		g.AbortWithError(http.StatusBadRequest, fmt.Errorf("error parsing mediaID: %w", err))
+		g.Error(NewHttpError(fmt.Errorf("error parsing mediaID: %w", err), http.StatusBadRequest))
 		return nil
 	}
-	media, err := s.mediaFacade.Read(g.Request.Context(), query.Id(idObj))
+	media, err := s.mediaFacade.GetCollection().Finder().Filter(query.Id(idObj)).Find(g.Request.Context())
 	if err != nil {
-		g.AbortWithError(http.StatusInternalServerError, err)
+		g.Error(NewHttpError(err, http.StatusInternalServerError))
 		return nil
 	}
 	if len(media) == 0 {
-		g.AbortWithError(http.StatusNotFound, fmt.Errorf("media (%s) not found", id))
+		g.Error(NewHttpError(fmt.Errorf("media (%s) not found", id), http.StatusNotFound))
 		return nil
 	}
 	return media[0]

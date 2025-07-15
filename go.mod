@@ -7,6 +7,7 @@ toolchain go1.23.10
 require (
 	github.com/caarlos0/env/v11 v11.1.0
 	github.com/glebarez/sqlite v1.11.0
+	github.com/go-faster/errors v0.7.1
 	github.com/google/uuid v1.6.0
 	github.com/gotd/td v0.127.0
 	github.com/joho/godotenv v1.5.1
@@ -16,6 +17,7 @@ require (
 	go.uber.org/mock v0.5.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/net v0.41.0
+	golang.org/x/sync v0.15.0
 )
 
 require (
@@ -33,7 +35,6 @@ require (
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/glebarez/go-sqlite v1.22.0 // indirect
-	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/go-faster/jx v1.1.0 // indirect
 	github.com/go-faster/xor v1.0.0 // indirect
 	github.com/go-faster/yaml v0.4.6 // indirect
@@ -61,7 +62,6 @@ require (
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/montanaflynn/stats v0.6.3 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/ogen-go/ogen v1.12.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
@@ -85,7 +85,6 @@ require (
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
 	golang.org/x/mod v0.25.0 // indirect
-	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
 	golang.org/x/tools v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
@@ -107,7 +106,6 @@ require (
 	github.com/minio/minio-go/v7 v7.0.75
 	github.com/quantumsheep/range-parser v1.1.0
 	github.com/sirupsen/logrus v1.9.3
-	go.mongodb.org/mongo-driver v1.15.1
 	go.mongodb.org/mongo-driver/v2 v2.2.2
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/time v0.12.0

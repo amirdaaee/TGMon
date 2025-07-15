@@ -124,7 +124,7 @@ func getJobReqQ(doc *types.JobResDoc) bson.D {
 
 // getJobRequest retrieves the related JobReqDoc for the given JobResDoc. Returns an error if not found or multiple found.
 func (crd *JobResCrud) getJobRequest(ctx context.Context, doc *types.JobResDoc) (*types.JobReqDoc, error) {
-	jobReqD, err := crd.jReqFac.Read(ctx, getJobReqQ(doc))
+	jobReqD, err := crd.jReqFac.GetCollection().Finder().Filter(getJobReqQ(doc)).Find(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get job req doc: %w", err)
 	}

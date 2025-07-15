@@ -85,6 +85,12 @@ func buildWorkerContainer() (stream.IWorkerContainer, error) {
 func buildMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerContainer) facade.IFacade[types.MediaFileDoc] {
 	return facade.NewFacade(facade.NewMediaCrud(dbContainer, workerContainer))
 }
+func buildJobReqFacade(dbContainer db.IDbContainer) facade.IFacade[types.JobReqDoc] {
+	return facade.NewFacade(facade.NewJobReqCrud(dbContainer))
+}
+func buildJobResFacade(dbContainer db.IDbContainer) facade.IFacade[types.JobResDoc] {
+	return facade.NewFacade(facade.NewJobResCrud(dbContainer))
+}
 func setupLogger() {
 	cfg := config.Config()
 	log.Setup(cfg.LogLevel)

@@ -308,41 +308,4 @@ var _ = Describe("BaseFacade", func() {
 			}),
 		)
 	})
-	Describe("Read", func() {
-		type testCase struct {
-			finderErr bool
-			nilFilter bool
-			expectErr bool
-		}
-		DescribeTable("", func(tc testCase) {
-			ctx := testContext
-			filter := testQ
-			if tc.nilFilter {
-				filter = nil
-			}
-			mockFinder.EXPECT().Filter(gomock.AssignableToTypeOf(filter)).Return(mockFinder)
-			if tc.finderErr {
-				mockFinder.EXPECT().Find(ctx).Return(nil, fmt.Errorf("mock find error"))
-			} else {
-				mockFinder.EXPECT().Find(ctx).Return([]*testDoc{tDoc}, nil)
-			}
-			fac = facade.NewFacade(mockCrud)
-			res, err := fac.Read(ctx, filter)
-			if tc.expectErr {
-				Expect(err).To(HaveOccurred())
-			} else {
-				Expect(err).ToNot(HaveOccurred())
-				Expect(res).To(HaveLen(1))
-			}
-		},
-			Entry("should read documents (happy path)", testCase{}),
-			Entry("should return error if finder returns error", testCase{
-				finderErr: true,
-				expectErr: true,
-			}),
-			Entry("should handle nil filter", testCase{
-				nilFilter: true,
-			}),
-		)
-	})
 })

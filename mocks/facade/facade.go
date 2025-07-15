@@ -181,17 +181,16 @@ func (mr *MockIFacadeMockRecorder[T]) GetCRD() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCRD", reflect.TypeOf((*MockIFacade[T])(nil).GetCRD))
 }
 
-// Read mocks base method.
-func (m *MockIFacade[T]) Read(ctx context.Context, filter bson.D) ([]*T, error) {
+// GetCollection mocks base method.
+func (m *MockIFacade[T]) GetCollection() mongo.ICollection[T] {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Read", ctx, filter)
-	ret0, _ := ret[0].([]*T)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "GetCollection")
+	ret0, _ := ret[0].(mongo.ICollection[T])
+	return ret0
 }
 
-// Read indicates an expected call of Read.
-func (mr *MockIFacadeMockRecorder[T]) Read(ctx, filter any) *gomock.Call {
+// GetCollection indicates an expected call of GetCollection.
+func (mr *MockIFacadeMockRecorder[T]) GetCollection() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockIFacade[T])(nil).Read), ctx, filter)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCollection", reflect.TypeOf((*MockIFacade[T])(nil).GetCollection))
 }
