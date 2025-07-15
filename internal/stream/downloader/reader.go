@@ -15,10 +15,6 @@ import (
 const defaultPartSize = 256 * 1024 // 512 kb
 const maxFloodWaitSec = 5
 
-type schema interface {
-	Chunk(ctx context.Context, client *tg.Client, offset int64, limit int) (chunk, error)
-}
-
 type chunk struct {
 	tag  tg.StorageFileTypeClass
 	data []byte

@@ -23,6 +23,10 @@ func (r *RedirectError) Error() string {
 	return "redirect to CDN DC " + strconv.Itoa(r.Redirect.DCID)
 }
 
+type schema interface {
+	Chunk(ctx context.Context, client *tg.Client, offset int64, limit int) (chunk, error)
+}
+
 // master is a master DC download schema.
 // See https://core.telegram.org/api/files#downloading-files.
 type master struct {
