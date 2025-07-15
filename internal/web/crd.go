@@ -12,7 +12,7 @@ import (
 // Package api provides generic API handler logic for CRUD operations using Gin and MongoDB.
 
 type ApiHandler[T any] struct {
-	hndler IHandler[T]
+	hndler ICRDHandler[T]
 	fac    facade.IFacade[T]
 	name   string
 }
@@ -67,11 +67,17 @@ func (a *ApiHandler[T]) HandleDelete(g *gin.Context) {
 func (a *ApiHandler[T]) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	// RegisterRoutes registers CRUD routes for the resource on the given router group.
 	apiG := r.Group(fmt.Sprintf("/%s", a.name))
-	apiG.GET("/", authMiddleware, a.HandleRead)
-	apiG.POST("/", authMiddleware, a.HandleCreate)
-	apiG.DELETE("/:id", authMiddleware, a.HandleDelete)
+	if a.hndler.HasList() {
+		apiG.GET("/", authMiddleware, a.HandleRead)
+	}
+	if a.hndler.HasCreate() {
+		apiG.POST("/", authMiddleware, a.HandleCreate)
+	}
+	if a.hndler.HasDelete() {
+		apiG.DELETE("/:id", authMiddleware, a.HandleDelete)
+	}
 }
-func NewApiHandler[T any](hndler IHandler[T], fac facade.IFacade[T], name string) *ApiHandler[T] {
+func NewApiHandler[T any](hndler ICRDHandler[T], fac facade.IFacade[T], name string) *ApiHandler[T] {
 	// NewApiHandler creates a new ApiHandler for the given handler, manager, and resource name.
 	return &ApiHandler[T]{
 		hndler: hndler,

@@ -12,12 +12,16 @@ import (
 
 // Package api provides handler interfaces and implementations for API resource operations.
 
-type IHandler[T any] interface {
+type ICRDHandler[T any] interface {
 	BindCreateRequest(g *gin.Context) (*T, error)
 	BindListRequest(g *gin.Context, fnd finder.IFinder[T]) (finder.IFinder[T], error)
 	BindDeleteRequest(g *gin.Context) (bson.D, error)
 	MarshalCreateResponse(*T) any
 	MarshalListResponse([]*T) any
+
+	HasCreate() bool
+	HasList() bool
+	HasDelete() bool
 }
 
 // IHandler defines methods for binding requests and marshaling responses for a resource type T.
@@ -31,13 +35,13 @@ type JobReqHandler struct{}
 // JobResHandler implements IHandler for media resources.
 type JobResHandler struct{}
 
-var _ IHandler[types.MediaFileDoc] = (*MediaHandler)(nil)
-var _ IHandler[types.JobReqDoc] = (*JobReqHandler)(nil)
-var _ IHandler[types.JobResDoc] = (*JobResHandler)(nil)
+var _ ICRDHandler[types.MediaFileDoc] = (*MediaHandler)(nil)
+var _ ICRDHandler[types.JobReqDoc] = (*JobReqHandler)(nil)
+var _ ICRDHandler[types.JobResDoc] = (*JobResHandler)(nil)
 
 // =====
 func (h *MediaHandler) BindCreateRequest(g *gin.Context) (*types.MediaFileDoc, error) {
-	return nil, fmt.Errorf("not supported method")
+	return nil, ErrNotImplemented
 }
 func (h *MediaHandler) BindListRequest(g *gin.Context, fnd finder.IFinder[types.MediaFileDoc]) (finder.IFinder[types.MediaFileDoc], error) {
 	var v MediaListReqType
@@ -71,10 +75,19 @@ func (h *MediaHandler) MarshalListResponse(v []*types.MediaFileDoc) any {
 	}
 	return MediaListResType(res)
 }
+func (h *MediaHandler) HasCreate() bool {
+	return false
+}
+func (h *MediaHandler) HasList() bool {
+	return true
+}
+func (h *MediaHandler) HasDelete() bool {
+	return true
+}
 
 // =====
 func (h *JobReqHandler) BindCreateRequest(g *gin.Context) (*types.JobReqDoc, error) {
-	return nil, fmt.Errorf("not supported method")
+	return nil, ErrNotImplemented
 }
 func (h *JobReqHandler) BindListRequest(g *gin.Context, fnd finder.IFinder[types.JobReqDoc]) (finder.IFinder[types.JobReqDoc], error) {
 	return fnd, nil
@@ -102,6 +115,15 @@ func (h *JobReqHandler) MarshalListResponse(v []*types.JobReqDoc) any {
 	}
 	return JobReqListResType(res)
 }
+func (h *JobReqHandler) HasCreate() bool {
+	return false
+}
+func (h *JobReqHandler) HasList() bool {
+	return true
+}
+func (h *JobReqHandler) HasDelete() bool {
+	return true
+}
 
 // =====
 func (h *JobResHandler) BindCreateRequest(g *gin.Context) (*types.JobResDoc, error) {
@@ -112,28 +134,23 @@ func (h *JobResHandler) BindCreateRequest(g *gin.Context) (*types.JobResDoc, err
 	return v, nil
 }
 func (h *JobResHandler) BindListRequest(g *gin.Context, fnd finder.IFinder[types.JobResDoc]) (finder.IFinder[types.JobResDoc], error) {
-	return nil, fmt.Errorf("not supported method")
+	return nil, ErrNotImplemented
 }
 func (h *JobResHandler) BindDeleteRequest(g *gin.Context) (bson.D, error) {
-	var qID JobReqDelReqType
-	if err := g.ShouldBindUri(&qID); err != nil {
-		return nil, err
-	}
-	idObj, err := bson.ObjectIDFromHex(qID.ID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid id: %w", err)
-	}
-	q := query.Id(idObj)
-	return q, nil
+	return nil, ErrNotImplemented
 }
 func (h *JobResHandler) MarshalCreateResponse(v *types.JobResDoc) any {
-	return nil
+	return v
 }
 func (h *JobResHandler) MarshalListResponse(v []*types.JobResDoc) any {
-	res := make([]*types.JobResDoc, len(v))
-	for i, doc := range v {
-		_v := types.JobResDoc(*doc)
-		res[i] = &_v
-	}
-	return JobResListReqType(res)
+	return nil
+}
+func (h *JobResHandler) HasCreate() bool {
+	return true
+}
+func (h *JobResHandler) HasList() bool {
+	return false
+}
+func (h *JobResHandler) HasDelete() bool {
+	return false
 }

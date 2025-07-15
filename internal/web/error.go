@@ -1,5 +1,9 @@
 package web
 
+import (
+	"fmt"
+)
+
 type HttpErr struct {
 	StatusCode int    `json:"statusCode"`
 	Message    string `json:"msg"`
@@ -16,3 +20,5 @@ func NewHttpError(err error, statusCode int) HttpErr {
 	}
 	return e
 }
+
+var ErrNotImplemented = fmt.Errorf("not supported method")
