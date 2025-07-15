@@ -12,7 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const defaultPartSize = 256 * 1024 // 512 kb
 const maxFloodWaitSec = 5
 
 type chunk struct {
@@ -35,19 +34,20 @@ func (b Block) Data() []byte {
 
 type Reader struct {
 	sch       schema // immutable
-	partSize  int    // immutable
 	offset    int64
 	offsetMux sync.Mutex
 	fileSize  int64
 }
 
 func (r *Reader) Next(ctx context.Context, client *tg.Client) (*Block, error) {
+	ll := r.getLogger("Next")
 	r.offsetMux.Lock()
+	limit := r.adjustLimit(r.offset)
 	offset := r.offset
-	r.offset += int64(r.partSize)
+	r.offset += int64(limit)
 	r.offsetMux.Unlock()
-
-	return r.next(ctx, client, offset, r.partSize)
+	ll.Debugf("limit=%d, offset=%d, fileSize=%d", limit, offset, r.fileSize)
+	return r.next(ctx, client, offset, limit)
 }
 
 func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limit int) (*Block, error) {
@@ -56,8 +56,6 @@ func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limi
 		if ctx.Err() != nil {
 			return nil, nil
 		}
-		limit = r.adjustLimit(limit, offset)
-		ll.Debugf("limit=%d, offset=%d, fileSize=%d", limit, offset, r.fileSize)
 		if limit <= 0 {
 			return nil, io.EOF
 		}
@@ -83,26 +81,49 @@ func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limi
 		return &Block{
 			chunk:    ch,
 			offset:   offset,
-			partSize: r.partSize,
+			partSize: limit,
 		}, nil
 	}
 }
 
-func (r *Reader) adjustLimit(limit int, offset int64) int {
+func (r *Reader) adjustLimit(offset int64) int {
 	ll := r.getLogger("adjustLimit")
-	limitDiv := 4 * 1024
-	if offset+int64(limit) > r.fileSize {
-		limit = int(r.fileSize - offset)
-		limit = limit - (limit % limitDiv)
-		for {
-			if limit <= 0 || 1048576%limit == 0 {
-				break
-			}
-			limit += limitDiv
-		}
-		ll.Debugf("limit adjusted to %d", limit)
+	const (
+		oneMB  = 1048576 // 1 MB
+		fourKB = 4096    // 4 KB
+	)
+
+	// Valid divisors of 1MB that are multiples of 4KB (powers of 2 from 2^12 to 2^19)
+	validLimits := []int{524288, 262144, 131072, 65536, 32768, 16384, 8192, 4096}
+
+	// Calculate maximum possible limit based on fileSize constraint
+	maxByFileSize := int(r.fileSize - offset)
+	if maxByFileSize <= 0 {
+		ll.Warnf("maxByFileSize <= 0, offset=%d, fileSize=%d", offset, r.fileSize)
+		return 0
 	}
-	return limit
+
+	// Calculate maximum possible limit to stay within 1MB chunk from beginning
+	chunkStart := (offset / oneMB) * oneMB
+	maxByChunk := int(chunkStart + oneMB - offset)
+
+	// Find the largest valid limit that satisfies all constraints
+	maxAllowed := maxByFileSize
+	if maxByChunk < maxAllowed {
+		maxAllowed = maxByChunk
+	}
+
+	// Find the largest valid limit from our predefined list
+	for _, validLimit := range validLimits {
+		if validLimit <= maxAllowed {
+			ll.Debugf("optimal limit found: %d (offset=%d, fileSize=%d, maxByFileSize=%d, maxByChunk=%d)",
+				validLimit, offset, r.fileSize, maxByFileSize, maxByChunk)
+			return validLimit
+		}
+	}
+
+	ll.Warnf("no valid limit found, returning least")
+	return validLimits[len(validLimits)-1]
 }
 func (r *Reader) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", r, fn))
@@ -117,7 +138,6 @@ func NewReader(offset int64, loc *tg.InputDocumentFileLocation, fileSize int64) 
 	}
 	return &Reader{
 		sch:      master,
-		partSize: defaultPartSize,
 		offset:   offset,
 		fileSize: fileSize,
 	}
