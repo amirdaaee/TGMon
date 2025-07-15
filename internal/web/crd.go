@@ -11,7 +11,7 @@ import (
 
 // Package api provides generic API handler logic for CRUD operations using Gin and MongoDB.
 
-type ApiHandler[T any] struct {
+type CRDApiHandler[T any] struct {
 	hndler ICRDHandler[T]
 	fac    facade.IFacade[T]
 	name   string
@@ -19,7 +19,7 @@ type ApiHandler[T any] struct {
 
 // ApiHandler provides CRUD handlers and route registration for a resource type T.
 
-func (a *ApiHandler[T]) HandleCreate(g *gin.Context) {
+func (a *CRDApiHandler[T]) HandleCreate(g *gin.Context) {
 	// HandleCreate handles HTTP POST requests to create a new resource.
 	doc, err := a.hndler.BindCreateRequest(g)
 	if err != nil {
@@ -33,7 +33,7 @@ func (a *ApiHandler[T]) HandleCreate(g *gin.Context) {
 	}
 	g.JSON(http.StatusOK, a.hndler.MarshalCreateResponse(res))
 }
-func (a *ApiHandler[T]) HandleRead(g *gin.Context) {
+func (a *CRDApiHandler[T]) HandleRead(g *gin.Context) {
 	// HandleRead handles HTTP GET requests to read resources.
 	req, err := a.hndler.BindListRequest(g, a.fac.GetCollection().Finder())
 	if err != nil {
@@ -47,7 +47,7 @@ func (a *ApiHandler[T]) HandleRead(g *gin.Context) {
 	}
 	g.JSON(http.StatusOK, a.hndler.MarshalListResponse(res))
 }
-func (a *ApiHandler[T]) HandleDelete(g *gin.Context) {
+func (a *CRDApiHandler[T]) HandleDelete(g *gin.Context) {
 	// HandleDelete handles HTTP DELETE requests to delete a resource.
 	q, err := a.hndler.BindDeleteRequest(g)
 	if err != nil {
@@ -64,7 +64,7 @@ func (a *ApiHandler[T]) HandleDelete(g *gin.Context) {
 	}
 	g.AbortWithStatus(http.StatusOK)
 }
-func (a *ApiHandler[T]) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
+func (a *CRDApiHandler[T]) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	// RegisterRoutes registers CRUD routes for the resource on the given router group.
 	apiG := r.Group(fmt.Sprintf("/%s", a.name))
 	if a.hndler.HasList() {
@@ -77,9 +77,9 @@ func (a *ApiHandler[T]) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.Ha
 		apiG.DELETE("/:id", authMiddleware, a.HandleDelete)
 	}
 }
-func NewApiHandler[T any](hndler ICRDHandler[T], fac facade.IFacade[T], name string) *ApiHandler[T] {
+func NewCRDApiHandler[T any](hndler ICRDHandler[T], fac facade.IFacade[T], name string) *CRDApiHandler[T] {
 	// NewApiHandler creates a new ApiHandler for the given handler, manager, and resource name.
-	return &ApiHandler[T]{
+	return &CRDApiHandler[T]{
 		hndler: hndler,
 		fac:    fac,
 		name:   name,

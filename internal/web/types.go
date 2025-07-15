@@ -32,7 +32,4 @@ type JobReqListResType []*types.JobReqDoc
 
 // ===
 type JobResPostReqType *types.JobResDoc
-
-type JobResListReqType []*types.JobResDoc
-
-// type JobResPostResType []*types.JobResDoc
+type JobResPostResType *types.JobResDoc

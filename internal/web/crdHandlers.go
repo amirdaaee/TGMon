@@ -20,6 +20,7 @@ type ICRDHandler[T any] interface {
 	MarshalListResponse([]*T) any
 
 	HasCreate() bool
+	HasGet() bool
 	HasList() bool
 	HasDelete() bool
 }
@@ -78,6 +79,9 @@ func (h *MediaHandler) MarshalListResponse(v []*types.MediaFileDoc) any {
 func (h *MediaHandler) HasCreate() bool {
 	return false
 }
+func (h *MediaHandler) HasGet() bool {
+	return true
+}
 func (h *MediaHandler) HasList() bool {
 	return true
 }
@@ -118,6 +122,9 @@ func (h *JobReqHandler) MarshalListResponse(v []*types.JobReqDoc) any {
 func (h *JobReqHandler) HasCreate() bool {
 	return false
 }
+func (h *JobReqHandler) HasGet() bool {
+	return false
+}
 func (h *JobReqHandler) HasList() bool {
 	return true
 }
@@ -147,6 +154,9 @@ func (h *JobResHandler) MarshalListResponse(v []*types.JobResDoc) any {
 }
 func (h *JobResHandler) HasCreate() bool {
 	return true
+}
+func (h *JobResHandler) HasGet() bool {
+	return false
 }
 func (h *JobResHandler) HasList() bool {
 	return false

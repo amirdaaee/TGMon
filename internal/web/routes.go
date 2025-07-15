@@ -6,9 +6,9 @@ import (
 )
 
 type HandlerContainer struct {
-	MediaHandler  *ApiHandler[types.MediaFileDoc]
-	JobReqHandler *ApiHandler[types.JobReqDoc]
-	JobResHandler *ApiHandler[types.JobResDoc]
+	MediaHandler  *CRDApiHandler[types.MediaFileDoc]
+	JobReqHandler *CRDApiHandler[types.JobReqDoc]
+	JobResHandler *CRDApiHandler[types.JobResDoc]
 }
 
 func RegisterRoutes(r *gin.Engine, streamHandler *Streamhandler, hndlrs HandlerContainer, apiToken string) {
