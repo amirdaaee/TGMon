@@ -6,11 +6,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// //go:generate mockgen -source=docs.go -destination=../../mocks/types/docs.go -package=mocks
-// type IMongoDoc interface {
-// 	String() string
-// }
-
 // ...
 const (
 	MediaFileDoc__VttField       = "Vtt"
@@ -20,12 +15,10 @@ const (
 )
 
 type MediaFileMeta struct {
-	Location *tg.InputDocumentFileLocation `bson:"Location"`
-	FileSize int64                         `bson:"FileSize"`
-	FileName string                        `bson:"FileName"`
-	MimeType string                        `bson:"MimeType"`
-	FileID   int64                         `bson:"FileID"`
-	Duration float64                       `bson:"Duration"`
+	FileSize int64  `bson:"FileSize"`
+	FileName string `bson:"FileName"`
+	MimeType string `bson:"MimeType"`
+	FileID   int64  `bson:"FileID"`
 }
 type MediaFileDoc struct {
 	mongox.Model `bson:",inline"`
@@ -45,14 +38,11 @@ func (m *MediaFileMeta) FillFromDocument(doc *tg.Document) error {
 		switch v := attr.(type) {
 		case *tg.DocumentAttributeFilename:
 			m.FileName = v.FileName
-		case *tg.DocumentAttributeVideo:
-			m.Duration = v.Duration
 		}
 	}
 	m.FileSize = doc.Size
 	m.MimeType = doc.MimeType
 	m.FileID = doc.ID
-	m.Location = doc.AsInputDocumentFileLocation()
 	return nil
 }
 
