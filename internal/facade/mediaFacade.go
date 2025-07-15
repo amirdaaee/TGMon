@@ -24,6 +24,7 @@ type MediaCrud struct {
 	dbContainer     db.IDbContainer
 	jReqFac         IFacade[types.JobReqDoc]
 	workerContainer stream.IWorkerContainer
+	keepDup         bool
 }
 
 var _ ICrud[types.MediaFileDoc] = (*MediaCrud)(nil)
@@ -33,6 +34,9 @@ func (crd *MediaCrud) PreCreate(ctx context.Context, doc *types.MediaFileDoc) er
 	ll := crd.getLogger("PreCreate")
 	if doc == nil {
 		return fmt.Errorf("MediaFileDoc is nil")
+	}
+	if crd.keepDup {
+		return nil
 	}
 	if n, err := crd.GetCollection().Finder().Filter(bsonx.NewD().Add(types.MediaFileDoc__FileIDField, doc.Meta.FileID)).Count(ctx); err != nil {
 		ll.WithError(err).Error("failed to check for duplicates")
@@ -119,9 +123,9 @@ func (crd *MediaCrud) getLogger(fn string) *logrus.Entry {
 }
 
 // NewMediaCrud creates a new MediaCrud with the provided database container.
-func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerContainer) ICrud[types.MediaFileDoc] {
+func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerContainer, keepDup bool) ICrud[types.MediaFileDoc] {
 	jobReqFacade := NewFacade(NewJobReqCrud(dbContainer))
-	return &MediaCrud{dbContainer: dbContainer, jReqFac: jobReqFacade, workerContainer: workerContainer}
+	return &MediaCrud{dbContainer: dbContainer, jReqFac: jobReqFacade, workerContainer: workerContainer, keepDup: keepDup}
 }
 
 // ...

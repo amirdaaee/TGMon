@@ -83,7 +83,8 @@ func buildWorkerContainer() (stream.IWorkerContainer, error) {
 	return stream.NewWorkerContainer(wp), nil
 }
 func buildMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerContainer) facade.IFacade[types.MediaFileDoc] {
-	return facade.NewFacade(facade.NewMediaCrud(dbContainer, workerContainer))
+	cfg := config.Config()
+	return facade.NewFacade(facade.NewMediaCrud(dbContainer, workerContainer, cfg.KeepDupFiles))
 }
 func buildJobReqFacade(dbContainer db.IDbContainer) facade.IFacade[types.JobReqDoc] {
 	return facade.NewFacade(facade.NewJobReqCrud(dbContainer))

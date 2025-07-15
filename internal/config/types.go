@@ -18,6 +18,7 @@ type ConfigType struct {
 	UserPass      string `env:"USER_PASS,required"`
 	ApiToken      string `env:"API_TOKEN,required"`
 	AccessLogFile string `env:"ACCESS_LOG_FILE"`
+	KeepDupFiles  bool   `env:"KEEP_DUP_FILE"`
 	// ...
 	MinioEndpoint  string `env:"MINIO_ENDPOINT,required"`
 	MinioAccessKey string `env:"MINIO_ACCESS_KEY,required"`
