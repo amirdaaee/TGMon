@@ -16,7 +16,6 @@ type ConfigType struct {
 	// ...
 	UserName      string `env:"USER_NAME,required"`
 	UserPass      string `env:"USER_PASS,required"`
-	UserToken     string `env:"USER_TOKEN,required"`
 	ApiToken      string `env:"API_TOKEN,required"`
 	AccessLogFile string `env:"ACCESS_LOG_FILE"`
 	// ...

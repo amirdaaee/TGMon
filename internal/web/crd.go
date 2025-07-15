@@ -12,7 +12,7 @@ import (
 // Package api provides generic API handler logic for CRUD operations using Gin and MongoDB.
 
 type CRDApiHandler[T any] struct {
-	hndler ICRDHandler[T]
+	hndler ICRDApiHandler[T]
 	fac    facade.IFacade[T]
 	name   string
 }
@@ -77,7 +77,7 @@ func (a *CRDApiHandler[T]) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin
 		apiG.DELETE("/:id", authMiddleware, a.HandleDelete)
 	}
 }
-func NewCRDApiHandler[T any](hndler ICRDHandler[T], fac facade.IFacade[T], name string) *CRDApiHandler[T] {
+func NewCRDApiHandler[T any](hndler ICRDApiHandler[T], fac facade.IFacade[T], name string) *CRDApiHandler[T] {
 	// NewApiHandler creates a new ApiHandler for the given handler, manager, and resource name.
 	return &CRDApiHandler[T]{
 		hndler: hndler,

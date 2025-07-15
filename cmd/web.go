@@ -41,10 +41,20 @@ var webCmd = &cobra.Command{
 		mediaHandler := web.MediaHandler{}
 		jobReqHandler := web.JobReqHandler{}
 		jobResHandler := web.JobResHandler{}
+		infoHandler := web.InfoApiHandler{
+			MediaFacade: mediafacade,
+		}
+		loginHandler := web.LoginApiHandler{
+			UserName: config.Config().UserName,
+			UserPass: config.Config().UserPass,
+			Token:    config.Config().ApiToken,
+		}
 		hndlrs := web.HandlerContainer{
 			MediaHandler:  web.NewCRDApiHandler(&mediaHandler, mediafacade, "media"),
 			JobReqHandler: web.NewCRDApiHandler(&jobReqHandler, jobReqFacade, "jobReq"),
 			JobResHandler: web.NewCRDApiHandler(&jobResHandler, jobResFacade, "jobRes"),
+			InfoHandler:   web.NewApiHandler(&infoHandler, "info"),
+			LoginHandler:  web.NewApiHandler(&loginHandler, "login"),
 		}
 		web.RegisterRoutes(g, streamHandler, hndlrs, config.Config().ApiToken)
 		ll.Warn("starting server")

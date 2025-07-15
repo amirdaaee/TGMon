@@ -12,7 +12,7 @@ import (
 
 // Package api provides handler interfaces and implementations for API resource operations.
 
-type ICRDHandler[T any] interface {
+type ICRDApiHandler[T any] interface {
 	BindCreateRequest(g *gin.Context) (*T, error)
 	BindListRequest(g *gin.Context, fnd finder.IFinder[T]) (finder.IFinder[T], error)
 	BindDeleteRequest(g *gin.Context) (bson.D, error)
@@ -36,9 +36,9 @@ type JobReqHandler struct{}
 // JobResHandler implements IHandler for media resources.
 type JobResHandler struct{}
 
-var _ ICRDHandler[types.MediaFileDoc] = (*MediaHandler)(nil)
-var _ ICRDHandler[types.JobReqDoc] = (*JobReqHandler)(nil)
-var _ ICRDHandler[types.JobResDoc] = (*JobResHandler)(nil)
+var _ ICRDApiHandler[types.MediaFileDoc] = (*MediaHandler)(nil)
+var _ ICRDApiHandler[types.JobReqDoc] = (*JobReqHandler)(nil)
+var _ ICRDApiHandler[types.JobResDoc] = (*JobResHandler)(nil)
 
 // =====
 func (h *MediaHandler) BindCreateRequest(g *gin.Context) (*types.MediaFileDoc, error) {

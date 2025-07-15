@@ -2,6 +2,14 @@ package web
 
 import "github.com/amirdaaee/TGMon/internal/types"
 
+type ApiType string
+
+const (
+	No     ApiType = "No"
+	NoAuth ApiType = "NO_AUTH"
+	Auth   ApiType = "AUTH"
+)
+
 type StreamMetaData struct {
 	Start         int64
 	End           int64
@@ -33,3 +41,17 @@ type JobReqListResType []*types.JobReqDoc
 // ===
 type JobResPostReqType *types.JobResDoc
 type JobResPostResType *types.JobResDoc
+
+// ===
+type InfoGetResType struct {
+	MediaCount int64
+}
+
+// ===
+type LoginPostReqType struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+type LoginPostResType struct {
+	Token string `json:"token"`
+}
