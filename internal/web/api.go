@@ -7,31 +7,30 @@ import (
 )
 
 type ApiHandler struct {
-	hndler IApiHandler
+	hndler any
 	name   string
 }
 
 func (a *ApiHandler) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	apiG := r.Group(fmt.Sprintf("/%s", a.name))
-
-	if a.hndler.HasPost() != No {
+	if v, ok := a.hndler.(IPostApiHandler); ok {
 		mid := []gin.HandlerFunc{}
-		if a.hndler.HasPost() == Auth {
+		if v.AuthPost() {
 			mid = append(mid, authMiddleware)
 		}
-		mid = append(mid, a.hndler.Post)
+		mid = append(mid, v.Post)
 		apiG.POST("/", mid...)
 	}
-	if a.hndler.HasGet() != No {
+	if v, ok := a.hndler.(IGetApiHandler); ok {
 		mid := []gin.HandlerFunc{}
-		if a.hndler.HasGet() == Auth {
+		if v.AuthGet() {
 			mid = append(mid, authMiddleware)
 		}
-		mid = append(mid, a.hndler.Get)
+		mid = append(mid, v.Get)
 		apiG.GET("/", mid...)
 	}
 }
 
-func NewApiHandler(hndler IApiHandler, name string) *ApiHandler {
+func NewApiHandler(hndler any, name string) *ApiHandler {
 	return &ApiHandler{hndler: hndler, name: name}
 }

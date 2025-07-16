@@ -9,11 +9,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type IApiHandler interface {
+type IPostApiHandler interface {
 	Post(g *gin.Context)
+	AuthPost() bool
+}
+type IGetApiHandler interface {
 	Get(g *gin.Context)
-	HasPost() ApiType
-	HasGet() ApiType
+	AuthGet() bool
 }
 
 type InfoApiHandler struct {
@@ -25,10 +27,8 @@ type LoginApiHandler struct {
 	Token    string
 }
 
-var _ IApiHandler = (*InfoApiHandler)(nil)
-var _ IApiHandler = (*LoginApiHandler)(nil)
-
-func (h *InfoApiHandler) Post(g *gin.Context) {}
+var _ IGetApiHandler = (*InfoApiHandler)(nil)
+var _ IPostApiHandler = (*LoginApiHandler)(nil)
 
 // @Summary	Info summary
 // @Produce	json
@@ -43,11 +43,8 @@ func (h *InfoApiHandler) Get(g *gin.Context) {
 	}
 	g.JSON(http.StatusOK, InfoGetResType{MediaCount: media})
 }
-func (h *InfoApiHandler) HasPost() ApiType {
-	return No
-}
-func (h *InfoApiHandler) HasGet() ApiType {
-	return Auth
+func (h *InfoApiHandler) AuthGet() bool {
+	return true
 }
 
 // ===
@@ -69,10 +66,6 @@ func (h *LoginApiHandler) Post(g *gin.Context) {
 	}
 	g.JSON(http.StatusOK, LoginPostResType{Token: h.Token})
 }
-func (h *LoginApiHandler) Get(g *gin.Context) {}
-func (h *LoginApiHandler) HasPost() ApiType {
-	return NoAuth
-}
-func (h *LoginApiHandler) HasGet() ApiType {
-	return No
+func (h *LoginApiHandler) AuthPost() bool {
+	return false
 }

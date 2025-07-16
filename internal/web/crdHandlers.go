@@ -11,18 +11,16 @@ import (
 )
 
 // Package api provides handler interfaces and implementations for API resource operations.
-
-type ICRDApiHandler[T any] interface {
+type ICreateApiHandler[T any] interface {
 	BindCreateRequest(g *gin.Context) (*T, error)
-	BindListRequest(g *gin.Context, fnd finder.IFinder[T]) (finder.IFinder[T], error)
-	BindDeleteRequest(g *gin.Context) (bson.D, error)
 	MarshalCreateResponse(*T) any
+}
+type IListApiHandler[T any] interface {
+	BindListRequest(g *gin.Context, fnd finder.IFinder[T]) (finder.IFinder[T], error)
 	MarshalListResponse([]*T) any
-
-	HasCreate() bool
-	HasGet() bool
-	HasList() bool
-	HasDelete() bool
+}
+type IDeleteApiHandler[T any] interface {
+	BindDeleteRequest(g *gin.Context) (bson.D, error)
 }
 
 // IHandler defines methods for binding requests and marshaling responses for a resource type T.
@@ -36,15 +34,13 @@ type JobReqHandler struct{}
 // JobResHandler implements IHandler for media resources.
 type JobResHandler struct{}
 
-var _ ICRDApiHandler[types.MediaFileDoc] = (*MediaHandler)(nil)
-var _ ICRDApiHandler[types.JobReqDoc] = (*JobReqHandler)(nil)
-var _ ICRDApiHandler[types.JobResDoc] = (*JobResHandler)(nil)
+var _ IListApiHandler[types.MediaFileDoc] = (*MediaHandler)(nil)
+var _ IDeleteApiHandler[types.MediaFileDoc] = (*MediaHandler)(nil)
+var _ IListApiHandler[types.JobReqDoc] = (*JobReqHandler)(nil)
+var _ IDeleteApiHandler[types.JobReqDoc] = (*JobReqHandler)(nil)
+var _ ICreateApiHandler[types.JobResDoc] = (*JobResHandler)(nil)
 
 // =====
-func (h *MediaHandler) BindCreateRequest(g *gin.Context) (*types.MediaFileDoc, error) {
-	return nil, ErrNotImplemented
-}
-
 // @Summary	List media
 // @Tags		media
 // @Produce	json
@@ -81,9 +77,6 @@ func (h *MediaHandler) BindDeleteRequest(g *gin.Context) (bson.D, error) {
 	q := query.Id(idObj)
 	return q, nil
 }
-func (h *MediaHandler) MarshalCreateResponse(v *types.MediaFileDoc) any {
-	return nil
-}
 func (h *MediaHandler) MarshalListResponse(v []*types.MediaFileDoc) any {
 	res := make([]*types.MediaFileDoc, len(v))
 	for i, doc := range v {
@@ -92,24 +85,8 @@ func (h *MediaHandler) MarshalListResponse(v []*types.MediaFileDoc) any {
 	}
 	return MediaListResType(res)
 }
-func (h *MediaHandler) HasCreate() bool {
-	return false
-}
-func (h *MediaHandler) HasGet() bool {
-	return true
-}
-func (h *MediaHandler) HasList() bool {
-	return true
-}
-func (h *MediaHandler) HasDelete() bool {
-	return true
-}
 
 // =====
-func (h *JobReqHandler) BindCreateRequest(g *gin.Context) (*types.JobReqDoc, error) {
-	return nil, ErrNotImplemented
-}
-
 // @Summary	List job requests
 // @Tags		jobReq
 // @Produce	json
@@ -139,9 +116,6 @@ func (h *JobReqHandler) BindDeleteRequest(g *gin.Context) (bson.D, error) {
 	q := query.Id(idObj)
 	return q, nil
 }
-func (h *JobReqHandler) MarshalCreateResponse(v *types.JobReqDoc) any {
-	return nil
-}
 func (h *JobReqHandler) MarshalListResponse(v []*types.JobReqDoc) any {
 	res := make([]*types.JobReqDoc, len(v))
 	for i, doc := range v {
@@ -149,18 +123,6 @@ func (h *JobReqHandler) MarshalListResponse(v []*types.JobReqDoc) any {
 		res[i] = &_v
 	}
 	return JobReqListResType(res)
-}
-func (h *JobReqHandler) HasCreate() bool {
-	return false
-}
-func (h *JobReqHandler) HasGet() bool {
-	return false
-}
-func (h *JobReqHandler) HasList() bool {
-	return true
-}
-func (h *JobReqHandler) HasDelete() bool {
-	return true
 }
 
 // =====
@@ -180,27 +142,6 @@ func (h *JobResHandler) BindCreateRequest(g *gin.Context) (*types.JobResDoc, err
 	}
 	return v, nil
 }
-func (h *JobResHandler) BindListRequest(g *gin.Context, fnd finder.IFinder[types.JobResDoc]) (finder.IFinder[types.JobResDoc], error) {
-	return nil, ErrNotImplemented
-}
-func (h *JobResHandler) BindDeleteRequest(g *gin.Context) (bson.D, error) {
-	return nil, ErrNotImplemented
-}
 func (h *JobResHandler) MarshalCreateResponse(v *types.JobResDoc) any {
 	return v
-}
-func (h *JobResHandler) MarshalListResponse(v []*types.JobResDoc) any {
-	return nil
-}
-func (h *JobResHandler) HasCreate() bool {
-	return true
-}
-func (h *JobResHandler) HasGet() bool {
-	return false
-}
-func (h *JobResHandler) HasList() bool {
-	return false
-}
-func (h *JobResHandler) HasDelete() bool {
-	return false
 }
