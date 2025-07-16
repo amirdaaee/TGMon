@@ -74,7 +74,7 @@ func (crd *JobResCrud) PreCreate(ctx context.Context, doc *types.JobResDoc) erro
 		return err
 	}
 
-	fileName := crd.generateFileName(doc, jobReq)
+	fileName := crd.generateFileName(jobReq)
 
 	updateField, err := crd.processJobResult(ctx, doc, jobReq, fileName)
 	if err != nil {
@@ -139,8 +139,8 @@ func (crd *JobResCrud) getJobRequest(ctx context.Context, doc *types.JobResDoc) 
 }
 
 // generateFileName generates a file name for the job result based on the JobResDoc and JobReqDoc.
-func (crd *JobResCrud) generateFileName(doc *types.JobResDoc, jobReq *types.JobReqDoc) string {
-	return fmt.Sprintf("%s_%s", doc.ID.Hex(), jobReq.Type)
+func (crd *JobResCrud) generateFileName(jobReq *types.JobReqDoc) string {
+	return fmt.Sprintf("%s_%s", jobReq.MediaID.Hex(), jobReq.Type)
 }
 
 // processJobResult processes the job result, stores the result in Minio, and returns the update field for the media document.

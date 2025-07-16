@@ -53,8 +53,9 @@ func (f *BaseFacade[T]) CreateOne(ctx context.Context, doc *T) (*T, error) {
 		return nil, fmt.Errorf("error creating document: %w", err)
 	}
 	// PostCreate runs in a goroutine; errors are logged but not returned.
+	postCtx := context.Background()
 	go func() {
-		if err := f.crd.PostCreate(ctx, doc); err != nil {
+		if err := f.crd.PostCreate(postCtx, doc); err != nil {
 			ll.WithError(err).Error("error in post-creating hook")
 		} else {
 			ll.Info("document post-creating hook completed")
