@@ -12,6 +12,8 @@ import (
 var lock = &sync.Mutex{}
 var configInstance *ConfigType
 
+// Config returns a singleton instance of ConfigType, loading environment variables from a .env file if present.
+// It uses sync.Mutex to ensure thread-safe initialization and parses environment variables into the ConfigType struct.
 func Config() *ConfigType {
 	if configInstance == nil {
 		lock.Lock()
