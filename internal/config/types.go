@@ -17,6 +17,7 @@ type ConfigType struct {
 	UserName      string `env:"USER_NAME,required"`
 	UserPass      string `env:"USER_PASS,required"`
 	ApiToken      string `env:"API_TOKEN,required"`
+	Swagger       bool   `env:"SWAGGER" envDefault:"false"`
 	AccessLogFile string `env:"ACCESS_LOG_FILE"`
 	KeepDupFiles  bool   `env:"KEEP_DUP_FILE"`
 	// ...

@@ -29,6 +29,12 @@ var _ IApiHandler = (*InfoApiHandler)(nil)
 var _ IApiHandler = (*LoginApiHandler)(nil)
 
 func (h *InfoApiHandler) Post(g *gin.Context) {}
+
+// @Summary	Info summary
+// @Produce	json
+// @Success	200	{object}	InfoGetResType
+// @Router		/api/info [get]
+// @Security	ApiKeyAuth
 func (h *InfoApiHandler) Get(g *gin.Context) {
 	media, err := h.MediaFacade.GetCollection().Finder().Count(g.Request.Context())
 	if err != nil {
@@ -45,6 +51,12 @@ func (h *InfoApiHandler) HasGet() ApiType {
 }
 
 // ===
+// @Summary      Login
+// @Description  Authenticate user and return a token
+// @Accept       json
+// @Produce      json
+// @Param        data  body      LoginPostReqType  true  "Login Data"
+// @Router       /api/login [post]
 func (h *LoginApiHandler) Post(g *gin.Context) {
 	var req LoginPostReqType
 	if err := g.ShouldBindJSON(&req); err != nil {

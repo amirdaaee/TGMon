@@ -1,8 +1,11 @@
 package web
 
 import (
+	docs "github.com/amirdaaee/TGMon/docs"
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 type HandlerContainer struct {
@@ -13,8 +16,12 @@ type HandlerContainer struct {
 	LoginHandler  *ApiHandler
 }
 
-func RegisterRoutes(r *gin.Engine, streamHandler *Streamhandler, hndlrs HandlerContainer, apiToken string) {
+func RegisterRoutes(r *gin.Engine, streamHandler *Streamhandler, hndlrs HandlerContainer, apiToken string, swag bool) {
 	webRoot := r.Group("/", errMiddleware())
+	if swag {
+		docs.SwaggerInfo.Title = "Tgmon API"
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
 	webRoot.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", streamHandler.Stream)
 	authMiddleware := apiAuthMiddleware(apiToken)
 	apiRoot := webRoot.Group("api/")

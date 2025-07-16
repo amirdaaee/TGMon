@@ -44,6 +44,14 @@ var _ ICRDApiHandler[types.JobResDoc] = (*JobResHandler)(nil)
 func (h *MediaHandler) BindCreateRequest(g *gin.Context) (*types.MediaFileDoc, error) {
 	return nil, ErrNotImplemented
 }
+
+// @Summary	List media
+// @Tags		media
+// @Produce	json
+// @Param		page	query	int	false	"page"
+// @Success	200		{array}	types.MediaFileDoc
+// @Router		/api/media [get]
+// @Security	ApiKeyAuth
 func (h *MediaHandler) BindListRequest(g *gin.Context, fnd finder.IFinder[types.MediaFileDoc]) (finder.IFinder[types.MediaFileDoc], error) {
 	var v MediaListReqType
 	const resultPerPage = 12
@@ -53,6 +61,14 @@ func (h *MediaHandler) BindListRequest(g *gin.Context, fnd finder.IFinder[types.
 	fnd = fnd.Sort(bson.D{{Key: "created_at", Value: -1}}).Skip(resultPerPage * int64(v.Page)).Limit(resultPerPage)
 	return fnd, nil
 }
+
+// @Summary	Delete media
+// @Tags		media
+// @Produce	json
+// @Param		id	path	string	true	"Media ID"
+// @Success	200
+// @Router		/api/media/{id} [delete]
+// @Security	ApiKeyAuth
 func (h *MediaHandler) BindDeleteRequest(g *gin.Context) (bson.D, error) {
 	var qID MediaDelReqType
 	if err := g.ShouldBindUri(&qID); err != nil {
@@ -93,9 +109,24 @@ func (h *MediaHandler) HasDelete() bool {
 func (h *JobReqHandler) BindCreateRequest(g *gin.Context) (*types.JobReqDoc, error) {
 	return nil, ErrNotImplemented
 }
+
+// @Summary	List job requests
+// @Tags		jobReq
+// @Produce	json
+// @Success	200	{array}	types.JobReqDoc
+// @Router		/api/jobReq [get]
+// @Security	ApiKeyAuth
 func (h *JobReqHandler) BindListRequest(g *gin.Context, fnd finder.IFinder[types.JobReqDoc]) (finder.IFinder[types.JobReqDoc], error) {
 	return fnd, nil
 }
+
+// @Summary	Delete job request
+// @Tags		jobReq
+// @Produce	json
+// @Param		id	path		string	true	"Job Request ID"
+// @Success	200	{string}	string	"OK"
+// @Router		/api/jobReq/{id} [delete]
+// @Security	ApiKeyAuth
 func (h *JobReqHandler) BindDeleteRequest(g *gin.Context) (bson.D, error) {
 	var qID JobReqDelReqType
 	if err := g.ShouldBindUri(&qID); err != nil {
@@ -133,6 +164,15 @@ func (h *JobReqHandler) HasDelete() bool {
 }
 
 // =====
+//
+//	@Summary	Create job response
+//	@Tags		jobRes
+//	@Accept		json
+//	@Produce	json
+//	@Param		data	body		JobResPostReqType	true	"Job Response Data"
+//	@Success	200		{object}	types.JobResDoc
+//	@Router		/api/jobRes [post]
+//	@Security	ApiKeyAuth
 func (h *JobResHandler) BindCreateRequest(g *gin.Context) (*types.JobResDoc, error) {
 	var v JobResPostReqType
 	if err := g.ShouldBindJSON(&v); err != nil {

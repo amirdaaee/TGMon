@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// webCmd represents the web command
 var webCmd = &cobra.Command{
 	Use:   "web",
 	Short: "Start TGmon web server",
@@ -56,9 +55,12 @@ var webCmd = &cobra.Command{
 			InfoHandler:   web.NewApiHandler(&infoHandler, "info"),
 			LoginHandler:  web.NewApiHandler(&loginHandler, "login"),
 		}
-		web.RegisterRoutes(g, streamHandler, hndlrs, config.Config().ApiToken)
+		cfg := config.Config()
+		web.RegisterRoutes(g, streamHandler, hndlrs, cfg.ApiToken, cfg.Swagger)
 		ll.Warn("starting server")
-		g.Run(":8080")
+		if err := g.Run(":8080"); err != nil {
+			logrus.WithError(err).Fatal("error running webserver")
+		}
 	},
 }
 

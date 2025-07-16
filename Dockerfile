@@ -12,8 +12,8 @@ FROM alpine AS app
 ENV SESSION_DIR="/TGMon/session"
 ENV ACCESS_LOG="/TGMon/log/access.log"
 ENV GIN_MODE=release
-RUN mkdir -p /TGMon/session &&\ 
-    mkdir -p /TGMon/log &&\ 
+RUN mkdir -p /TGMon/session &&\
+    mkdir -p /TGMon/log &&\
     alias tgmon-server=/tgmon-server &&\
     alias tgmon-bot=/tgmon-bot &&\
     alias tgmon-cli=/tgmon-cli

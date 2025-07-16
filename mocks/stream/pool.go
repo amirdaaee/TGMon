@@ -10,6 +10,8 @@
 package mocks
 
 import (
+	context "context"
+	io "io"
 	reflect "reflect"
 
 	stream "github.com/amirdaaee/TGMon/internal/stream"
@@ -52,4 +54,18 @@ func (m *MockIWorkerPool) GetNextWorker() stream.IWorker {
 func (mr *MockIWorkerPoolMockRecorder) GetNextWorker() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNextWorker", reflect.TypeOf((*MockIWorkerPool)(nil).GetNextWorker))
+}
+
+// Stream mocks base method.
+func (m *MockIWorkerPool) Stream(ctx context.Context, msgID int, offset int64, writer io.Writer) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Stream", ctx, msgID, offset, writer)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Stream indicates an expected call of Stream.
+func (mr *MockIWorkerPoolMockRecorder) Stream(ctx, msgID, offset, writer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stream", reflect.TypeOf((*MockIWorkerPool)(nil).Stream), ctx, msgID, offset, writer)
 }

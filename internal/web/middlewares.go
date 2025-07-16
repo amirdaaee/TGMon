@@ -15,7 +15,7 @@ func apiAuth(c *gin.Context, expected string) bool {
 		return false
 	}
 	scheme, value, ok := strings.Cut(authHeader, " ")
-	if !ok || !(scheme == "Basic" || scheme == "Bearer") {
+	if !ok || !(scheme == "Basic" || scheme == "Bearer") { //nolint:golint,staticcheck
 		return false
 	}
 	return value == expected

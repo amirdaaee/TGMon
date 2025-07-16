@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream/downloader"
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	"github.com/celestix/gotgproto"
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/tg"
-	"github.com/sirupsen/logrus"
 )
 
 //go:generate mockgen -source=worker.go -destination=../../mocks/stream/worker.go -package=mocks
@@ -201,9 +199,6 @@ func (w *worker) retrieveChannelMessageDoc(ctx context.Context, messageID int) (
 }
 func (w *worker) cacheNamePrefix(s int) string {
 	return fmt.Sprintf("%d-%d", w.getTg().Self.GetID(), s)
-}
-func (w *worker) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", w, fn))
 }
 func NewWorker(tok string, sessCfg *tlg.SessionConfig, channelID int64, cacheRoot string) (IWorker, error) {
 	cache := NewAccessHashCache(cacheRoot)
