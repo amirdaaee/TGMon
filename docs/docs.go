@@ -263,9 +263,26 @@ const docTemplate = `{
                 "jobReqID": {
                     "type": "string"
                 },
-                "result": {},
+                "sprite": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "thumbnail": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "updatedAt": {
                     "type": "string"
+                },
+                "vtt": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },
@@ -352,9 +369,26 @@ const docTemplate = `{
                 "jobReqID": {
                     "type": "string"
                 },
-                "result": {},
+                "sprite": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "thumbnail": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "updatedAt": {
                     "type": "string"
+                },
+                "vtt": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },

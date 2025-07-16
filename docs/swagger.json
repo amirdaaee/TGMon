@@ -252,9 +252,26 @@
                 "jobReqID": {
                     "type": "string"
                 },
-                "result": {},
+                "sprite": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "thumbnail": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "updatedAt": {
                     "type": "string"
+                },
+                "vtt": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },
@@ -341,9 +358,26 @@
                 "jobReqID": {
                     "type": "string"
                 },
-                "result": {},
+                "sprite": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "thumbnail": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "updatedAt": {
                     "type": "string"
+                },
+                "vtt": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },

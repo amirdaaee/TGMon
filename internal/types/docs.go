@@ -70,7 +70,9 @@ func (m JobReqDoc) String() string {
 type JobResDoc struct {
 	mongox.Model `bson:",inline"`
 	JobReqID     bson.ObjectID `bson:"JobReqID" json:"jobReqID"`
-	Result       any           `bson:"-"`
+	Thumbnail    []byte        `bson:"-"`
+	Sprite       []byte        `bson:"-"`
+	Vtt          []byte        `bson:"-"`
 }
 
 func (m JobResDoc) String() string {

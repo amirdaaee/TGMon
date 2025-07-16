@@ -24,9 +24,20 @@ definitions:
         type: string
       jobReqID:
         type: string
-      result: {}
+      sprite:
+        items:
+          type: integer
+        type: array
+      thumbnail:
+        items:
+          type: integer
+        type: array
       updatedAt:
         type: string
+      vtt:
+        items:
+          type: integer
+        type: array
     type: object
   types.JobTypeEnum:
     enum:
@@ -83,9 +94,20 @@ definitions:
         type: string
       jobReqID:
         type: string
-      result: {}
+      sprite:
+        items:
+          type: integer
+        type: array
+      thumbnail:
+        items:
+          type: integer
+        type: array
       updatedAt:
         type: string
+      vtt:
+        items:
+          type: integer
+        type: array
     type: object
   web.LoginPostReqType:
     properties:

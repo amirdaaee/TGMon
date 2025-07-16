@@ -144,38 +144,56 @@ func (crd *JobResCrud) generateFileName(doc *types.JobResDoc, jobReq *types.JobR
 }
 
 // processJobResult processes the job result, stores the result in Minio, and returns the update field for the media document.
-func (crd *JobResCrud) processJobResult(ctx context.Context, doc *types.JobResDoc, jobReq *types.JobReqDoc, fileName string) (bson.D, error) {
-	resBytes, ok := doc.Result.([]byte)
-	if !ok {
-		return nil, fmt.Errorf("result is not []byte (%T)", doc.Result)
-	}
-
+func (crd *JobResCrud) processJobResult(ctx context.Context, doc *types.JobResDoc, jobReq *types.JobReqDoc, fileName string) ([]bson.D, error) {
 	mno := crd.container.GetMinioContainer().GetMinioClient()
-	if err := mno.FileAdd(ctx, fileName, resBytes); err != nil {
-		return nil, fmt.Errorf("failed to add file to minio: %w", err)
+	if doc.Thumbnail != nil {
+		if err := mno.FileAdd(ctx, crd.thumbFileName(fileName), doc.Thumbnail); err != nil {
+			return nil, fmt.Errorf("failed to add thumbnail file to minio: %w", err)
+		}
 	}
-
+	if doc.Sprite != nil {
+		if err := mno.FileAdd(ctx, crd.spriteFileName(fileName), doc.Sprite); err != nil {
+			return nil, fmt.Errorf("failed to add sprite file to minio: %w", err)
+		}
+	}
+	if doc.Vtt != nil {
+		if err := mno.FileAdd(ctx, crd.vttFileName(fileName), doc.Vtt); err != nil {
+			return nil, fmt.Errorf("failed to add vtt file to minio: %w", err)
+		}
+	}
 	return crd.getUpdateField(jobReq.Type, fileName)
 }
 
 // getUpdateField returns the BSON update field for the given job type and file name.
-func (crd *JobResCrud) getUpdateField(jobType types.JobTypeEnum, fileName string) (bson.D, error) {
+func (crd *JobResCrud) getUpdateField(jobType types.JobTypeEnum, fileName string) ([]bson.D, error) {
 	switch jobType {
 	case types.THUMBNAILJobType:
-		return update.Set(types.MediaFileDoc__ThumbnailField, fileName), nil
+		return []bson.D{update.Set(types.MediaFileDoc__ThumbnailField, crd.thumbFileName(fileName))}, nil
 	case types.SPRITEJobType:
-		return update.Set(types.MediaFileDoc__SpriteField, fileName), nil
+		return []bson.D{update.Set(types.MediaFileDoc__SpriteField, crd.spriteFileName(fileName)), update.Set(types.MediaFileDoc__VttField, crd.vttFileName(fileName))}, nil
 	default:
 		return nil, fmt.Errorf("unknown job type: %s", jobType)
 	}
 }
 
 // updateMediaDocument updates the media document with the given media ID and update field.
-func (crd *JobResCrud) updateMediaDocument(ctx context.Context, mediaID bson.ObjectID, updateField bson.D) error {
-	if _, err := crd.container.GetMongoContainer().GetMediaFileCollection().Updater().Filter(query.Id(mediaID)).Updates(updateField).UpdateOne(ctx); err != nil {
-		return fmt.Errorf("failed to update media doc: %w", err)
+func (crd *JobResCrud) updateMediaDocument(ctx context.Context, mediaID bson.ObjectID, updateFields []bson.D) error {
+	for _, q := range updateFields {
+		if _, err := crd.container.GetMongoContainer().GetMediaFileCollection().Updater().Filter(query.Id(mediaID)).Updates(q).UpdateOne(ctx); err != nil {
+			return fmt.Errorf("failed to update media doc: %w", err)
+		}
 	}
+
 	return nil
+}
+func (crd *JobResCrud) vttFileName(s string) string {
+	return fmt.Sprintf("%s.vtt", s)
+}
+func (crd *JobResCrud) thumbFileName(s string) string {
+	return fmt.Sprintf("%s.jpeg", s)
+}
+func (crd *JobResCrud) spriteFileName(s string) string {
+	return fmt.Sprintf("%s.jpeg", s)
 }
 
 // NewJobResCrud creates a new JobResCrud with the provided database container.
