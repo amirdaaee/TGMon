@@ -1,3 +1,4 @@
+// Package bot provides core bot logic, including message forwarding functionality.
 package bot
 
 import (
@@ -9,6 +10,8 @@ import (
 	"github.com/gotd/td/tg"
 )
 
+// forward forwards a message from one chat to another and returns the new message.
+// It takes the context, update, and target chat ID, and returns the forwarded message or an error.
 func forward(ctx *ext.Context, u *ext.Update, targetID int64) (*tgTypes.Message, error) {
 	ll := log.GetLogger(log.BotModule).WithField("func", "forward")
 	fromChat := u.EffectiveChat().GetID()
@@ -19,13 +22,14 @@ func forward(ctx *ext.Context, u *ext.Update, targetID int64) (*tgTypes.Message,
 		ID: []int{u.EffectiveMessage.ID},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("can not forward message: %w", err)
+		return nil, NewBotError("can not forward message", err)
 	} else {
 		ll.Debug("message forwarded")
 	}
+	// Type assertion: ensure newUCls is of type *tg.Updates
 	upd, ok := newUCls.(*tg.Updates)
 	if !ok {
-		return nil, fmt.Errorf("upd is not a *tg.Updates: %T", newUCls)
+		return nil, NewBotError(fmt.Sprintf("upd is not a *tg.Updates: %T", newUCls), nil)
 	}
 	var newMsg tg.MessageClass
 	for c, u := range upd.Updates {
@@ -38,7 +42,7 @@ func forward(ctx *ext.Context, u *ext.Update, targetID int64) (*tgTypes.Message,
 		break
 	}
 	if newMsg == nil {
-		return nil, fmt.Errorf("no message in update found")
+		return nil, NewBotError("no message in update found", nil)
 	}
 	m := tgTypes.ConstructMessage(newMsg)
 	ll.Debugf("got forwarded message: %+v", m)

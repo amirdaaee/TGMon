@@ -45,7 +45,10 @@ var botCmd = &cobra.Command{
 		}
 		ll.Info("bot built")
 		// ...
-		hndler := bot.NewHandler(mediafacade, config.Config().ChannelID, wp)
+		hndler, err := bot.NewHandler(mediafacade, config.Config().ChannelID, wp)
+		if err != nil {
+			logrus.WithError(err).Fatal("can not build bot handler")
+		}
 		ll.Info("handler built")
 		hndler.Register(myBot)
 		ll.Info("handler registered")
@@ -59,14 +62,4 @@ var botCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(botCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// botCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// botCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
