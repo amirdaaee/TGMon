@@ -1,28 +1,37 @@
 package web
 
 import (
-	"github.com/amirdaaee/TGMon/config"
-	"github.com/amirdaaee/TGMon/internal/bot"
-	"github.com/amirdaaee/TGMon/internal/db"
+	docs "github.com/amirdaaee/TGMon/docs"
+	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-func SetupRoutes(r *gin.Engine, wp *bot.WorkerPool, mongo *db.Mongo, minio *db.MinioClient, cfg *config.ConfigType) {
-	r.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", streamHandlerFactory(wp, mongo, cfg.StreamChunkSize, cfg.WorkerProfileFile))
-	// ...
-	mediaApi := r.Group("/api/media")
-	mediaApi.GET("/", tokenAuthMiddleware(), listMediaHandlerFactory(mongo))
-	mediaApi.GET("/rand", tokenAuthMiddleware(), getRandomMedia(mongo))
-	mediaApi.GET("/:mediaID", infoMediaHandlerFactory(mongo))
-	mediaApi.DELETE("/:mediaID", deleteMediaHandlerFactory(wp, mongo, minio))
-	// ...
-	jobApi := r.Group("/api/job")
-	jobApi.GET("/", anyAuthMiddleware(), listJobsHandlerFactory(mongo))
-	jobApi.POST("/", tokenAuthMiddleware(), createJobsHandlerFactory(mongo))
-	jobApi.PUT("/result/:jobID/:status", apiAuthMiddleware(), putJobResultHandlerFactory(mongo, minio))
+type HandlerContainer struct {
+	MediaHandler       *CRDApiHandler[types.MediaFileDoc]
+	JobReqHandler      *CRDApiHandler[types.JobReqDoc]
+	JobResHandler      *CRDApiHandler[types.JobResDoc]
+	InfoHandler        *ApiHandler
+	LoginHandler       *ApiHandler
+	SessionHandler     *ApiHandler
+	RandomMediaHandler *ApiHandler
+}
 
-	// ...
-	grpAuth := r.Group("/api/auth")
-	grpAuth.POST("/login", loginHandlerFactory(cfg.UserName, cfg.UserPass, cfg.UserToken))
-	grpAuth.GET("/session", tokenAuthMiddleware(), sessionHandlerFactory(cfg.UserToken))
+func RegisterRoutes(r *gin.Engine, streamHandler *Streamhandler, hndlrs HandlerContainer, apiToken string, swag bool) {
+	webRoot := r.Group("/", errMiddleware())
+	if swag {
+		docs.SwaggerInfo.Title = "Tgmon API"
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
+	webRoot.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", streamHandler.Stream)
+	authMiddleware := apiAuthMiddleware(apiToken)
+	apiRoot := webRoot.Group("api/")
+	hndlrs.MediaHandler.RegisterRoutes(apiRoot, authMiddleware)
+	hndlrs.JobReqHandler.RegisterRoutes(apiRoot, authMiddleware)
+	hndlrs.JobResHandler.RegisterRoutes(apiRoot, authMiddleware)
+	hndlrs.InfoHandler.RegisterRoutes(apiRoot, authMiddleware)
+	hndlrs.LoginHandler.RegisterRoutes(apiRoot, authMiddleware)
+	hndlrs.SessionHandler.RegisterRoutes(apiRoot, authMiddleware)
+	hndlrs.RandomMediaHandler.RegisterRoutes(apiRoot, authMiddleware)
 }

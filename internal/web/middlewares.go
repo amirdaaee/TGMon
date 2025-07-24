@@ -2,47 +2,48 @@ package web
 
 import (
 	"net/http"
+	"strings"
 
-	"github.com/amirdaaee/TGMon/config"
 	"github.com/gin-gonic/gin"
 )
 
-func tokenAuth(c *gin.Context) bool {
-	token, ok := c.Request.Header["Authorization"]
-	if !ok || token[0] != "Bearer "+config.Config().UserToken {
+// Package api provides HTTP API middlewares for authentication, metrics, and error handling.
+
+func apiAuth(c *gin.Context, expected string) bool {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
 		return false
 	}
-	return true
-}
-func apiAuth(c *gin.Context) bool {
-	token, ok := c.Request.Header["Authorization"]
-	if !ok || token[0] != "Basic "+config.Config().ApiToken {
+	scheme, value, ok := strings.Cut(authHeader, " ")
+	if !ok || !(scheme == "Basic" || scheme == "Bearer") { //nolint:golint,staticcheck
 		return false
 	}
-	return true
+	return value == expected
 }
-func tokenAuthMiddleware() gin.HandlerFunc {
+
+// apiAuthMiddleware returns a Gin middleware that enforces API authentication using the provided expected value.
+func apiAuthMiddleware(expected string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !tokenAuth(c) {
-			c.AbortWithStatus(http.StatusUnauthorized)
-		}
-		c.Next()
-	}
-}
-func apiAuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if !apiAuth(c) {
+		if expected != "" && !apiAuth(c, expected) {
 			c.AbortWithStatus(http.StatusUnauthorized)
 		}
 		c.Next()
 	}
 }
 
-func anyAuthMiddleware() gin.HandlerFunc {
+// errMiddleware is a Gin middleware that handles errors, logs them, and returns appropriate HTTP responses.
+func errMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !(apiAuth(c) || tokenAuth(c)) {
-			c.AbortWithStatus(http.StatusUnauthorized)
-		}
 		c.Next()
+		if len(c.Errors) > 0 {
+			err := c.Errors.Last()
+			switch e := err.Err.(type) {
+			case HttpErr:
+				c.AbortWithStatusJSON(e.StatusCode, e)
+			default:
+				c.AbortWithStatusJSON(http.StatusInternalServerError,
+					map[string]string{"message": "Service Unavailable"})
+			}
+		}
 	}
 }

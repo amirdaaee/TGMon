@@ -1,0 +1,328 @@
+definitions:
+  types.JobReqDoc:
+    properties:
+      CreatedAt:
+        type: string
+      DeletedAt:
+        type: string
+      ID:
+        type: string
+      MediaID:
+        type: string
+      Type:
+        $ref: '#/definitions/types.JobTypeEnum'
+      UpdatedAt:
+        type: string
+    type: object
+  types.JobResDoc:
+    properties:
+      CreatedAt:
+        type: string
+      DeletedAt:
+        type: string
+      ID:
+        type: string
+      JobReqID:
+        type: string
+      Sprite:
+        items:
+          type: integer
+        type: array
+      Thumbnail:
+        items:
+          type: integer
+        type: array
+      UpdatedAt:
+        type: string
+      Vtt:
+        items:
+          type: integer
+        type: array
+    type: object
+  types.JobTypeEnum:
+    enum:
+    - THUMBNAIL
+    - SPRITE
+    type: string
+    x-enum-varnames:
+    - THUMBNAILJobType
+    - SPRITEJobType
+  types.MediaFileDoc:
+    properties:
+      CreatedAt:
+        type: string
+      DeletedAt:
+        type: string
+      ID:
+        type: string
+      MessageID:
+        type: integer
+      Meta:
+        $ref: '#/definitions/types.MediaFileMeta'
+      Sprite:
+        type: string
+      Thumbnail:
+        type: string
+      UpdatedAt:
+        type: string
+      Vtt:
+        type: string
+    type: object
+  types.MediaFileMeta:
+    properties:
+      Duration:
+        type: number
+      FileID:
+        type: integer
+      FileName:
+        type: string
+      FileSize:
+        type: integer
+      MimeType:
+        type: string
+    type: object
+  web.InfoGetResType:
+    properties:
+      MediaCount:
+        type: integer
+    type: object
+  web.LoginPostReqType:
+    properties:
+      Password:
+        type: string
+      Username:
+        type: string
+    required:
+    - Password
+    - Username
+    type: object
+  web.LoginPostResType:
+    properties:
+      Token:
+        type: string
+    type: object
+  web.MediaListResType:
+    properties:
+      Media:
+        items:
+          $ref: '#/definitions/types.MediaFileDoc'
+        type: array
+      Total:
+        type: integer
+    type: object
+  web.MediaReadResType:
+    properties:
+      Media:
+        $ref: '#/definitions/types.MediaFileDoc'
+      nextID:
+        type: string
+      pervID:
+        type: string
+    type: object
+  web.RandomMediaGetResType:
+    properties:
+      MediaID:
+        type: string
+    type: object
+info:
+  contact: {}
+  title: TGMon API
+  version: "1.0"
+paths:
+  /api/auth/login/:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return a token
+      parameters:
+      - description: Login Data
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/web.LoginPostReqType'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/web.LoginPostResType'
+      summary: Login
+  /api/auth/session/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/web.LoginPostResType'
+      security:
+      - ApiKeyAuth: []
+      summary: Session data
+  /api/info/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/web.InfoGetResType'
+      security:
+      - ApiKeyAuth: []
+      summary: Info summary
+  /api/jobReq/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/types.JobReqDoc'
+            type: array
+      security:
+      - ApiKeyAuth: []
+      summary: List job requests
+      tags:
+      - jobReq
+    post:
+      parameters:
+      - description: Job Request Data
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/types.JobReqDoc'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.JobReqDoc'
+      security:
+      - ApiKeyAuth: []
+      summary: Create job request
+      tags:
+      - jobReq
+  /api/jobReq/{id}/:
+    delete:
+      parameters:
+      - description: Job Request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: Delete job request
+      tags:
+      - jobReq
+  /api/jobRes/:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Job Response Data
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/types.JobResDoc'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.JobResDoc'
+      security:
+      - ApiKeyAuth: []
+      summary: Create job response
+      tags:
+      - jobRes
+  /api/media/:
+    get:
+      parameters:
+      - description: page
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/web.MediaListResType'
+      security:
+      - ApiKeyAuth: []
+      summary: List media
+      tags:
+      - media
+  /api/media/{id}/:
+    delete:
+      parameters:
+      - description: Media ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      security:
+      - ApiKeyAuth: []
+      summary: Delete media
+      tags:
+      - media
+    get:
+      parameters:
+      - description: Media ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/web.MediaReadResType'
+      security:
+      - ApiKeyAuth: []
+      summary: Read media
+      tags:
+      - media
+  /api/media/random/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/web.RandomMediaGetResType'
+      security:
+      - ApiKeyAuth: []
+      summary: Get random media
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
