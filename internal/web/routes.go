@@ -9,11 +9,13 @@ import (
 )
 
 type HandlerContainer struct {
-	MediaHandler  *CRDApiHandler[types.MediaFileDoc]
-	JobReqHandler *CRDApiHandler[types.JobReqDoc]
-	JobResHandler *CRDApiHandler[types.JobResDoc]
-	InfoHandler   *ApiHandler
-	LoginHandler  *ApiHandler
+	MediaHandler       *CRDApiHandler[types.MediaFileDoc]
+	JobReqHandler      *CRDApiHandler[types.JobReqDoc]
+	JobResHandler      *CRDApiHandler[types.JobResDoc]
+	InfoHandler        *ApiHandler
+	LoginHandler       *ApiHandler
+	SessionHandler     *ApiHandler
+	RandomMediaHandler *ApiHandler
 }
 
 func RegisterRoutes(r *gin.Engine, streamHandler *Streamhandler, hndlrs HandlerContainer, apiToken string, swag bool) {
@@ -30,4 +32,6 @@ func RegisterRoutes(r *gin.Engine, streamHandler *Streamhandler, hndlrs HandlerC
 	hndlrs.JobResHandler.RegisterRoutes(apiRoot, authMiddleware)
 	hndlrs.InfoHandler.RegisterRoutes(apiRoot, authMiddleware)
 	hndlrs.LoginHandler.RegisterRoutes(apiRoot, authMiddleware)
+	hndlrs.SessionHandler.RegisterRoutes(apiRoot, authMiddleware)
+	hndlrs.RandomMediaHandler.RegisterRoutes(apiRoot, authMiddleware)
 }

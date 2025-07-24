@@ -89,8 +89,9 @@ func (f *BaseFacade[T]) DeleteOne(ctx context.Context, filter bson.D) (*T, error
 		return nil, fmt.Errorf("error deleting document: %w", err)
 	}
 	// PostDelete runs in a goroutine; errors are logged but not returned.
+	postCtx := context.Background()
 	go func() {
-		if err := f.crd.PostDelete(ctx, doc); err != nil {
+		if err := f.crd.PostDelete(postCtx, doc); err != nil {
 			ll.WithError(err).Error("error in post-deleting hook")
 		} else {
 			ll.Info("document post-deleting hook completed")

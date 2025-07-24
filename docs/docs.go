@@ -15,7 +15,59 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/info": {
+        "/api/auth/login/": {
+            "post": {
+                "description": "Authenticate user and return a token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Login",
+                "parameters": [
+                    {
+                        "description": "Login Data",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/web.LoginPostReqType"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/web.LoginPostResType"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/session/": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Session data",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/web.LoginPostResType"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/info/": {
             "get": {
                 "security": [
                     {
@@ -36,7 +88,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/jobReq": {
+        "/api/jobReq/": {
             "get": {
                 "security": [
                     {
@@ -61,9 +113,42 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobReq"
+                ],
+                "summary": "Create job request",
+                "parameters": [
+                    {
+                        "description": "Job Request Data",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.JobReqDoc"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/types.JobReqDoc"
+                        }
+                    }
+                }
             }
         },
-        "/api/jobReq/{id}": {
+        "/api/jobReq/{id}/": {
             "delete": {
                 "security": [
                     {
@@ -96,7 +181,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/jobRes": {
+        "/api/jobRes/": {
             "post": {
                 "security": [
                     {
@@ -120,7 +205,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/web.JobResPostReqType"
+                            "$ref": "#/definitions/types.JobResDoc"
                         }
                     }
                 ],
@@ -134,31 +219,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/login": {
-            "post": {
-                "description": "Authenticate user and return a token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "summary": "Login",
-                "parameters": [
-                    {
-                        "description": "Login Data",
-                        "name": "data",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/web.LoginPostReqType"
-                        }
-                    }
-                ],
-                "responses": {}
-            }
-        },
-        "/api/media": {
+        "/api/media/": {
             "get": {
                 "security": [
                     {
@@ -184,16 +245,65 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/types.MediaFileDoc"
-                            }
+                            "$ref": "#/definitions/web.MediaListResType"
                         }
                     }
                 }
             }
         },
-        "/api/media/{id}": {
+        "/api/media/random/": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Get random media",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/web.RandomMediaGetResType"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/media/{id}/": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media"
+                ],
+                "summary": "Read media",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Media ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/web.MediaReadResType"
+                        }
+                    }
+                }
+            },
             "delete": {
                 "security": [
                     {
@@ -228,22 +338,22 @@ const docTemplate = `{
         "types.JobReqDoc": {
             "type": "object",
             "properties": {
-                "createdAt": {
+                "CreatedAt": {
                     "type": "string"
                 },
-                "deletedAt": {
+                "DeletedAt": {
                     "type": "string"
                 },
-                "id": {
+                "ID": {
                     "type": "string"
                 },
-                "mediaID": {
+                "MediaID": {
                     "type": "string"
                 },
-                "type": {
+                "Type": {
                     "$ref": "#/definitions/types.JobTypeEnum"
                 },
-                "updatedAt": {
+                "UpdatedAt": {
                     "type": "string"
                 }
             }
@@ -251,34 +361,34 @@ const docTemplate = `{
         "types.JobResDoc": {
             "type": "object",
             "properties": {
-                "createdAt": {
+                "CreatedAt": {
                     "type": "string"
                 },
-                "deletedAt": {
+                "DeletedAt": {
                     "type": "string"
                 },
-                "id": {
+                "ID": {
                     "type": "string"
                 },
-                "jobReqID": {
+                "JobReqID": {
                     "type": "string"
                 },
-                "sprite": {
+                "Sprite": {
                     "type": "array",
                     "items": {
                         "type": "integer"
                     }
                 },
-                "thumbnail": {
+                "Thumbnail": {
                     "type": "array",
                     "items": {
                         "type": "integer"
                     }
                 },
-                "updatedAt": {
+                "UpdatedAt": {
                     "type": "string"
                 },
-                "vtt": {
+                "Vtt": {
                     "type": "array",
                     "items": {
                         "type": "integer"
@@ -300,31 +410,31 @@ const docTemplate = `{
         "types.MediaFileDoc": {
             "type": "object",
             "properties": {
-                "createdAt": {
+                "CreatedAt": {
                     "type": "string"
                 },
-                "deletedAt": {
+                "DeletedAt": {
                     "type": "string"
                 },
-                "id": {
+                "ID": {
                     "type": "string"
                 },
-                "messageID": {
+                "MessageID": {
                     "type": "integer"
                 },
-                "meta": {
+                "Meta": {
                     "$ref": "#/definitions/types.MediaFileMeta"
                 },
-                "sprite": {
+                "Sprite": {
                     "type": "string"
                 },
-                "thumbnail": {
+                "Thumbnail": {
                     "type": "string"
                 },
-                "updatedAt": {
+                "UpdatedAt": {
                     "type": "string"
                 },
-                "vtt": {
+                "Vtt": {
                     "type": "string"
                 }
             }
@@ -332,16 +442,19 @@ const docTemplate = `{
         "types.MediaFileMeta": {
             "type": "object",
             "properties": {
-                "fileID": {
+                "Duration": {
+                    "type": "number"
+                },
+                "FileID": {
                     "type": "integer"
                 },
-                "fileName": {
+                "FileName": {
                     "type": "string"
                 },
-                "fileSize": {
+                "FileSize": {
                     "type": "integer"
                 },
-                "mimeType": {
+                "MimeType": {
                     "type": "string"
                 }
             }
@@ -349,60 +462,66 @@ const docTemplate = `{
         "web.InfoGetResType": {
             "type": "object",
             "properties": {
-                "mediaCount": {
+                "MediaCount": {
                     "type": "integer"
-                }
-            }
-        },
-        "web.JobResPostReqType": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "deletedAt": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "jobReqID": {
-                    "type": "string"
-                },
-                "sprite": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "thumbnail": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "vtt": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
                 }
             }
         },
         "web.LoginPostReqType": {
             "type": "object",
             "required": [
-                "password",
-                "username"
+                "Password",
+                "Username"
             ],
             "properties": {
-                "password": {
+                "Password": {
                     "type": "string"
                 },
-                "username": {
+                "Username": {
+                    "type": "string"
+                }
+            }
+        },
+        "web.LoginPostResType": {
+            "type": "object",
+            "properties": {
+                "Token": {
+                    "type": "string"
+                }
+            }
+        },
+        "web.MediaListResType": {
+            "type": "object",
+            "properties": {
+                "Media": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.MediaFileDoc"
+                    }
+                },
+                "Total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "web.MediaReadResType": {
+            "type": "object",
+            "properties": {
+                "Media": {
+                    "$ref": "#/definitions/types.MediaFileDoc"
+                },
+                "nextID": {
+                    "type": "string"
+                },
+                "pervID": {
+                    "type": "string"
+                }
+            }
+        },
+        "web.RandomMediaGetResType": {
+            "type": "object",
+            "properties": {
+                "MediaID": {
                     "type": "string"
                 }
             }
@@ -419,11 +538,11 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
+	Version:          "1.0",
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{},
-	Title:            "",
+	Title:            "TGMon API",
 	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,

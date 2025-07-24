@@ -7,7 +7,10 @@ import (
 	"github.com/amirdaaee/TGMon/cmd"
 )
 
-//go:generate swag init --parseDependency
+//go:generate swag init --parseDependency --propertyStrategy pascalcase
+
+// @title           TGMon API
+// @version         1.0
 
 // @securitydefinitions.apikey ApiKeyAuth
 // @in							header

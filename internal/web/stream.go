@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"runtime"
 	"strconv"
 
 	"github.com/amirdaaee/TGMon/internal/db"
@@ -51,6 +52,7 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 		return
 	}
 	wp := s.streamPool.GetWorkerPool()
+	defer runtime.GC()
 	if err := wp.Stream(g.Request.Context(), media.MessageID, meta.Start, g.Writer); err != nil {
 		ll.WithError(err).Error("error streaming media")
 	}
