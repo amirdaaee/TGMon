@@ -89,8 +89,8 @@ func (w *worker) GetDoc(ctx context.Context, messageID int) (*tg.Document, error
 }
 func (w *worker) Stream(ctx context.Context, reader *downloader.Reader, writer chan *downloader.Block) error {
 	// ll := w.getLogger("Stream")
+	doc, err := w.GetDoc(ctx, reader.MsgId)
 	for {
-		doc, err := w.GetDoc(ctx, reader.MsgId)
 		if err != nil {
 			return fmt.Errorf("error getting document: %w", err)
 		}
@@ -99,10 +99,6 @@ func (w *worker) Stream(ctx context.Context, reader *downloader.Reader, writer c
 			return fmt.Errorf("error getting block: %w", err)
 		}
 		writer <- block
-		// if block.Last() {
-		// 	ll.Debug("last block received")
-		// 	return io.EOF
-		// }
 	}
 }
 func (w *worker) getChannel(ctx context.Context) (tg.InputChannelClass, error) {
