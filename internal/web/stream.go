@@ -104,7 +104,9 @@ func (s *Streamhandler) getStreamMetaData(req *http.Request, media types.MediaFi
 		FileSize:      media.Meta.FileSize,
 		Filename:      media.Meta.FileName,
 	}
-
+	if metaData.Filename == "" {
+		metaData.Filename = fmt.Sprintf("%d.mp4", media.Meta.FileID)
+	}
 	if metaData.MimeType == "" {
 		metaData.MimeType = "application/octet-stream"
 	}
