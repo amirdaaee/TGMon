@@ -41,14 +41,12 @@ func (wp *workerPool) GetNextWorker() IWorker {
 }
 func (wp *workerPool) Stream(ctx context.Context, msgID int, offset int64, writer io.Writer) error {
 	ll := wp.getLogger("Stream")
-	wrkr := wp.GetNextWorker()
-	doc, err := wrkr.GetDoc(ctx, msgID)
+	doc, err := wp.GetNextWorker().GetDoc(ctx, msgID)
 	if err != nil {
 		return fmt.Errorf("error getting doc: %w", err)
 	}
 	dataChan := make(chan *downloader.Block, 10)
-	loc := doc.AsInputDocumentFileLocation()
-	reader := downloader.NewReader(offset, loc, doc.GetSize())
+	reader := downloader.NewReader(offset, doc.GetSize(), msgID)
 	errG, ctx := errgroup.WithContext(ctx)
 	errG.Go(func() error {
 		ll.Debug("starting stream")

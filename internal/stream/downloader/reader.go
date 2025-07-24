@@ -33,13 +33,14 @@ func (b Block) Data() []byte {
 }
 
 type Reader struct {
+	MsgId     int
 	sch       schema // immutable
 	offset    int64
 	offsetMux sync.Mutex
 	fileSize  int64
 }
 
-func (r *Reader) Next(ctx context.Context, client *tg.Client) (*Block, error) {
+func (r *Reader) Next(ctx context.Context, client *tg.Client, loc tg.InputFileLocationClass) (*Block, error) {
 	ll := r.getLogger("Next")
 	r.offsetMux.Lock()
 	limit := r.adjustLimit(r.offset)
@@ -47,10 +48,10 @@ func (r *Reader) Next(ctx context.Context, client *tg.Client) (*Block, error) {
 	r.offset += int64(limit)
 	r.offsetMux.Unlock()
 	ll.Debugf("limit=%d, offset=%d, fileSize=%d", limit, offset, r.fileSize)
-	return r.next(ctx, client, offset, limit)
+	return r.next(ctx, client, offset, limit, loc)
 }
 
-func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limit int) (*Block, error) {
+func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limit int, loc tg.InputFileLocationClass) (*Block, error) {
 	ll := r.getLogger("next")
 	for { // for floodWait and timeout
 		if ctx.Err() != nil {
@@ -59,7 +60,7 @@ func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limi
 		if limit <= 0 {
 			return nil, io.EOF
 		}
-		ch, err := r.sch.Chunk(ctx, client, offset, limit)
+		ch, err := r.sch.Chunk(ctx, client, offset, limit, loc)
 		if d, ok := tgerr.AsFloodWait(err); ok {
 			sec := d.Seconds()
 			ll.WithError(err).Warnf("flood wait %f", sec)
@@ -129,16 +130,16 @@ func (r *Reader) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", r, fn))
 }
 
-func NewReader(offset int64, loc *tg.InputDocumentFileLocation, fileSize int64) *Reader {
+func NewReader(offset int64, fileSize int64, msgID int) *Reader {
 	// TODO: client as arg in Next function and passed to master
 	master := master{
 		precise:  false,
 		allowCDN: true,
-		location: loc,
 	}
 	return &Reader{
 		sch:      master,
 		offset:   offset,
 		fileSize: fileSize,
+		MsgId:    msgID,
 	}
 }

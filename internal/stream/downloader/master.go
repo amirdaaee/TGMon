@@ -24,7 +24,7 @@ func (r *RedirectError) Error() string {
 }
 
 type schema interface {
-	Chunk(ctx context.Context, client *tg.Client, offset int64, limit int) (chunk, error)
+	Chunk(ctx context.Context, client *tg.Client, offset int64, limit int, loc tg.InputFileLocationClass) (chunk, error)
 }
 
 // master is a master DC download schema.
@@ -32,18 +32,17 @@ type schema interface {
 type master struct {
 	precise  bool
 	allowCDN bool
-	location *tg.InputDocumentFileLocation
 }
 
 var _ schema = master{}
 
-func (c master) Chunk(ctx context.Context, client *tg.Client, offset int64, limit int) (chunk, error) {
+func (c master) Chunk(ctx context.Context, client *tg.Client, offset int64, limit int, loc tg.InputFileLocationClass) (chunk, error) {
 	ll := c.getLogger("Chunk")
 	ll.Debugf("getting chunk from offset %d with limit %d", offset, limit)
 	req := &tg.UploadGetFileRequest{
 		Offset:   offset,
 		Limit:    limit,
-		Location: c.location,
+		Location: loc,
 	}
 	req.SetCDNSupported(c.allowCDN)
 	req.SetPrecise(c.precise)

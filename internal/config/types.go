@@ -6,6 +6,7 @@ type HttpConfigType struct {
 	ApiToken     string   `env:"API_TOKEN,required"`
 	Swagger      bool     `env:"SWAGGER" envDefault:"false"`
 	CoresAllowed []string `env:"CORES_ALLOWED_ORIGINS"`
+	ListenAddr   string   `env:"LISTEN_ADDR" envDefault:":8080"`
 }
 type ConfigType struct {
 	AppID           int            `env:"APP_ID,required"`

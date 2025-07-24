@@ -10,7 +10,7 @@ FROM alpine AS app
 ENV SESSION_DIR="/TGMon/session"
 ENV WORKER_CACHE_ROOT="/TGMon/worker-cache"
 ENV GIN_MODE=release
-ENV WORKER_CACHE_ROOT=WARNING
+ENV LOG_LEVEL=WARNING
 RUN mkdir -p $SESSION_DIR &&\
     mkdir -p $WORKER_CACHE_ROOT
 COPY --from=build /app/tgmon /bin/tgmon

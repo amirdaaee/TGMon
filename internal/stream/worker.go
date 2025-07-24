@@ -90,7 +90,11 @@ func (w *worker) GetDoc(ctx context.Context, messageID int) (*tg.Document, error
 func (w *worker) Stream(ctx context.Context, reader *downloader.Reader, writer chan *downloader.Block) error {
 	// ll := w.getLogger("Stream")
 	for {
-		block, err := reader.Next(ctx, w.getTgApi())
+		doc, err := w.GetDoc(ctx, reader.MsgId)
+		if err != nil {
+			return fmt.Errorf("error getting document: %w", err)
+		}
+		block, err := reader.Next(ctx, w.getTgApi(), doc.AsInputDocumentFileLocation())
 		if err != nil {
 			return fmt.Errorf("error getting block: %w", err)
 		}

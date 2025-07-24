@@ -75,7 +75,7 @@ var webCmd = &cobra.Command{
 		}
 		web.RegisterRoutes(g, streamHandler, hndlrs, hCfg.ApiToken, hCfg.Swagger)
 		ll.Warn("starting server")
-		if err := g.Run(":8080"); err != nil {
+		if err := g.Run(hCfg.ListenAddr); err != nil {
 			logrus.WithError(err).Fatal("error running webserver")
 		}
 	},
