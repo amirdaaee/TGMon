@@ -16,12 +16,10 @@ type ConfigType struct {
 	WorkerCacheRoot string         `env:"WORKER_CACHE_ROOT,required"`
 	SessionDir      string         `env:"SESSION_DIR" envDefault:"sessions"`
 	ChannelID       int64          `env:"CHANNEL_ID,required"`
-	StreamChunkSize int64          `env:"STREAM_CHUNK_SIZE" envDefault:"1048576"`
 	LogLevel        string         `env:"LOG_LEVEL" envDefault:"warning"`
 	HttpConfig      HttpConfigType `envPrefix:"HTTP_CONFIG__"`
 	// ...
-	WorkerProfileFile string `env:"WORKER_PROFILE_FILE"`
-	KeepDupFiles      bool   `env:"KEEP_DUP_FILE"`
+	KeepDupFiles bool `env:"KEEP_DUP_FILE"`
 	// ...
 	MinioEndpoint  string `env:"MINIO_ENDPOINT,required"`
 	MinioAccessKey string `env:"MINIO_ACCESS_KEY,required"`
@@ -31,7 +29,4 @@ type ConfigType struct {
 	// ...
 	MongoDBUri  string `env:"MONGODB_URI,required"`
 	MongoDBName string `env:"MONGODB_DB_NAME,required"`
-	// ...
-	FFmpegImage string `env:"FFMPEG_IMAGE" envDefault:"linuxserver/ffmpeg"`
-	ServerURL   string `env:"SERVER_URL" envDefault:"http://127.0.0.1:8080"`
 }
