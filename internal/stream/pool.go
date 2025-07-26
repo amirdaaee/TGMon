@@ -81,18 +81,24 @@ type IStreamer interface {
 	GetBuffer() *bufio.Reader
 }
 type Streamer struct {
-	ctx    context.Context
-	msgID  int
-	offset int64
-	reader *downloader.Reader
-	wp     IWorkerPool
-	buff   *bufio.Reader
+	ctx      context.Context
+	msgID    int
+	offset   int64
+	reader   *downloader.Reader
+	wp       IWorkerPool
+	buff     *bufio.Reader
+	leftover []byte
 }
 
 var _ IStreamer = (*Streamer)(nil)
 
 func (s *Streamer) Read(p []byte) (n int, err error) {
 	ll := s.getLogger("startStream")
+	if len(s.leftover) > 0 {
+		n := copy(p, s.leftover)
+		s.leftover = s.leftover[n:]
+		return n, nil
+	}
 	for {
 		wrkr := s.wp.GetNextWorker()
 		v, err := wrkr.Stream(s.ctx, s.reader)
@@ -107,7 +113,11 @@ func (s *Streamer) Read(p []byte) (n int, err error) {
 				return 0, fmt.Errorf("error streaming: %w", err)
 			}
 		}
-		return copy(p, v), nil
+		n := copy(p, v)
+		if n < len(v) {
+			s.leftover = append(s.leftover[:0], v[n:]...)
+		}
+		return n, nil
 	}
 }
 func (s *Streamer) GetBuffer() *bufio.Reader {
