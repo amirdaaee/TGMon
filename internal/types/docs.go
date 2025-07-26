@@ -57,7 +57,7 @@ const (
 	SPRITEJobType    JobTypeEnum = "SPRITE"
 )
 const (
-	JobReqDoc__MediaIDField = "mediaID"
+	JobReqDoc__MediaIDField = "MediaID"
 )
 
 type JobReqDoc struct {
