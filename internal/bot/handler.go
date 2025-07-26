@@ -54,10 +54,6 @@ func (h *handler) handleDoc(ctx *ext.Context, u *ext.Update) error {
 	if worker == nil {
 		return NewBotError("no available worker", nil)
 	}
-	// Validate original document
-	if _, err := worker.GetDoc(ctx, u.EffectiveMessage.GetID()); err != nil {
-		return NewBotError("can not get document from user message", err)
-	}
 	// Forward message and process result
 	fwMsg, err := forward(ctx, u, h.channelID)
 	if err != nil {
