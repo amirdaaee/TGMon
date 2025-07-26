@@ -145,20 +145,30 @@ func (crd *JobResCrud) generateFileName(jobReq *types.JobReqDoc) string {
 
 // processJobResult processes the job result, stores the result in Minio, and returns the update field for the media document.
 func (crd *JobResCrud) processJobResult(ctx context.Context, doc *types.JobResDoc, jobReq *types.JobReqDoc, fileName string) ([]bson.D, error) {
+	ll := crd.getLogger("processJobResult")
 	mno := crd.container.GetMinioContainer().GetMinioClient()
 	if doc.Thumbnail != nil {
-		if err := mno.FileAdd(ctx, crd.thumbFileName(fileName), doc.Thumbnail); err != nil {
+		fname := crd.thumbFileName(fileName)
+		if err := mno.FileAdd(ctx, fname, doc.Thumbnail); err != nil {
 			return nil, fmt.Errorf("failed to add thumbnail file to minio: %w", err)
+		} else {
+			ll.Debugf("thumbnail file added to minio: %s", fname)
 		}
 	}
 	if doc.Sprite != nil {
-		if err := mno.FileAdd(ctx, crd.spriteFileName(fileName), doc.Sprite); err != nil {
+		fname := crd.spriteFileName(fileName)
+		if err := mno.FileAdd(ctx, fname, doc.Sprite); err != nil {
 			return nil, fmt.Errorf("failed to add sprite file to minio: %w", err)
+		} else {
+			ll.Debugf("sprite file added to minio: %s", fname)
 		}
 	}
 	if doc.Vtt != nil {
-		if err := mno.FileAdd(ctx, crd.vttFileName(fileName), doc.Vtt); err != nil {
+		fname := crd.vttFileName(fileName)
+		if err := mno.FileAdd(ctx, fname, doc.Vtt); err != nil {
 			return nil, fmt.Errorf("failed to add vtt file to minio: %w", err)
+		} else {
+			ll.Debugf("vtt file added to minio: %s", fname)
 		}
 	}
 	return crd.getUpdateField(jobReq.Type, fileName)
