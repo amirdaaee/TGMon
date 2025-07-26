@@ -7,10 +7,10 @@ COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w"  -o ./tgmon
 
 FROM alpine AS app
-ENV SESSION_DIR="/TGMon/session"
-ENV WORKER_CACHE_ROOT="/TGMon/worker-cache"
 ENV GIN_MODE=release
-ENV LOG_LEVEL=WARNING
+ENV TELEGRAM__SESSION_DIR="/TGMon/session"
+ENV TELEGRAM__WORKER_CACHE_ROOT="/TGMon/worker-cache"
+ENV RUNTIME__LOG_LEVEL=WARNING
 RUN mkdir -p $SESSION_DIR &&\
     mkdir -p $WORKER_CACHE_ROOT
 COPY --from=build /app/tgmon /bin/tgmon
