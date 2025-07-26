@@ -8,6 +8,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/amirdaaee/TGMon/internal/config"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream/downloader"
 	"github.com/amirdaaee/TGMon/internal/tlg"
@@ -128,6 +129,6 @@ func NewStreamer(ctx context.Context, wp IWorkerPool, msgID int, offset int64, e
 		reader: reader,
 		wp:     wp,
 	}
-	v.buff = bufio.NewReaderSize(v, 8*1024*1024)
+	v.buff = bufio.NewReaderSize(v, config.Config().RuntimeConfig.StreamBuffSize)
 	return v, nil
 }

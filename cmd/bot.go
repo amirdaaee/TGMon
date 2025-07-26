@@ -45,7 +45,7 @@ var botCmd = &cobra.Command{
 		}
 		ll.Info("bot built")
 		// ...
-		hndler, err := bot.NewHandler(mediafacade, config.Config().ChannelID, wp)
+		hndler, err := bot.NewHandler(mediafacade, config.Config().TelegramConfig.ChannelID, wp)
 		if err != nil {
 			logrus.WithError(err).Fatal("can not build bot handler")
 		}

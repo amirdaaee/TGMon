@@ -41,17 +41,17 @@ func init() {
 func buildDbContainer() (db.IDbContainer, error) {
 	cfg := config.Config()
 	ctx := context.TODO()
-	mongoContainer, err := mongo.NewMongoContainer(ctx, mongo.MongoContainerConfig{Endpoint: cfg.MongoDBUri, DbName: cfg.MongoDBName}, true)
+	mongoContainer, err := mongo.NewMongoContainer(ctx, mongo.MongoContainerConfig{Endpoint: cfg.MongoDBConfig.Uri, DbName: cfg.MongoDBConfig.DBName}, true)
 	if err != nil {
 		return nil, fmt.Errorf("can not create mongo container: %w", err)
 	}
 	minioContainer, err := minio.NewMinioContainer(ctx, minio.MinioContainerConfig{
-		Endpoint: cfg.MinioEndpoint,
+		Endpoint: cfg.MinioConfig.Endpoint,
 		Opts: &realMinio.Options{
-			Creds:  credentials.NewStaticV4(cfg.MinioAccessKey, cfg.MinioSecretKey, ""),
-			Secure: cfg.MinioSecure,
+			Creds:  credentials.NewStaticV4(cfg.MinioConfig.AccessKey, cfg.MinioConfig.SecretKey, ""),
+			Secure: cfg.MinioConfig.Secure,
 		},
-		Bucket: cfg.MinioBucket,
+		Bucket: cfg.MinioConfig.Bucket,
 	}, true)
 	if err != nil {
 		return nil, fmt.Errorf("can not create minio container: %w", err)
@@ -62,20 +62,20 @@ func buildDbContainer() (db.IDbContainer, error) {
 func buildSessionConfig() *tlg.SessionConfig {
 	cfg := config.Config()
 	return &tlg.SessionConfig{
-		SocksProxy: cfg.TGSocksProxy,
-		SessionDir: cfg.SessionDir,
-		AppID:      cfg.AppID,
-		AppHash:    cfg.AppHash,
+		SocksProxy: cfg.TelegramConfig.TGSocksProxy,
+		SessionDir: cfg.TelegramConfig.SessionDir,
+		AppID:      cfg.TelegramConfig.AppID,
+		AppHash:    cfg.TelegramConfig.AppHash,
 	}
 }
 func buildTgClient() (tlg.IClient, error) {
 	cfg := config.Config()
-	tgClient := tlg.NewTgClient(buildSessionConfig(), cfg.BotToken)
+	tgClient := tlg.NewTgClient(buildSessionConfig(), cfg.TelegramConfig.BotToken)
 	return tgClient, nil
 }
 func buildWorkerContainer() (stream.IWorkerContainer, error) {
 	cfg := config.Config()
-	wp, err := stream.NewWorkerPool(cfg.WorkerTokens, buildSessionConfig(), cfg.ChannelID, cfg.WorkerCacheRoot)
+	wp, err := stream.NewWorkerPool(cfg.TelegramConfig.WorkerTokens, buildSessionConfig(), cfg.TelegramConfig.ChannelID, cfg.TelegramConfig.WorkerCacheRoot)
 	if err != nil {
 		return nil, fmt.Errorf("can not create worker pool: %w", err)
 	}
@@ -83,7 +83,7 @@ func buildWorkerContainer() (stream.IWorkerContainer, error) {
 }
 func buildMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerContainer) facade.IFacade[types.MediaFileDoc] {
 	cfg := config.Config()
-	return facade.NewFacade(facade.NewMediaCrud(dbContainer, workerContainer, cfg.KeepDupFiles))
+	return facade.NewFacade(facade.NewMediaCrud(dbContainer, workerContainer, cfg.RuntimeConfig.KeepDupFiles))
 }
 func buildJobReqFacade(dbContainer db.IDbContainer) facade.IFacade[types.JobReqDoc] {
 	return facade.NewFacade(facade.NewJobReqCrud(dbContainer))
@@ -93,5 +93,5 @@ func buildJobResFacade(dbContainer db.IDbContainer) facade.IFacade[types.JobResD
 }
 func setupLogger() {
 	cfg := config.Config()
-	log.Setup(cfg.LogLevel)
+	log.Setup(cfg.RuntimeConfig.LogLevel)
 }
