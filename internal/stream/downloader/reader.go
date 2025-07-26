@@ -12,7 +12,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const maxFloodWaitSec = 5
+const (
+	oneMB           = 1048576 // 1 MB
+	fourKB          = 4096    // 4 KB
+	maxFloodWaitSec = 5
+)
 
 type chunk struct {
 	tag  tg.StorageFileTypeClass
@@ -25,9 +29,6 @@ type Block struct {
 	partSize int
 }
 
-//	func (b Block) Last() bool {
-//		return len(b.data) < b.partSize
-//	}
 func (b Block) Data() []byte {
 	return b.data
 }
@@ -38,26 +39,46 @@ type Reader struct {
 	offset    int64
 	offsetMux sync.Mutex
 	fileSize  int64
+	end       int64
 }
 
 func (r *Reader) Next(ctx context.Context, client *tg.Client, loc tg.InputFileLocationClass) (*Block, error) {
 	ll := r.getLogger("Next")
 	r.offsetMux.Lock()
-	limit := r.adjustLimit(r.offset)
-	offset := r.offset
-	r.offset += int64(limit)
+	if r.offset > r.end {
+		ll.Debugf("EOF [r.offset > end (offset=%d, end=%d)]", r.offset, r.end)
+		r.offsetMux.Unlock()
+		return nil, io.EOF
+	}
+	offsetSkip := r.offset % fourKB
+	offset := r.offset - offsetSkip
+	limit, err := r.adjustLimit(offset)
+	if err != nil {
+		r.offsetMux.Unlock()
+		return nil, err
+	}
+	r.offset = offset + int64(limit)
 	r.offsetMux.Unlock()
-	ll.Debugf("limit=%d, offset=%d, fileSize=%d", limit, offset, r.fileSize)
-	return r.next(ctx, client, offset, limit, loc)
+	ll.Debugf("limit=%d, offset=%d, fileSize=%d, end=%d, offsetSkip=%d", limit, offset, r.fileSize, offset+int64(limit), offsetSkip)
+	v, err := r.next(ctx, client, offset, limit, loc)
+	if err != nil {
+		return nil, err
+	}
+
+	offsetEndSkip := int64(len(v.data))
+	if offset+int64(len(v.data)) > r.end {
+		offsetEndSkip -= (offset + int64(len(v.data)) - r.end - 1)
+		ll.Debugf("overshot end (exp=%d vs %d - cut=%d/%d)", r.end, offset+int64(len(v.data)), offsetEndSkip, len(v.data))
+	}
+	v.data = v.data[offsetSkip:offsetEndSkip]
+	return v, nil
 }
 
 func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limit int, loc tg.InputFileLocationClass) (*Block, error) {
 	ll := r.getLogger("next")
 	for { // for floodWait and timeout
 		if ctx.Err() != nil {
-			return nil, nil
-		}
-		if limit <= 0 {
+			ll.Debug("context canceled")
 			return nil, io.EOF
 		}
 		ch, err := r.sch.Chunk(ctx, client, offset, limit, loc)
@@ -76,7 +97,7 @@ func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limi
 			if flood || tgerr.Is(err, tg.ErrTimeout) {
 				continue
 			}
-			return nil, fmt.Errorf("error getting chunk: %w", err)
+			return nil, fmt.Errorf("error getting chunk (offset=%d, limit=%d, fileSize=%d, end=%d): %w", offset, limit, r.fileSize, offset+int64(limit), err)
 		}
 
 		return &Block{
@@ -87,12 +108,8 @@ func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limi
 	}
 }
 
-func (r *Reader) adjustLimit(offset int64) int {
+func (r *Reader) adjustLimit(offset int64) (int, error) {
 	ll := r.getLogger("adjustLimit")
-	const (
-		oneMB  = 1048576 // 1 MB
-		fourKB = 4096    // 4 KB
-	)
 
 	// Valid divisors of 1MB that are multiples of 4KB (powers of 2 from 2^12 to 2^19)
 	validLimits := []int{524288, 262144, 131072, 65536, 32768, 16384, 8192, 4096}
@@ -100,8 +117,8 @@ func (r *Reader) adjustLimit(offset int64) int {
 	// Calculate maximum possible limit based on fileSize constraint
 	maxByFileSize := int(r.fileSize - offset)
 	if maxByFileSize <= 0 {
-		ll.Warnf("maxByFileSize <= 0, offset=%d, fileSize=%d", offset, r.fileSize)
-		return 0
+		ll.Debugf("EOF (maxByFileSize <= 0, offset=%d, fileSize=%d)", offset, r.fileSize)
+		return 0, io.EOF
 	}
 
 	// Calculate maximum possible limit to stay within 1MB chunk from beginning
@@ -119,18 +136,18 @@ func (r *Reader) adjustLimit(offset int64) int {
 		if validLimit <= maxAllowed {
 			ll.Debugf("optimal limit found: %d (offset=%d, fileSize=%d, maxByFileSize=%d, maxByChunk=%d)",
 				validLimit, offset, r.fileSize, maxByFileSize, maxByChunk)
-			return validLimit
+			return validLimit, nil
 		}
 	}
 
-	ll.Warnf("no valid limit found, returning least")
-	return validLimits[len(validLimits)-1]
+	ll.Debugf("no valid limit found, returning least")
+	return validLimits[len(validLimits)-1], nil
 }
 func (r *Reader) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", r, fn))
 }
 
-func NewReader(offset int64, fileSize int64, msgID int) *Reader {
+func NewReader(offset int64, fileSize int64, msgID int, end int64) *Reader {
 	// TODO: client as arg in Next function and passed to master
 	master := master{
 		precise:  false,
@@ -141,5 +158,6 @@ func NewReader(offset int64, fileSize int64, msgID int) *Reader {
 		offset:   offset,
 		fileSize: fileSize,
 		MsgId:    msgID,
+		end:      end,
 	}
 }

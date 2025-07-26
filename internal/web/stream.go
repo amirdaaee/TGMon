@@ -26,16 +26,15 @@ type Streamhandler struct {
 }
 
 func (s *Streamhandler) Stream(g *gin.Context) {
-	ll := s.getLogger("Stream")
 	r := g.Request
 	var req StreamReq
 	if err := g.ShouldBindUri(&req); err != nil {
 		g.Error(NewHttpError(err, http.StatusBadRequest)) //nolint:golint,errcheck
 		return
 	}
-	media := s.getMedia(g, req.ID)
-	if media == nil {
-		// s.getMedia should have already aborted the request with error
+	media, err := s.getMedia(g, req.ID)
+	if err != nil {
+		g.Error(err) //nolint:golint,errcheck
 		return
 	}
 	meta, err := s.getStreamMetaData(r, *media)
@@ -44,40 +43,40 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 		return
 	}
 	status, headers := s.getStreamHeaders(r, meta, g.Query("d") == "true")
-	g.Writer.WriteHeader(status)
-	for k, v := range headers {
-		g.Header(k, v)
-	}
 	if r.Method == "HEAD" {
+		g.Writer.WriteHeader(status)
+		for k, v := range headers {
+			g.Header(k, v)
+		}
 		return
 	}
-	wp := s.streamPool.GetWorkerPool()
-	defer runtime.GC()
-	if err := wp.Stream(g.Request.Context(), media.MessageID, meta.Start, g.Writer); err != nil {
-		ll.WithError(err).Error("error streaming media")
+	streamer, err := s.streamPool.GetWorkerPool().Stream(g.Request.Context(), media.MessageID, meta.Start, meta.End)
+	if err != nil {
+		g.Error(NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
+		return
 	}
-	ll.Debug("stream finished")
+	defer runtime.GC()
+	// remove content-length from header map
+	delete(headers, "Content-Length")
+	delete(headers, "Content-Type")
+	g.DataFromReader(status, meta.ContentLength, meta.MimeType, streamer.GetBuffer(), headers)
 }
-func (s *Streamhandler) getMedia(g *gin.Context, id string) *types.MediaFileDoc {
+func (s *Streamhandler) getMedia(g *gin.Context, id string) (*types.MediaFileDoc, error) {
 	if id == "" {
-		g.Error(NewHttpError(errors.New("mediaID is required"), http.StatusBadRequest)) //nolint:golint,errcheck
-		return nil
+		return nil, NewHttpError(errors.New("mediaID is required"), http.StatusBadRequest)
 	}
 	idObj, err := bson.ObjectIDFromHex(id)
 	if err != nil {
-		g.Error(NewHttpError(fmt.Errorf("error parsing mediaID: %w", err), http.StatusBadRequest)) //nolint:golint,errcheck
-		return nil
+		return nil, NewHttpError(fmt.Errorf("error parsing mediaID: %w", err), http.StatusBadRequest)
 	}
 	media, err := s.mediaFacade.GetCollection().Finder().Filter(query.Id(idObj)).Find(g.Request.Context())
 	if err != nil {
-		g.Error(NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
-		return nil
+		return nil, NewHttpError(err, http.StatusInternalServerError)
 	}
 	if len(media) == 0 {
-		g.Error(NewHttpError(fmt.Errorf("media (%s) not found", id), http.StatusNotFound)) //nolint:golint,errcheck
-		return nil
+		return nil, NewHttpError(fmt.Errorf("media (%s) not found", id), http.StatusNotFound)
 	}
-	return media[0]
+	return media[0], nil
 }
 func (s *Streamhandler) getStreamMetaData(req *http.Request, media types.MediaFileDoc) (*StreamMetaData, error) {
 	ll := s.getLogger("getStreamMetaData")
@@ -85,9 +84,11 @@ func (s *Streamhandler) getStreamMetaData(req *http.Request, media types.MediaFi
 	rangeHeader := req.Header.Get("Range")
 	fileSize := media.Meta.FileSize
 	if rangeHeader == "" {
+		ll.Debug("no range header")
 		start = 0
 		end = fileSize - 1
 	} else {
+		ll.Debugf("range header %s", rangeHeader)
 		ranges, err := range_parser.Parse(fileSize, rangeHeader)
 		if err != nil {
 			return nil, err

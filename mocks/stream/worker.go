@@ -73,15 +73,16 @@ func (mr *MockIWorkerMockRecorder) GetThumbnail(ctx, messageID any) *gomock.Call
 }
 
 // Stream mocks base method.
-func (m *MockIWorker) Stream(ctx context.Context, reader *downloader.Reader, writer chan *downloader.Block) error {
+func (m *MockIWorker) Stream(ctx context.Context, reader *downloader.Reader) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stream", ctx, reader, writer)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "Stream", ctx, reader)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Stream indicates an expected call of Stream.
-func (mr *MockIWorkerMockRecorder) Stream(ctx, reader, writer any) *gomock.Call {
+func (mr *MockIWorkerMockRecorder) Stream(ctx, reader any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stream", reflect.TypeOf((*MockIWorker)(nil).Stream), ctx, reader, writer)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stream", reflect.TypeOf((*MockIWorker)(nil).Stream), ctx, reader)
 }

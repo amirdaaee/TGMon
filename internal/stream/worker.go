@@ -2,21 +2,25 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"sync"
 
+	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream/downloader"
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	"github.com/celestix/gotgproto"
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/tg"
+	"github.com/sirupsen/logrus"
 )
 
 //go:generate mockgen -source=worker.go -destination=../../mocks/stream/worker.go -package=mocks
 type IWorker interface {
 	GetThumbnail(ctx context.Context, messageID int) ([]byte, error)
 	GetDoc(ctx context.Context, messageID int) (*tg.Document, error)
-	Stream(ctx context.Context, reader *downloader.Reader, writer chan *downloader.Block) error
+	Stream(ctx context.Context, reader *downloader.Reader) ([]byte, error)
 }
 type worker struct {
 	cl            tlg.IClient
@@ -87,19 +91,26 @@ func (w *worker) GetDoc(ctx context.Context, messageID int) (*tg.Document, error
 	}
 	return &doc, nil
 }
-func (w *worker) Stream(ctx context.Context, reader *downloader.Reader, writer chan *downloader.Block) error {
-	// ll := w.getLogger("Stream")
+func (w *worker) Stream(ctx context.Context, reader *downloader.Reader) ([]byte, error) {
+	ll := w.getLogger("Stream")
 	doc, err := w.GetDoc(ctx, reader.MsgId)
-	for {
-		if err != nil {
-			return fmt.Errorf("error getting document: %w", err)
-		}
-		block, err := reader.Next(ctx, w.getTgApi(), doc.AsInputDocumentFileLocation())
-		if err != nil {
-			return fmt.Errorf("error getting block: %w", err)
-		}
-		writer <- block
+	if err != nil {
+		return nil, fmt.Errorf("error getting document: %w", err)
 	}
+	inDoc := doc.AsInputDocumentFileLocation()
+	block, err := reader.Next(ctx, w.getTgApi(), inDoc)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			ll.Debug("end of file reached (io.EOF)")
+			return nil, io.EOF
+		}
+		return nil, fmt.Errorf("error getting block: %w", err)
+	}
+	if block == nil {
+		ll.Debug("end of file reached (nil block)")
+		return nil, io.EOF
+	}
+	return block.Data(), nil
 }
 func (w *worker) getChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	w.tgChannelLock.Lock()
@@ -199,6 +210,9 @@ func (w *worker) retrieveChannelMessageDoc(ctx context.Context, messageID int) (
 }
 func (w *worker) cacheNamePrefix(s int) string {
 	return fmt.Sprintf("%d-%d", w.getTg().Self.GetID(), s)
+}
+func (w *worker) getLogger(fn string) *logrus.Entry {
+	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", w, fn))
 }
 func NewWorker(tok string, sessCfg *tlg.SessionConfig, channelID int64, cacheRoot string) (IWorker, error) {
 	cache := NewAccessHashCache(cacheRoot)
