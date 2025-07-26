@@ -2,6 +2,7 @@
 package facade
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -165,7 +166,8 @@ func (crd *JobResCrud) processJobResult(ctx context.Context, doc *types.JobResDo
 	}
 	if doc.Vtt != nil {
 		fname := crd.vttFileName(fileName)
-		if err := mno.FileAdd(ctx, fname, doc.Vtt); err != nil {
+		sprt := crd.spriteFileName(fileName)
+		if err := mno.FileAdd(ctx, fname, bytes.ReplaceAll(doc.Vtt, []byte("__NAME__"), []byte(sprt))); err != nil {
 			return nil, fmt.Errorf("failed to add vtt file to minio: %w", err)
 		} else {
 			ll.Debugf("vtt file added to minio: %s", fname)
