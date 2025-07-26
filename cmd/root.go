@@ -66,7 +66,6 @@ func buildSessionConfig() *tlg.SessionConfig {
 		SessionDir: cfg.SessionDir,
 		AppID:      cfg.AppID,
 		AppHash:    cfg.AppHash,
-		ChannelId:  cfg.ChannelID,
 	}
 }
 func buildTgClient() (tlg.IClient, error) {

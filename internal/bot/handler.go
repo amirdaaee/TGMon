@@ -40,7 +40,7 @@ func (h *handler) Register(b *Bot) {
 		return
 	}
 	dispatcher := h.getDispatcher(b)
-	dispatcher.AddHandler(handlers.NewMessage(filters.Message.Media, h.handleDoc))
+	dispatcher.AddHandler(handlers.NewMessage(filters.Message.Media, HandlerWithErrorMessage(h.handleDoc)))
 }
 
 // handleDoc processes incoming media messages from users, forwards them, and stores metadata.
@@ -137,4 +137,20 @@ func NewHandler(mediaFacade facade.IFacade[types.MediaFileDoc], channelID int64,
 		channelID:       channelID,
 		workerContainer: wp,
 	}, nil
+}
+
+// ---
+func HandlerWithErrorMessage(fn handlers.CallbackResponse) handlers.CallbackResponse {
+	ll := log.GetLogger(log.BotModule)
+	_fn := func(c *ext.Context, u *ext.Update) error {
+		err := fn(c, u)
+		if err != nil {
+			if _, err := c.Reply(u, ext.ReplyTextString(err.Error()), &ext.ReplyOpts{ReplyToMessageId: u.EffectiveMessage.ID}); err != nil {
+				ll.WithError(err).Error("error writing err message")
+			}
+			return err
+		}
+		return nil
+	}
+	return _fn
 }

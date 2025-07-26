@@ -15,7 +15,6 @@ type SessionConfig struct {
 	SessionDir string
 	AppID      int
 	AppHash    string
-	ChannelId  int64
 }
 
 func (sessCfg *SessionConfig) getSocksDialer() (*dcs.Resolver, error) {
