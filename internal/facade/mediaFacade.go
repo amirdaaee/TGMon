@@ -38,7 +38,7 @@ func (crd *MediaCrud) PreCreate(ctx context.Context, doc *types.MediaFileDoc) er
 	if crd.keepDup {
 		return nil
 	}
-	if n, err := crd.GetCollection().Finder().Filter(bsonx.NewD().Add(types.MediaFileDoc__FileIDField, doc.Meta.FileID)).Count(ctx); err != nil {
+	if n, err := crd.GetCollection().Finder().Filter(bsonx.NewD().Add(types.MediaFileDoc__FileIDField, doc.Meta.FileID).Build()).Count(ctx); err != nil {
 		ll.WithError(err).Error("failed to check for duplicates")
 	} else if n > 0 {
 		return fmt.Errorf("%w: %d", ErrFileAlreadyExists, doc.Meta.FileID)
