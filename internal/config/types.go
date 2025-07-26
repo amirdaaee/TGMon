@@ -35,9 +35,9 @@ type RuntimeConfigType struct {
 	StreamBuffSize int    `env:"STREAM_BUFF_SIZE" envDefault:"8388608"`
 }
 type ConfigType struct {
-	TelegramConfig TelegramConfigType `envPrefix:"TELEGRAM_CONFIG__"`
-	HttpConfig     HttpConfigType     `envPrefix:"HTTP_CONFIG__"`
-	MinioConfig    MinioConfigType    `envPrefix:"MINIO_CONFIG__"`
-	MongoDBConfig  MongoDBConfigType  `envPrefix:"MONGODB_CONFIG__"`
-	RuntimeConfig  RuntimeConfigType  `envPrefix:"RUNTIME_CONFIG__"`
+	TelegramConfig TelegramConfigType `envPrefix:"TELEGRAM__"`
+	HttpConfig     HttpConfigType     `envPrefix:"HTTP__"`
+	MinioConfig    MinioConfigType    `envPrefix:"MINIO__"`
+	MongoDBConfig  MongoDBConfigType  `envPrefix:"MONGODB__"`
+	RuntimeConfig  RuntimeConfigType  `envPrefix:"RUNTIME__"`
 }
