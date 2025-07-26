@@ -128,6 +128,6 @@ func NewStreamer(ctx context.Context, wp IWorkerPool, msgID int, offset int64, e
 		reader: reader,
 		wp:     wp,
 	}
-	v.buff = bufio.NewReaderSize(v, 1024*1024)
+	v.buff = bufio.NewReaderSize(v, 8*1024*1024)
 	return v, nil
 }
