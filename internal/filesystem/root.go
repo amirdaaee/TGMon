@@ -212,8 +212,26 @@ func NewMediaFS(dbContainer db.IDbContainer, streamWorkerPool stream.IWorkerPool
 
 // Mount mounts the media filesystem at the specified mount point
 func Mount(mountPoint string, dbContainer db.IDbContainer, streamWorkerPool stream.IWorkerPool) (*fuse.Server, error) {
+	return MountWithOptions(mountPoint, dbContainer, streamWorkerPool, &MountOptions{})
+}
+
+// MountOptions configures the filesystem mount behavior
+type MountOptions struct {
+	// AllowOther allows other users (including containers) to access the filesystem
+	// Note: This requires /etc/fuse.conf to have "user_allow_other" enabled
+	AllowOther bool
+	// Debug enables FUSE debug logging
+	Debug bool
+}
+
+// MountWithOptions mounts the media filesystem with custom options
+func MountWithOptions(mountPoint string, dbContainer db.IDbContainer, streamWorkerPool stream.IWorkerPool, opts *MountOptions) (*fuse.Server, error) {
 	ll := log.GetLogger(log.WebModule).WithField("func", "Mount")
 	ll.Infof("Mounting filesystem at: %s", mountPoint)
+
+	if opts == nil {
+		opts = &MountOptions{}
+	}
 
 	// ensure mount point exists
 	if err := os.MkdirAll(mountPoint, 0755); err != nil {
@@ -224,11 +242,15 @@ func Mount(mountPoint string, dbContainer db.IDbContainer, streamWorkerPool stre
 	root := NewMediaFS(dbContainer, streamWorkerPool)
 
 	// Create FUSE server
-	opts := &fs.Options{}
-	opts.Debug = false
-	opts.AllowOther = false
+	fuseOpts := &fs.Options{}
+	fuseOpts.Debug = opts.Debug
+	fuseOpts.AllowOther = opts.AllowOther
 
-	server, err := fs.Mount(mountPoint, root, opts)
+	if opts.AllowOther {
+		ll.Info("AllowOther enabled - filesystem will be accessible to other users/containers")
+	}
+
+	server, err := fs.Mount(mountPoint, root, fuseOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to mount filesystem: %w", err)
 	}

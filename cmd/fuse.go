@@ -34,7 +34,15 @@ var fuseCmd = &cobra.Command{
 		}
 		// ...
 		mountDir := cmd.Flag("dir").Value.String()
-		server, err := filesystem.Mount(mountDir, dbContainer, wp)
+		allowOther, _ := cmd.Flags().GetBool("allow-other")
+		debug, _ := cmd.Flags().GetBool("debug")
+
+		opts := &filesystem.MountOptions{
+			AllowOther: allowOther,
+			Debug:      debug,
+		}
+
+		server, err := filesystem.MountWithOptions(mountDir, dbContainer, wp, opts)
 		if err != nil {
 			logrus.WithError(err).Fatal("can not mount filesystem")
 		}
@@ -56,4 +64,6 @@ var fuseCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(fuseCmd)
 	fuseCmd.Flags().StringP("dir", "d", "./storage/media", "Directory to mount")
+	fuseCmd.Flags().BoolP("allow-other", "o", false, "Allow other users/containers to access the filesystem (requires user_allow_other in /etc/fuse.conf)")
+	fuseCmd.Flags().BoolP("debug", "v", false, "Enable FUSE debug logging")
 }
