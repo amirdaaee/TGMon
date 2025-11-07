@@ -22,7 +22,7 @@ import (
 type Streamhandler struct {
 	dbContainer db.IDbContainer
 	mediaFacade facade.IFacade[types.MediaFileDoc]
-	streamPool  stream.IWorkerContainer
+	streamPool  stream.IWorkerPool
 }
 
 func (s *Streamhandler) Stream(g *gin.Context) {
@@ -50,7 +50,7 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 		}
 		return
 	}
-	streamer, err := s.streamPool.GetWorkerPool().Stream(g.Request.Context(), media.MessageID, meta.Start, meta.End)
+	streamer, err := s.streamPool.Stream(g.Request.Context(), media.MessageID, meta.Start, meta.End)
 	if err != nil {
 		g.Error(NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
 		return
@@ -140,7 +140,7 @@ func (s *Streamhandler) getStreamHeaders(req *http.Request, meta *StreamMetaData
 func (s *Streamhandler) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", s, fn))
 }
-func NewStreamHandler(dbContainer db.IDbContainer, mediaFacade facade.IFacade[types.MediaFileDoc], wp stream.IWorkerContainer) *Streamhandler {
+func NewStreamHandler(dbContainer db.IDbContainer, mediaFacade facade.IFacade[types.MediaFileDoc], wp stream.IWorkerPool) *Streamhandler {
 	return &Streamhandler{
 		dbContainer: dbContainer,
 		mediaFacade: mediaFacade,

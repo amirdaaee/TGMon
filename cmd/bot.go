@@ -31,7 +31,7 @@ var botCmd = &cobra.Command{
 		}
 		ll.Info("tg client built")
 		// ...
-		wp, err := buildWorkerContainer()
+		wp, err := buildWorkerPool()
 		if err != nil {
 			logrus.WithError(err).Fatal("can not build worker pool")
 		}

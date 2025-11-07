@@ -23,7 +23,7 @@ import (
 type MediaCrud struct {
 	dbContainer     db.IDbContainer
 	jReqFac         IFacade[types.JobReqDoc]
-	workerContainer stream.IWorkerContainer
+	workerContainer stream.IWorkerPool
 	keepDup         bool
 }
 
@@ -123,7 +123,7 @@ func (crd *MediaCrud) getLogger(fn string) *logrus.Entry {
 }
 
 // NewMediaCrud creates a new MediaCrud with the provided database container.
-func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerContainer, keepDup bool) ICrud[types.MediaFileDoc] {
+func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool, keepDup bool) ICrud[types.MediaFileDoc] {
 	jobReqFacade := NewFacade(NewJobReqCrud(dbContainer))
 	return &MediaCrud{dbContainer: dbContainer, jReqFac: jobReqFacade, workerContainer: workerContainer, keepDup: keepDup}
 }
