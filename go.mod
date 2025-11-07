@@ -11,6 +11,7 @@ require (
 	github.com/go-faster/errors v0.7.1
 	github.com/google/uuid v1.6.0
 	github.com/gotd/td v0.127.0
+	github.com/hanwen/go-fuse/v2 v2.9.0
 	github.com/joho/godotenv v1.5.1
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.35.1
