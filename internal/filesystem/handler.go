@@ -18,9 +18,12 @@ import (
 type MediaFileHandle struct {
 	media            *types.MediaFileDoc
 	streamWorkerPool stream.IWorkerPool
+	ctx              context.Context
+	cancel           context.CancelFunc
 }
 
 var _ fs.FileReader = (*MediaFileHandle)(nil)
+var _ fs.FileReleaser = (*MediaFileHandle)(nil)
 
 // Read reads data from the file at the specified offset
 func (mfh *MediaFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
@@ -46,7 +49,28 @@ func (mfh *MediaFileHandle) Read(ctx context.Context, dest []byte, off int64) (f
 		end = mfh.media.Meta.FileSize - 1
 	}
 
-	streamer, err := mfh.streamWorkerPool.Stream(ctx, mfh.media.MessageID, off, end)
+	// Create a context that is canceled when either:
+	// 1. The request context (ctx) is canceled (user interrupt, FUSE connection close)
+	// 2. The file handle context (mfh.ctx) is canceled (file is closed)
+	// This ensures stream operations are canceled in both cases.
+	// The goroutine exits when any of the contexts are canceled, preventing leaks.
+	streamCtx, streamCancel := context.WithCancel(ctx)
+	go func() {
+		select {
+		case <-mfh.ctx.Done():
+			// File handle was closed, cancel the stream operation
+			streamCancel()
+		case <-ctx.Done():
+			// Request was canceled, streamCancel will be called by defer
+			// This case ensures the goroutine doesn't block if ctx is canceled
+		case <-streamCtx.Done():
+			// Stream context already canceled (e.g., Read returned normally)
+		}
+	}()
+	defer streamCancel() // Ensure stream context is canceled when Read returns
+
+	// Use the combined context for stream operations
+	streamer, err := mfh.streamWorkerPool.Stream(streamCtx, mfh.media.MessageID, off, end)
 	if err != nil {
 		ll.WithError(err).Error("Failed to create streamer")
 		return nil, syscall.EIO
@@ -77,6 +101,16 @@ func (mfh *MediaFileHandle) Read(ctx context.Context, dest []byte, off int64) (f
 	ll.Debugf("Read %d bytes", totalRead)
 
 	return fuse.ReadResultData(data), 0
+}
+
+// Release is called when the file is closed/released
+func (mfh *MediaFileHandle) Release(ctx context.Context) syscall.Errno {
+	ll := mfh.getLogger("Release")
+	ll.Debug("File handle released, canceling context")
+	if mfh.cancel != nil {
+		mfh.cancel()
+	}
+	return 0
 }
 
 func (mfh *MediaFileHandle) getLogger(fn string) *logrus.Entry {

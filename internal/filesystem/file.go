@@ -45,9 +45,15 @@ func (mf *MediaFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uin
 		return nil, 0, syscall.EACCES
 	}
 
+	// Create a cancelable context for this file handle
+	// This context will be canceled when the file is closed
+	fileCtx, cancel := context.WithCancel(ctx)
+
 	fileHandle := &MediaFileHandle{
 		media:            mf.media,
 		streamWorkerPool: mf.streamWorkerPool,
+		ctx:              fileCtx,
+		cancel:           cancel,
 	}
 
 	return fileHandle, fuse.FOPEN_KEEP_CACHE, 0
