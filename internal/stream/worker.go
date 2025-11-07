@@ -1,3 +1,6 @@
+// Package stream provides Telegram file streaming utilities built around a pool
+// of workers. Each worker talks to Telegram APIs to fetch documents, thumbnails
+// and file chunks, applying caching and resiliency to rate limits.
 package stream
 
 import (
@@ -7,19 +10,24 @@ import (
 	"io"
 	"sync"
 
-	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream/downloader"
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	"github.com/celestix/gotgproto"
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/tg"
-	"github.com/sirupsen/logrus"
 )
 
+// IWorker encapsulates Telegram document operations for a single bot/account.
+// Implementations fetch document metadata, thumbnails, and stream file blocks.
+//
 //go:generate mockgen -source=worker.go -destination=../../mocks/stream/worker.go -package=mocks
 type IWorker interface {
+	// GetThumbnail returns the first available thumbnail bytes for a document
+	// in the specified message.
 	GetThumbnail(ctx context.Context, messageID int) ([]byte, error)
+	// GetDoc returns the Telegram document of a message, possibly using cache.
 	GetDoc(ctx context.Context, messageID int) (*tg.Document, error)
+	// Stream fetches the next block using the provided downloader.Reader.
 	Stream(ctx context.Context, reader *downloader.Reader) ([]byte, error)
 }
 type worker struct {
@@ -33,42 +41,62 @@ type worker struct {
 
 var _ IWorker = (*worker)(nil)
 
+// thumbnailLimit caps thumbnail downloads to 1MB which is sufficient for
+// Telegram thumbnails and keeps network usage bounded.
+const thumbnailLimit = 1024 * 1024 // 1 MB
+
+// GetThumbnail downloads the first available thumbnail for the document inside
+// the given channel message. It ensures the access hash is up-to-date before
+// requesting the thumbnail file from Telegram.
 func (w *worker) GetThumbnail(ctx context.Context, messageID int) ([]byte, error) {
 	doc, err := w.GetDoc(ctx, messageID)
 	if err != nil {
 		return nil, fmt.Errorf("error getting document: %w", err)
 	}
+
+	// Get thumbnail size
 	thumbs, ok := doc.GetThumbs()
-	if !ok {
+	if !ok || len(thumbs) == 0 {
 		return nil, ErrNoThumbnail
 	}
-	thmb, ok := thumbs[0].(*tg.PhotoSize)
+
+	thumbSize, ok := thumbs[0].(*tg.PhotoSize)
 	if !ok {
 		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.PhotoSize{}, GotType: thumbs[0]}
 	}
-	size := thmb.Type
-	loc_ := tg.InputDocumentFileLocation{}
 
+	// Ensure access hash is cached
 	if _, err := w.getDocAccHash(ctx, messageID); err != nil {
-		return nil, fmt.Errorf("error updating access hash: %s", err)
+		return nil, fmt.Errorf("error updating access hash: %w", err)
 	}
-	loc_.FillFrom(doc.AsInputDocumentFileLocation())
-	loc_.ThumbSize = size
+
+	// Create file location request
+	location := tg.InputDocumentFileLocation{}
+	location.FillFrom(doc.AsInputDocumentFileLocation())
+	location.ThumbSize = thumbSize.Type
+
 	req := &tg.UploadGetFileRequest{
-		Location: &loc_,
-		Limit:    1024 * 1024,
+		Location: &location,
+		Limit:    thumbnailLimit,
 		Precise:  false,
 	}
-	res, err := w.getTgApi().UploadGetFile(ctx, req)
+
+	// Download thumbnail
+	result, err := w.getTgApi().UploadGetFile(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error downloading thumbnail: %w", err)
 	}
-	thumbFile, ok := res.(*tg.UploadFile)
+
+	thumbFile, ok := result.(*tg.UploadFile)
 	if !ok {
-		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.UploadFile{}, GotType: res}
+		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.UploadFile{}, GotType: result}
 	}
+
 	return thumbFile.GetBytes(), nil
 }
+
+// GetDoc fetches the message document and caches its encoded bytes on disk.
+// Subsequent calls return the cached value to reduce API calls.
 func (w *worker) GetDoc(ctx context.Context, messageID int) (*tg.Document, error) {
 	cacheName := w.cacheNamePrefix(messageID)
 	dataRaw, err := w.docCache.GetOrSet(cacheName, func() ([]byte, error) {
@@ -91,25 +119,28 @@ func (w *worker) GetDoc(ctx context.Context, messageID int) (*tg.Document, error
 	}
 	return &doc, nil
 }
+
+// Stream retrieves the next data block via the provided downloader.Reader.
+// It resolves the document location once and then pulls the next chunk.
 func (w *worker) Stream(ctx context.Context, reader *downloader.Reader) ([]byte, error) {
-	ll := w.getLogger("Stream")
 	doc, err := w.GetDoc(ctx, reader.MsgId)
 	if err != nil {
 		return nil, fmt.Errorf("error getting document: %w", err)
 	}
-	inDoc := doc.AsInputDocumentFileLocation()
-	block, err := reader.Next(ctx, w.getTgApi(), inDoc)
+
+	location := doc.AsInputDocumentFileLocation()
+	block, err := reader.Next(ctx, w.getTgApi(), location)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			ll.Debug("end of file reached (io.EOF)")
 			return nil, io.EOF
 		}
 		return nil, fmt.Errorf("error getting block: %w", err)
 	}
+
 	if block == nil {
-		ll.Debug("end of file reached (nil block)")
 		return nil, io.EOF
 	}
+
 	return block.Data(), nil
 }
 func (w *worker) getChannel(ctx context.Context) (tg.InputChannelClass, error) {
@@ -146,80 +177,100 @@ func (w *worker) getTgApi() *tg.Client {
 }
 func (w *worker) retrieveChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	api := w.getTgApi()
-	chatList, err := api.ChannelsGetChannels(ctx, []tg.InputChannelClass{&tg.InputChannel{ChannelID: w.channelID}})
+	inputChannel := &tg.InputChannel{ChannelID: w.channelID}
+	chatList, err := api.ChannelsGetChannels(ctx, []tg.InputChannelClass{inputChannel})
 	if err != nil {
-		return nil, fmt.Errorf("can not list channels: %w", err)
+		return nil, fmt.Errorf("cannot list channels: %w", err)
 	}
-	if len(chatList.GetChats()) == 0 {
+
+	chats := chatList.GetChats()
+	switch len(chats) {
+	case 0:
 		return nil, fmt.Errorf("channel not found")
-	} else if len(chatList.GetChats()) > 1 {
-		return nil, fmt.Errorf("multiple channels found")
+	case 1:
+		// Expected case
+	default:
+		return nil, fmt.Errorf("multiple channels found (expected 1, got %d)", len(chats))
 	}
-	cht := chatList.GetChats()[0]
-	var channel tg.InputChannelClass
-	if chn, ok := cht.(*tg.Channel); !ok {
-		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.Channel{}, GotType: chn}
-	} else {
-		channel = chn.AsInput()
+
+	channel, ok := chats[0].(*tg.Channel)
+	if !ok {
+		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.Channel{}, GotType: chats[0]}
 	}
-	return channel, nil
+
+	return channel.AsInput(), nil
 }
 func (w *worker) retrieveChannelMessage(ctx context.Context, messageID int) (tg.MessageClass, error) {
 	channel, err := w.getChannel(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error getting channel: %w", err)
 	}
-	inputMsgList := []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}}
-	chennelMsgCls, err := w.getTgApi().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
+
+	inputMsg := []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}}
+	response, err := w.getTgApi().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
 		Channel: channel,
-		ID:      inputMsgList,
+		ID:      inputMsg,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error getting message of document: %s", err)
+		return nil, fmt.Errorf("error getting message: %w", err)
 	}
-	chennelMsg, ok := chennelMsgCls.(*tg.MessagesChannelMessages)
+
+	channelMessages, ok := response.(*tg.MessagesChannelMessages)
 	if !ok {
-		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.MessagesChannelMessages{}, GotType: chennelMsg}
+		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.MessagesChannelMessages{}, GotType: response}
 	}
-	if len(chennelMsg.Messages) == 0 {
+
+	messages := channelMessages.Messages
+	switch len(messages) {
+	case 0:
 		return nil, fmt.Errorf("message not found")
-	} else if len(chennelMsg.Messages) > 1 {
-		return nil, fmt.Errorf("multiple messages found")
+	case 1:
+		return messages[0], nil
+	default:
+		return nil, fmt.Errorf("multiple messages found (expected 1, got %d)", len(messages))
 	}
-	msgCls := chennelMsg.Messages[0]
-	return msgCls, nil
 }
 func (w *worker) retrieveChannelMessageDoc(ctx context.Context, messageID int) (*tg.Document, error) {
-	msgCls, err := w.retrieveChannelMessage(ctx, messageID)
+	message, err := w.retrieveChannelMessage(ctx, messageID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting message of document: %w", err)
+		return nil, fmt.Errorf("error getting message: %w", err)
 	}
-	msg, ok := msgCls.(*tg.Message)
+
+	msg, ok := message.(*tg.Message)
 	if !ok {
-		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.Message{}, GotType: msgCls}
+		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.Message{}, GotType: message}
 	}
+
 	media, ok := msg.Media.(*tg.MessageMediaDocument)
 	if !ok {
 		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.MessageMediaDocument{}, GotType: msg.Media}
 	}
+
 	doc, ok := media.Document.(*tg.Document)
 	if !ok {
 		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.Document{}, GotType: media.Document}
 	}
+
 	return doc, nil
 }
 func (w *worker) cacheNamePrefix(s int) string {
 	return fmt.Sprintf("%d-%d", w.getTg().Self.GetID(), s)
 }
-func (w *worker) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", w, fn))
-}
-func NewWorker(tok string, sessCfg *tlg.SessionConfig, channelID int64, cacheRoot string) (IWorker, error) {
-	cache := NewAccessHashCache(cacheRoot)
-	docCache := NewDocCache(cacheRoot)
-	w := worker{cl: tlg.NewTgClient(sessCfg, tok), channelID: channelID, cache: cache, docCache: docCache}
-	if err := w.cl.Connect(); err != nil {
-		return nil, fmt.Errorf("can not connect to worker: %w", err)
+
+//	func (w *worker) getLogger(fn string) *logrus.Entry {
+//		return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", w, fn))
+//	}
+func NewWorker(token string, sessCfg *tlg.SessionConfig, channelID int64, cacheRoot string) (IWorker, error) {
+	w := worker{
+		cl:        tlg.NewTgClient(sessCfg, token),
+		channelID: channelID,
+		cache:     NewAccessHashCache(cacheRoot),
+		docCache:  NewDocCache(cacheRoot),
 	}
+
+	if err := w.cl.Connect(); err != nil {
+		return nil, fmt.Errorf("cannot connect to worker: %w", err)
+	}
+
 	return &w, nil
 }
