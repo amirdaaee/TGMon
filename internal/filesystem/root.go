@@ -2,8 +2,10 @@ package filesystem
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"syscall"
 	"time"
@@ -31,10 +33,32 @@ type MediaFS struct {
 var _ fs.NodeOnAdder = (*MediaFS)(nil)
 var _ fs.NodeReaddirer = (*MediaFS)(nil)
 var _ fs.NodeLookuper = (*MediaFS)(nil)
+var _ fs.NodeGetattrer = (*MediaFS)(nil)
+var _ fs.NodeOpendirer = (*MediaFS)(nil)
 
 // OnAdd is called when the filesystem is mounted
 func (mfs *MediaFS) OnAdd(ctx context.Context) {
 	mfs.getLogger("OnAdd").Info("MediaFS mounted")
+}
+
+// Opendir opens a directory for reading
+func (mfs *MediaFS) Opendir(ctx context.Context) syscall.Errno {
+	mfs.getLogger("Opendir").Debug("Opening directory")
+	return 0
+}
+
+// Getattr returns directory attributes for the root directory
+func (mfs *MediaFS) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+	// Use 0755 permissions to allow directory traversal
+	// When allow-other is enabled, the mount point itself will have 0777
+	out.Mode = fuse.S_IFDIR | 0755 // Directory, read and execute permissions
+	out.Nlink = 2                  // Standard for directories (., ..)
+	out.Size = 4096                // Typical directory size
+	now := uint64(time.Now().Unix())
+	out.Mtime = now
+	out.Atime = now
+	out.Ctime = now
+	return 0
 }
 
 // Readdir lists all media files in the root directory
@@ -42,22 +66,56 @@ func (mfs *MediaFS) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 	ll := mfs.getLogger("Readdir")
 	ll.Debug("Reading directory")
 
-	// Get all media files from database
-	mediaFiles, err := mfs.getMediaFiles(ctx)
-	if err != nil {
-		ll.WithError(err).Error("Failed to get media files")
-		return nil, syscall.EIO
+	// Check if context is already canceled
+	if ctx.Err() != nil {
+		ll.Debug("Context canceled before reading directory")
+		return nil, syscall.EINTR
 	}
 
-	// Create directory entries
+	// Create a context with timeout for database operations
+	// Increased timeout for large directories (1000+ files)
+	// This prevents the filesystem from hanging if the database is slow
+	queryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Get all media files from database
+	mediaFiles, err := mfs.getMediaFiles(queryCtx)
+	if err != nil {
+		// Check if error is due to context cancellation or timeout
+		if ctx.Err() != nil || queryCtx.Err() != nil {
+			ll.WithError(err).Debug("Context canceled or timed out during getMediaFiles")
+			// Return empty directory instead of error to prevent I/O errors
+			// This allows the container to continue working even if DB is temporarily unavailable
+			return fs.NewListDirStream([]fuse.DirEntry{}), 0
+		}
+		ll.WithError(err).Warn("Failed to get media files, returning empty directory")
+		// Return empty directory instead of error to prevent I/O errors
+		// This is safer for container access - they can retry later
+		return fs.NewListDirStream([]fuse.DirEntry{}), 0
+	}
+
+	// For large directories, optimize memory allocation
+	// Pre-allocate slice with exact capacity to avoid reallocations
 	entries := make([]fuse.DirEntry, 0, len(mediaFiles))
+
+	// Create directory entries directly (avoid intermediate struct for better performance)
 	for _, media := range mediaFiles {
 		filename := mfs.getFilename(media)
+		// Set Ino to match what we use in Lookup - use hash of ObjectID for uniqueness
+		ino := mfs.getInodeNumber(media.ID)
 		entries = append(entries, fuse.DirEntry{
 			Name: filename,
 			Mode: fuse.S_IFREG | 0444, // Regular file, read-only
+			Ino:  ino,
 		})
 	}
+
+	// Sort entries by filename for deterministic ordering
+	// This is important for proper directory scanning behavior
+	// Using sort.Slice is efficient even for large directories (1000+ files)
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name < entries[j].Name
+	})
 
 	ll.Debugf("Returning %d entries", len(entries))
 	return fs.NewListDirStream(entries), 0
@@ -68,10 +126,25 @@ func (mfs *MediaFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut)
 	ll := mfs.getLogger("Lookup")
 	ll.Debugf("Looking up file: %s", name)
 
+	// Check if context is already canceled
+	if ctx.Err() != nil {
+		ll.Debug("Context canceled before lookup")
+		return nil, syscall.EINTR
+	}
+
+	// Create a context with timeout for database operations
+	queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	// Get all media files
-	mediaFiles, err := mfs.getMediaFiles(ctx)
+	mediaFiles, err := mfs.getMediaFiles(queryCtx)
 	if err != nil {
-		ll.WithError(err).Error("Failed to get media files")
+		// Check if error is due to context cancellation or timeout
+		if ctx.Err() != nil || queryCtx.Err() != nil {
+			ll.WithError(err).Debug("Context canceled or timed out during getMediaFiles in Lookup")
+			return nil, syscall.EINTR
+		}
+		ll.WithError(err).Warn("Failed to get media files in Lookup")
 		return nil, syscall.EIO
 	}
 
@@ -105,7 +178,7 @@ func (mfs *MediaFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut)
 
 	stable := fs.StableAttr{
 		Mode: fuse.S_IFREG,
-		Ino:  uint64(media.ID.Timestamp().Unix()),
+		Ino:  mfs.getInodeNumber(media.ID),
 	}
 
 	ll.Debugf("Found file: %s (size: %d)", name, media.Meta.FileSize)
@@ -149,7 +222,7 @@ func (mfs *MediaFS) getMediaFiles(ctx context.Context) ([]*types.MediaFileDoc, e
 
 	// Update cache
 	mfs.mediaCache = make(map[string]*types.MediaFileDoc)
-	for _, media := range mediaFiles {
+	for _, media := range mediaFiles[:100] {
 		filename := mfs.getFilename(media)
 		mfs.mediaCache[filename] = media
 	}
@@ -158,13 +231,38 @@ func (mfs *MediaFS) getMediaFiles(ctx context.Context) ([]*types.MediaFileDoc, e
 	return mediaFiles, nil
 }
 
+// getInodeNumber generates a unique inode number from an ObjectID
+// Uses SHA256 hash to ensure uniqueness even if timestamps collide
+func (mfs *MediaFS) getInodeNumber(id interface{}) uint64 {
+	// Convert ObjectID to bytes for hashing
+	var idBytes []byte
+	switch v := id.(type) {
+	case fmt.Stringer:
+		idBytes = []byte(v.String())
+	default:
+		idBytes = []byte(fmt.Sprintf("%v", id))
+	}
+
+	// Use first 8 bytes of SHA256 hash as inode number
+	hash := sha256.Sum256(idBytes)
+	// Convert first 8 bytes to uint64, ensuring it's non-zero
+	ino := uint64(hash[0])<<56 | uint64(hash[1])<<48 | uint64(hash[2])<<40 | uint64(hash[3])<<32 |
+		uint64(hash[4])<<24 | uint64(hash[5])<<16 | uint64(hash[6])<<8 | uint64(hash[7])
+
+	// Ensure inode is never 0 (0 is reserved)
+	if ino == 0 {
+		ino = 1
+	}
+	return ino
+}
+
 // getFilename returns the filename for a media file
 func (mfs *MediaFS) getFilename(media *types.MediaFileDoc) string {
+	ext := mfs.getExtensionFromMimeType(media.Meta.MimeType)
 	if media.Meta.FileName != "" {
-		return media.Meta.FileName
+		return fmt.Sprintf("%s-%s%s", media.Meta.FileName, media.ID.Hex(), ext)
 	}
 	// Use ID as filename with appropriate extension based on mime type
-	ext := mfs.getExtensionFromMimeType(media.Meta.MimeType)
 	return fmt.Sprintf("%s%s", media.ID.Hex(), ext)
 }
 
@@ -233,8 +331,13 @@ func MountWithOptions(mountPoint string, dbContainer db.IDbContainer, streamWork
 		opts = &MountOptions{}
 	}
 
-	// ensure mount point exists
-	if err := os.MkdirAll(mountPoint, 0755); err != nil {
+	// ensure mount point exists with proper permissions
+	// Use 0755 for normal, 0777 if allow-other is enabled (needed for container access)
+	mountPerms := os.FileMode(0755)
+	if opts.AllowOther {
+		mountPerms = 0777
+	}
+	if err := os.MkdirAll(mountPoint, mountPerms); err != nil {
 		return nil, fmt.Errorf("failed to create mount point: %w", err)
 	}
 
@@ -245,6 +348,21 @@ func MountWithOptions(mountPoint string, dbContainer db.IDbContainer, streamWork
 	fuseOpts := &fs.Options{}
 	fuseOpts.Debug = opts.Debug
 	fuseOpts.AllowOther = opts.AllowOther
+	// Set timeouts for better performance and stability
+	// These help with container access by caching attributes and entries
+	// Longer timeouts reduce database load when containers scan directories frequently
+	attrTimeout := 5 * time.Second
+	entryTimeout := 5 * time.Second
+	fuseOpts.AttrTimeout = &attrTimeout
+	fuseOpts.EntryTimeout = &entryTimeout
+	// NegativeTimeout of 0 means don't cache failed lookups (safer)
+	zeroTimeout := time.Duration(0)
+	fuseOpts.NegativeTimeout = &zeroTimeout
+	// Set MaxBackground to handle concurrent requests from containers
+	// Higher value is needed for large directory scans (1000+ files)
+	// This allows more concurrent FUSE operations without blocking
+	// Default is typically 12, increasing to 128 helps with large directories and concurrent access
+	fuseOpts.MaxBackground = 128
 
 	if opts.AllowOther {
 		ll.Info("AllowOther enabled - filesystem will be accessible to other users/containers")
@@ -253,6 +371,13 @@ func MountWithOptions(mountPoint string, dbContainer db.IDbContainer, streamWork
 	server, err := fs.Mount(mountPoint, root, fuseOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to mount filesystem: %w", err)
+	}
+
+	// After successful mount, try to set permissions for allow-other access
+	if opts.AllowOther {
+		if err := os.Chmod(mountPoint, 0777); err != nil {
+			ll.WithError(err).Warn("Failed to set mount point permissions to 0777 (this may be normal)")
+		}
 	}
 
 	ll.Info("Filesystem mounted successfully")
