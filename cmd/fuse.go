@@ -4,6 +4,10 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/amirdaaee/TGMon/internal/filesystem"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -24,7 +28,7 @@ var fuseCmd = &cobra.Command{
 		}
 		ll.Info("db container built")
 		// ...
-		wp, err := buildWorkerContainer()
+		wp, err := buildWorkerPool()
 		if err != nil {
 			logrus.WithError(err).Fatal("can not build worker pool")
 		}
@@ -35,13 +39,17 @@ var fuseCmd = &cobra.Command{
 			logrus.WithError(err).Fatal("can not mount filesystem")
 		}
 		ll.Info("fuse server started")
-		defer func() {
-			if err := server.Unmount(); err != nil {
-				logrus.WithError(err).Error("can not unmount filesystem")
-			}
+		func() {
+			defer func() {
+				if err := server.Unmount(); err != nil {
+					logrus.WithError(err).Error("can not unmount filesystem")
+				}
+				ll.Info("fuse server stopped")
+			}()
+			sig := make(chan os.Signal, 1)
+			signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+			<-sig
 		}()
-		ll.Info("fuse server stopped")
-		select {}
 	},
 }
 

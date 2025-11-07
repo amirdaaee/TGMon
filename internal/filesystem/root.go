@@ -3,7 +3,7 @@ package filesystem
 import (
 	"context"
 	"fmt"
-	"io"
+	"os"
 	"sync"
 	"syscall"
 	"time"
@@ -20,27 +20,17 @@ import (
 // MediaFS is the root filesystem node that lists all media files
 type MediaFS struct {
 	fs.Inode
-	dbContainer     db.IDbContainer
-	streamContainer stream.IWorkerContainer
-	mediaCache      map[string]*types.MediaFileDoc
-	cacheMutex      sync.RWMutex
-	cacheExpiry     time.Time
-	cacheTTL        time.Duration
+	dbContainer      db.IDbContainer
+	streamWorkerPool stream.IWorkerPool
+	mediaCache       map[string]*types.MediaFileDoc
+	cacheMutex       sync.RWMutex
+	cacheExpiry      time.Time
+	cacheTTL         time.Duration
 }
 
 var _ fs.NodeOnAdder = (*MediaFS)(nil)
 var _ fs.NodeReaddirer = (*MediaFS)(nil)
 var _ fs.NodeLookuper = (*MediaFS)(nil)
-
-// NewMediaFS creates a new MediaFS filesystem
-func NewMediaFS(dbContainer db.IDbContainer, streamContainer stream.IWorkerContainer) *MediaFS {
-	return &MediaFS{
-		dbContainer:     dbContainer,
-		streamContainer: streamContainer,
-		mediaCache:      make(map[string]*types.MediaFileDoc),
-		cacheTTL:        30 * time.Second, // Cache media list for 30 seconds
-	}
-}
 
 // OnAdd is called when the filesystem is mounted
 func (mfs *MediaFS) OnAdd(ctx context.Context) {
@@ -101,9 +91,9 @@ func (mfs *MediaFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut)
 
 	// Create file node
 	fileNode := &MediaFile{
-		media:           media,
-		dbContainer:     mfs.dbContainer,
-		streamContainer: mfs.streamContainer,
+		media:            media,
+		dbContainer:      mfs.dbContainer,
+		streamWorkerPool: mfs.streamWorkerPool,
 	}
 
 	// Set entry attributes
@@ -210,125 +200,28 @@ func (mfs *MediaFS) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", mfs, fn))
 }
 
-// MediaFile represents a single media file in the filesystem
-type MediaFile struct {
-	fs.Inode
-	media           *types.MediaFileDoc
-	dbContainer     db.IDbContainer
-	streamContainer stream.IWorkerContainer
-}
-
-var _ fs.NodeOpener = (*MediaFile)(nil)
-var _ fs.NodeGetattrer = (*MediaFile)(nil)
-
-// Getattr returns file attributes
-func (mf *MediaFile) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
-	out.Mode = fuse.S_IFREG | 0444
-	out.Size = uint64(mf.media.Meta.FileSize)
-	out.Mtime = uint64(mf.media.CreatedAt.Unix())
-	out.Atime = uint64(mf.media.UpdatedAt.Unix())
-	out.Ctime = uint64(mf.media.CreatedAt.Unix())
-	return 0
-}
-
-// Open opens the file for reading
-func (mf *MediaFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
-	ll := mf.getLogger("Open")
-	ll.Debugf("Opening file: %s (flags: %d)", mf.media.ID.Hex(), flags)
-
-	// Only allow read operations
-	if flags&fuse.O_ANYWRITE != 0 {
-		return nil, 0, syscall.EACCES
+// NewMediaFS creates a new MediaFS filesystem
+func NewMediaFS(dbContainer db.IDbContainer, streamWorkerPool stream.IWorkerPool) *MediaFS {
+	return &MediaFS{
+		dbContainer:      dbContainer,
+		streamWorkerPool: streamWorkerPool,
+		mediaCache:       make(map[string]*types.MediaFileDoc),
+		cacheTTL:         30 * time.Second, // Cache media list for 30 seconds
 	}
-
-	fileHandle := &MediaFileHandle{
-		media:           mf.media,
-		streamContainer: mf.streamContainer,
-	}
-
-	return fileHandle, fuse.FOPEN_KEEP_CACHE, 0
-}
-
-func (mf *MediaFile) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", mf, fn))
-}
-
-// MediaFileHandle handles read operations on a media file
-type MediaFileHandle struct {
-	media           *types.MediaFileDoc
-	streamContainer stream.IWorkerContainer
-}
-
-var _ fs.FileReader = (*MediaFileHandle)(nil)
-
-// Read reads data from the file at the specified offset
-func (mfh *MediaFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
-	ll := mfh.getLogger("Read")
-	ll.Debugf("Read request: offset=%d, size=%d, fileSize=%d", off, len(dest), mfh.media.Meta.FileSize)
-
-	// Check if offset is beyond file size
-	if off >= mfh.media.Meta.FileSize {
-		ll.Debug("EOF: offset beyond file size")
-		return fuse.ReadResultData(nil), 0
-	}
-
-	// Calculate how much to read
-	toRead := int64(len(dest))
-	if off+toRead > mfh.media.Meta.FileSize {
-		toRead = mfh.media.Meta.FileSize - off
-	}
-
-	// Create a new streamer for this read operation with the correct offset
-	// This allows seeking to any position in the file
-	end := off + toRead - 1
-	if end >= mfh.media.Meta.FileSize {
-		end = mfh.media.Meta.FileSize - 1
-	}
-
-	streamer, err := mfh.streamContainer.GetWorkerPool().Stream(ctx, mfh.media.MessageID, off, end)
-	if err != nil {
-		ll.WithError(err).Error("Failed to create streamer")
-		return nil, syscall.EIO
-	}
-
-	// Read the data
-	data := make([]byte, toRead)
-	totalRead := int64(0)
-	for totalRead < toRead {
-		n, err := streamer.Read(data[totalRead:])
-		if err != nil && err != io.EOF {
-			ll.WithError(err).Error("Failed to read from streamer")
-			return nil, syscall.EIO
-		}
-		if n == 0 {
-			break
-		}
-		totalRead += int64(n)
-		if err == io.EOF {
-			break
-		}
-	}
-
-	// Trim to actual read size
-	if totalRead < toRead {
-		data = data[:totalRead]
-	}
-	ll.Debugf("Read %d bytes", totalRead)
-
-	return fuse.ReadResultData(data), 0
-}
-
-func (mfh *MediaFileHandle) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", mfh, fn))
 }
 
 // Mount mounts the media filesystem at the specified mount point
-func Mount(mountPoint string, dbContainer db.IDbContainer, streamContainer stream.IWorkerContainer) (*fuse.Server, error) {
+func Mount(mountPoint string, dbContainer db.IDbContainer, streamWorkerPool stream.IWorkerPool) (*fuse.Server, error) {
 	ll := log.GetLogger(log.WebModule).WithField("func", "Mount")
 	ll.Infof("Mounting filesystem at: %s", mountPoint)
 
+	// ensure mount point exists
+	if err := os.MkdirAll(mountPoint, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create mount point: %w", err)
+	}
+
 	// Create root filesystem
-	root := NewMediaFS(dbContainer, streamContainer)
+	root := NewMediaFS(dbContainer, streamWorkerPool)
 
 	// Create FUSE server
 	opts := &fs.Options{}
@@ -352,6 +245,7 @@ func Unmount(mountPoint string) error {
 	// Try to unmount using fusermount
 	if err := syscall.Unmount(mountPoint, 0); err != nil {
 		// If that fails, try with MNT_FORCE
+		ll.WithError(err).Error("failed to unmount filesystem using fusermount. trying with MNT_FORCE")
 		if err := syscall.Unmount(mountPoint, syscall.MNT_FORCE); err != nil {
 			return fmt.Errorf("failed to unmount: %w", err)
 		}
