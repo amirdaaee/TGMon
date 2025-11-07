@@ -1,3 +1,5 @@
+// Package downloader provides the master DC schema for chunk retrieval and
+// related helpers for Telegram file downloads.
 package downloader
 
 import (
@@ -12,7 +14,7 @@ import (
 	"github.com/gotd/td/tg"
 )
 
-// RedirectError error is returned when Downloader get CDN redirect.
+// RedirectError is returned when Downloader gets a CDN redirect.
 // See https://core.telegram.org/constructor/upload.fileCdnRedirect.
 type RedirectError struct {
 	Redirect *tg.UploadFileCDNRedirect
@@ -23,11 +25,12 @@ func (r *RedirectError) Error() string {
 	return "redirect to CDN DC " + strconv.Itoa(r.Redirect.DCID)
 }
 
+// schema abstracts a chunk retrieval strategy against Telegram APIs.
 type schema interface {
 	Chunk(ctx context.Context, client *tg.Client, offset int64, limit int, loc tg.InputFileLocationClass) (chunk, error)
 }
 
-// master is a master DC download schema.
+// master implements the master DC download schema.
 // See https://core.telegram.org/api/files#downloading-files.
 type master struct {
 	precise  bool
@@ -36,6 +39,7 @@ type master struct {
 
 var _ schema = master{}
 
+// Chunk retrieves a single chunk from Telegram with the configured options.
 func (c master) Chunk(ctx context.Context, client *tg.Client, offset int64, limit int, loc tg.InputFileLocationClass) (chunk, error) {
 	ll := c.getLogger("Chunk")
 	ll.Debugf("getting chunk from offset %d with limit %d", offset, limit)

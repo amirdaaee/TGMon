@@ -28,7 +28,7 @@ type IHandler interface {
 type handler struct {
 	channelID       int64
 	mediaFacade     facade.IFacade[types.MediaFileDoc]
-	workerContainer stream.IWorkerContainer
+	workerContainer stream.IWorkerPool
 }
 
 // Register registers the handler with the given bot instance and sets up message handlers.
@@ -121,7 +121,7 @@ var _ IHandler = (*handler)(nil)
 
 // NewHandler creates a new handler instance with the given dependencies.
 // Returns an error if any dependency is nil.
-func NewHandler(mediaFacade facade.IFacade[types.MediaFileDoc], channelID int64, wp stream.IWorkerContainer) (IHandler, error) {
+func NewHandler(mediaFacade facade.IFacade[types.MediaFileDoc], channelID int64, wp stream.IWorkerPool) (IHandler, error) {
 	if mediaFacade == nil {
 		return nil, NewBotError("mediaFacade cannot be nil", nil)
 	}

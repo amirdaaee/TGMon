@@ -73,15 +73,15 @@ func buildTgClient() (tlg.IClient, error) {
 	tgClient := tlg.NewTgClient(buildSessionConfig(), cfg.TelegramConfig.BotToken)
 	return tgClient, nil
 }
-func buildWorkerContainer() (stream.IWorkerContainer, error) {
+func buildWorkerPool() (stream.IWorkerPool, error) {
 	cfg := config.Config()
 	wp, err := stream.NewWorkerPool(cfg.TelegramConfig.WorkerTokens, buildSessionConfig(), cfg.TelegramConfig.ChannelID, cfg.TelegramConfig.WorkerCacheRoot)
 	if err != nil {
 		return nil, fmt.Errorf("can not create worker pool: %w", err)
 	}
-	return stream.NewWorkerContainer(wp), nil
+	return wp, nil
 }
-func buildMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerContainer) facade.IFacade[types.MediaFileDoc] {
+func buildMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool) facade.IFacade[types.MediaFileDoc] {
 	cfg := config.Config()
 	return facade.NewFacade(facade.NewMediaCrud(dbContainer, workerContainer, cfg.RuntimeConfig.KeepDupFiles))
 }

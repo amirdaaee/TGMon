@@ -1,3 +1,5 @@
+// Package downloader implements chunked file downloads from Telegram, handling
+// alignment constraints, chunk sizing, flood waits, and retries.
 package downloader
 
 import (
@@ -23,16 +25,21 @@ type chunk struct {
 	data []byte
 }
 
+// Block is a unit of downloaded data, capturing the file type tag, raw bytes,
+// originating offset, and the requested part size.
 type Block struct {
 	chunk
 	offset   int64
 	partSize int
 }
 
+// Data returns the payload of the downloaded block.
 func (b Block) Data() []byte {
 	return b.data
 }
 
+// Reader manages sequential retrieval of file chunks for a specific message,
+// keeping track of offsets and respecting Telegram download constraints.
 type Reader struct {
 	MsgId     int
 	sch       schema // immutable
@@ -42,111 +49,152 @@ type Reader struct {
 	end       int64
 }
 
+// Next downloads the next block starting from the internal offset. It aligns
+// to 4KB boundaries as required by Telegram, caps the chunk to 1MB boundaries,
+// and trims the data to the exact requested range.
 func (r *Reader) Next(ctx context.Context, client *tg.Client, loc tg.InputFileLocationClass) (*Block, error) {
-	ll := r.getLogger("Next")
+	// Check bounds and calculate aligned offset
 	r.offsetMux.Lock()
-	if r.offset > r.end {
-		ll.Debugf("EOF [r.offset > end (offset=%d, end=%d)]", r.offset, r.end)
+	currentOffset := r.offset
+	if currentOffset > r.end {
 		r.offsetMux.Unlock()
+		r.getLogger("Next").Debugf("EOF: offset %d > end %d", currentOffset, r.end)
 		return nil, io.EOF
 	}
-	offsetSkip := r.offset % fourKB
-	offset := r.offset - offsetSkip
-	limit, err := r.adjustLimit(offset)
+
+	// Align offset to 4KB boundary (Telegram requirement)
+	offsetSkip := currentOffset % fourKB
+	alignedOffset := currentOffset - offsetSkip
+
+	// Calculate optimal limit and update offset
+	limit, err := r.adjustLimit(alignedOffset)
 	if err != nil {
 		r.offsetMux.Unlock()
 		return nil, err
 	}
-	r.offset = offset + int64(limit)
+	r.offset = alignedOffset + int64(limit)
 	r.offsetMux.Unlock()
-	ll.Debugf("limit=%d, offset=%d, fileSize=%d, end=%d, offsetSkip=%d", limit, offset, r.fileSize, offset+int64(limit), offsetSkip)
-	v, err := r.next(ctx, client, offset, limit, loc)
+
+	// Download chunk
+	block, err := r.next(ctx, client, alignedOffset, limit, loc)
 	if err != nil {
 		return nil, err
 	}
 
-	offsetEndSkip := int64(len(v.data))
-	if offset+int64(len(v.data)) > r.end {
-		offsetEndSkip -= (offset + int64(len(v.data)) - r.end - 1)
-		ll.Debugf("overshot end (exp=%d vs %d - cut=%d/%d)", r.end, offset+int64(len(v.data)), offsetEndSkip, len(v.data))
-	}
-	v.data = v.data[offsetSkip:offsetEndSkip]
-	return v, nil
+	// Trim data to exact requested range
+	block.data = r.trimData(block.data, alignedOffset, offsetSkip)
+	return block, nil
 }
 
+// trimData trims the downloaded data to the exact requested range.
+func (r *Reader) trimData(data []byte, alignedOffset int64, offsetSkip int64) []byte {
+	endOffset := int64(len(data))
+
+	// Trim end if we overshot
+	if alignedOffset+endOffset > r.end {
+		trimAmount := alignedOffset + endOffset - r.end - 1
+		endOffset -= trimAmount
+		r.getLogger("trimData").Debugf("trimming end: %d bytes", trimAmount)
+	}
+
+	// Trim start to skip to actual offset
+	return data[offsetSkip:endOffset]
+}
+
+// next performs the actual chunk request with retry handling for flood waits
+// and timeouts. For excessive flood waits, a sentinel error is returned so
+// callers can switch workers.
 func (r *Reader) next(ctx context.Context, client *tg.Client, offset int64, limit int, loc tg.InputFileLocationClass) (*Block, error) {
 	ll := r.getLogger("next")
-	for { // for floodWait and timeout
+
+	for {
+		// Check context cancellation
 		if ctx.Err() != nil {
 			ll.Debug("context canceled")
 			return nil, io.EOF
 		}
-		ch, err := r.sch.Chunk(ctx, client, offset, limit, loc)
-		if d, ok := tgerr.AsFloodWait(err); ok {
-			sec := d.Seconds()
-			ll.WithError(err).Warnf("flood wait %f", sec)
-			if sec > maxFloodWaitSec {
-				return nil, &ErrFloodWaitTooLong{expected: maxFloodWaitSec, actual: sec}
+
+		// Download chunk
+		chunk, err := r.sch.Chunk(ctx, client, offset, limit, loc)
+		if err != nil {
+			// Handle flood wait
+			if floodWait, ok := tgerr.AsFloodWait(err); ok {
+				waitSeconds := floodWait.Seconds()
+				ll.WithError(err).Warnf("flood wait: %.2f seconds", waitSeconds)
+
+				if waitSeconds > maxFloodWaitSec {
+					return nil, &ErrFloodWaitTooLong{
+						expected: maxFloodWaitSec,
+						actual:   waitSeconds,
+					}
+				}
+			}
+
+			// Handle retryable errors (flood wait and timeout)
+			if shouldRetry, handledErr := tgerr.FloodWait(ctx, err); handledErr != nil {
+				if tgerr.Is(handledErr, tg.ErrTimeout) {
+					ll.WithError(handledErr).Warn("timeout, retrying")
+				}
+				if shouldRetry || tgerr.Is(handledErr, tg.ErrTimeout) {
+					continue
+				}
+
+				// Non-retryable error
+				return nil, fmt.Errorf("error getting chunk (offset=%d, limit=%d, fileSize=%d, end=%d): %w",
+					offset, limit, r.fileSize, offset+int64(limit), handledErr)
 			}
 		}
 
-		if flood, err := tgerr.FloodWait(ctx, err); err != nil {
-			if tgerr.Is(err, tg.ErrTimeout) {
-				ll.WithError(err).Error("timeout. retrying...")
-			}
-			if flood || tgerr.Is(err, tg.ErrTimeout) {
-				continue
-			}
-			return nil, fmt.Errorf("error getting chunk (offset=%d, limit=%d, fileSize=%d, end=%d): %w", offset, limit, r.fileSize, offset+int64(limit), err)
-		}
-
+		// Success
 		return &Block{
-			chunk:    ch,
+			chunk:    chunk,
 			offset:   offset,
 			partSize: limit,
 		}, nil
 	}
 }
 
+// Valid chunk sizes: divisors of 1MB that are multiples of 4KB (powers of 2 from 2^12 to 2^19).
+var validChunkSizes = []int{524288, 262144, 131072, 65536, 32768, 16384, 8192, 4096}
+
+// adjustLimit computes an optimal chunk size given the file size and the
+// 1MB chunk window boundaries, returning io.EOF if past the end of file.
 func (r *Reader) adjustLimit(offset int64) (int, error) {
-	ll := r.getLogger("adjustLimit")
-
-	// Valid divisors of 1MB that are multiples of 4KB (powers of 2 from 2^12 to 2^19)
-	validLimits := []int{524288, 262144, 131072, 65536, 32768, 16384, 8192, 4096}
-
-	// Calculate maximum possible limit based on fileSize constraint
+	// Calculate maximum limit based on remaining file size
 	maxByFileSize := int(r.fileSize - offset)
 	if maxByFileSize <= 0 {
-		ll.Debugf("EOF (maxByFileSize <= 0, offset=%d, fileSize=%d)", offset, r.fileSize)
+		r.getLogger("adjustLimit").Debugf("EOF: offset %d >= fileSize %d", offset, r.fileSize)
 		return 0, io.EOF
 	}
 
-	// Calculate maximum possible limit to stay within 1MB chunk from beginning
+	// Calculate maximum limit to stay within 1MB chunk boundary
 	chunkStart := (offset / oneMB) * oneMB
 	maxByChunk := int(chunkStart + oneMB - offset)
 
-	// Find the largest valid limit that satisfies all constraints
+	// Use the smaller of the two constraints
 	maxAllowed := maxByFileSize
 	if maxByChunk < maxAllowed {
 		maxAllowed = maxByChunk
 	}
 
-	// Find the largest valid limit from our predefined list
-	for _, validLimit := range validLimits {
-		if validLimit <= maxAllowed {
-			ll.Debugf("optimal limit found: %d (offset=%d, fileSize=%d, maxByFileSize=%d, maxByChunk=%d)",
-				validLimit, offset, r.fileSize, maxByFileSize, maxByChunk)
-			return validLimit, nil
+	// Find the largest valid chunk size that fits
+	for _, chunkSize := range validChunkSizes {
+		if chunkSize <= maxAllowed {
+			r.getLogger("adjustLimit").Debugf("optimal limit: %d (offset=%d, maxAllowed=%d)",
+				chunkSize, offset, maxAllowed)
+			return chunkSize, nil
 		}
 	}
 
-	ll.Debugf("no valid limit found, returning least")
-	return validLimits[len(validLimits)-1], nil
+	// Fallback to smallest valid size
+	return validChunkSizes[len(validChunkSizes)-1], nil
 }
 func (r *Reader) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", r, fn))
 }
 
+// NewReader constructs a Reader starting at offset up to end, using the master
+// schema by default and enabling CDN when allowed by Telegram.
 func NewReader(offset int64, fileSize int64, msgID int, end int64) *Reader {
 	// TODO: client as arg in Next function and passed to master
 	master := master{
