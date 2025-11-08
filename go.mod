@@ -1,8 +1,8 @@
 module github.com/amirdaaee/TGMon
 
-go 1.23.3
+go 1.24.3
 
-toolchain go1.23.10
+toolchain go1.24.10
 
 require (
 	github.com/caarlos0/env/v11 v11.1.0
@@ -12,15 +12,18 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gotd/td v0.127.0
 	github.com/hanwen/go-fuse/v2 v2.9.0
+	github.com/hasura/go-graphql-client v0.13.1
 	github.com/joho/godotenv v1.5.1
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.35.1
+	github.com/shurcooL/graphql v0.0.0-20230722043721-ed46e5a46466
 	github.com/spf13/cobra v1.9.1
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
 	go.uber.org/mock v0.5.2
 	golang.org/x/net v0.41.0
+	golang.org/x/oauth2 v0.33.0
 	golang.org/x/sync v0.15.0
 )
 
@@ -68,7 +71,7 @@ require (
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/mailru/easyjson v0.7.6 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect

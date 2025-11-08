@@ -1,0 +1,70 @@
+package stash
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+
+	"github.com/shurcooL/graphql"
+	"golang.org/x/oauth2"
+)
+
+type StashQlClient struct {
+	Endpoint string
+	APIKey   string
+	cl       graphql.Client
+}
+
+func (st *StashQlClient) FindSceneByHash(ctx context.Context, hash string) (*Scene, error) {
+	var Query struct {
+		// The struct tag maps the Go struct field 'Scene' to the GraphQL field
+		// 'findSceneByHash' and includes the argument 'input: { oshash: $hash }'.
+		// $hash is the placeholder for the dynamic variable.
+		Scene Scene `graphql:"findSceneByHash(input: { oshash: $hash })"`
+	}
+	variables := map[string]interface{}{
+		// The key must match the variable name used in the struct tag (e.g., $hash)
+		"hash": graphql.String(hash),
+	}
+	if err := st.cl.Query(ctx, &Query, variables); err != nil {
+		return nil, fmt.Errorf("can not find scene by hash: %w", err)
+	}
+	if Query.Scene.ID == "" {
+		return nil, fmt.Errorf("scene not found")
+	}
+	return &Query.Scene, nil
+}
+func (st *StashQlClient) FindSceneById(ctx context.Context, id string) (*Scene, error) {
+	var Query struct {
+		// The struct tag maps the Go struct field 'Scene' to the GraphQL field
+		// 'findSceneByHash' and includes the argument 'input: { oshash: $hash }'.
+		// $hash is the placeholder for the dynamic variable.
+		Scene Scene `graphql:"findScene(id: $id)"`
+	}
+	variables := map[string]interface{}{
+		// The key must match the variable name used in the struct tag (e.g., $hash)
+		"id": graphql.ID(id),
+	}
+	if err := st.cl.Query(ctx, &Query, variables); err != nil {
+		return nil, fmt.Errorf("can not find scene by hash: %w", err)
+	}
+	if Query.Scene.ID == "" {
+		return nil, fmt.Errorf("scene not found")
+	}
+	return &Query.Scene, nil
+}
+func NewStashQlClient(endpoint string, apiKey string) *StashQlClient {
+	var httpCl *http.Client
+	if apiKey != "" {
+		src := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: apiKey},
+		)
+		httpCl = oauth2.NewClient(context.Background(), src)
+	}
+	graphqlEndpoint := fmt.Sprintf("%s/graphql", endpoint)
+	return &StashQlClient{
+		Endpoint: graphqlEndpoint,
+		APIKey:   apiKey,
+		cl:       *graphql.NewClient(graphqlEndpoint, httpCl),
+	}
+}

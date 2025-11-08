@@ -19,7 +19,7 @@ func (a *ApiHandler) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.Handl
 			mid = append(mid, authMiddleware)
 		}
 		mid = append(mid, v.Post)
-		apiG.POST("/", mid...)
+		apiG.POST(v.RelativePathPost(), mid...)
 	}
 	if v, ok := a.hndler.(IGetApiHandler); ok {
 		mid := []gin.HandlerFunc{}
@@ -27,7 +27,7 @@ func (a *ApiHandler) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.Handl
 			mid = append(mid, authMiddleware)
 		}
 		mid = append(mid, v.Get)
-		apiG.GET("/", mid...)
+		apiG.GET(v.RelativePathGet(), mid...)
 	}
 }
 

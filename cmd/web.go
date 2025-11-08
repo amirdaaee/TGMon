@@ -15,6 +15,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/amirdaaee/TGMon/internal/facade"
 	"github.com/amirdaaee/TGMon/internal/filesystem"
+	"github.com/amirdaaee/TGMon/internal/stash"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/amirdaaee/TGMon/internal/web"
@@ -118,6 +119,7 @@ type Stopper func() error
 func webServerHandler(dbContainer db.IDbContainer, mediafacade facade.IFacade[types.MediaFileDoc], wp stream.IWorkerPool, jobReqFacade facade.IFacade[types.JobReqDoc], jobResFacade facade.IFacade[types.JobResDoc], errG *errgroup.Group) (Stopper, error) {
 	ll := logrus.WithField("at", "webServerHandler")
 	hCfg := config.Config().HttpConfig
+	sCfg := config.Config().StashRedirectorConfig
 	g := gin.Default()
 	coresCfg := cors.DefaultConfig()
 	if len(hCfg.CoresAllowed) > 0 {
@@ -145,6 +147,7 @@ func webServerHandler(dbContainer db.IDbContainer, mediafacade facade.IFacade[ty
 	randomMediaHandler := web.RandomMediaApiHandler{
 		MediaFacade: mediafacade,
 	}
+
 	hndlrs := web.HandlerContainer{
 		MediaHandler:       web.NewCRDApiHandler(&mediaHandler, mediafacade, "media"),
 		JobReqHandler:      web.NewCRDApiHandler(&jobReqHandler, jobReqFacade, "jobReq"),
@@ -153,6 +156,19 @@ func webServerHandler(dbContainer db.IDbContainer, mediafacade facade.IFacade[ty
 		LoginHandler:       web.NewApiHandler(&loginHandler, "auth/login"),
 		SessionHandler:     web.NewApiHandler(&sessionHandler, "auth/session"),
 		RandomMediaHandler: web.NewApiHandler(&randomMediaHandler, "media/random"),
+	}
+	if sCfg.Enabled {
+		stachCl := stash.NewStashQlClient(sCfg.StashEndpoint, sCfg.StashApiKey)
+		stashVTTRedirectorHandler := web.StashVTTRedirectorApiHandler{
+			MinioUrl:    sCfg.MinioUrl,
+			StashCl:     stachCl,
+			MediaFacade: mediafacade,
+		}
+		stashCoverRedirectorHandler := web.StashCoverRedirectorApiHandler{
+			StashVTTRedirectorApiHandler: stashVTTRedirectorHandler,
+		}
+		hndlrs.StashVTTRedirectorHandler = web.NewApiHandler(&stashVTTRedirectorHandler, "")
+		hndlrs.StashCoverRedirectorHandler = web.NewApiHandler(&stashCoverRedirectorHandler, "")
 	}
 	web.RegisterRoutes(g, streamHandler, hndlrs, hCfg.ApiToken, hCfg.Swagger)
 	ll.Warn("starting server")
