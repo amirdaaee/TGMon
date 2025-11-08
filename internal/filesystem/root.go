@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/amirdaaee/TGMon/internal/log"
@@ -222,7 +224,7 @@ func (mfs *MediaFS) getMediaFiles(ctx context.Context) ([]*types.MediaFileDoc, e
 
 	// Update cache
 	mfs.mediaCache = make(map[string]*types.MediaFileDoc)
-	for _, media := range mediaFiles[:100] {
+	for _, media := range mediaFiles {
 		filename := mfs.getFilename(media)
 		mfs.mediaCache[filename] = media
 	}
@@ -256,11 +258,42 @@ func (mfs *MediaFS) getInodeNumber(id interface{}) uint64 {
 	return ino
 }
 
+// sanitizeFilename makes a filename safe for use in filesystems by replacing
+// unsafe characters with underscores. This handles slashes, colons, and other
+// characters that are problematic in filenames.
+func (mfs *MediaFS) sanitizeFilename(filename string) string {
+	var builder strings.Builder
+	builder.Grow(len(filename) * 2) // Pre-allocate space for potential encoding
+
+	for _, r := range filename {
+		// Replace unsafe characters with underscore
+		// Unsafe characters: / \ : * ? " < > | and control characters
+		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' ||
+			r == '"' || r == '<' || r == '>' || r == '|' ||
+			unicode.IsControl(r) {
+			builder.WriteRune('_')
+		} else {
+			builder.WriteRune(r)
+		}
+	}
+
+	result := builder.String()
+	// Remove leading/trailing spaces and dots (problematic on Windows)
+	result = strings.Trim(result, " .")
+	// If the result is empty after trimming, use a default name
+	if result == "" {
+		result = "file"
+	}
+	return result
+}
+
 // getFilename returns the filename for a media file
 func (mfs *MediaFS) getFilename(media *types.MediaFileDoc) string {
 	ext := mfs.getExtensionFromMimeType(media.Meta.MimeType)
 	if media.Meta.FileName != "" {
-		return fmt.Sprintf("%s-%s%s", media.Meta.FileName, media.ID.Hex(), ext)
+		safeName := mfs.sanitizeFilename(media.Meta.FileName)
+		name := fmt.Sprintf("%s-%s%s", safeName, media.ID.Hex(), ext)
+		return name
 	}
 	// Use ID as filename with appropriate extension based on mime type
 	return fmt.Sprintf("%s%s", media.ID.Hex(), ext)

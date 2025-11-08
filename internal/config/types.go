@@ -29,6 +29,10 @@ type MongoDBConfigType struct {
 	Uri    string `env:"URI,required"`
 	DBName string `env:"DB_NAME,required"`
 }
+type FuseConfigType struct {
+	AllowOther bool `env:"ALLOW_OTHER" envDefault:"true"`
+	Debug      bool `env:"DEBUG" envDefault:"false"`
+}
 type RuntimeConfigType struct {
 	LogLevel       string `env:"LOG_LEVEL" envDefault:"warning"`
 	KeepDupFiles   bool   `env:"KEEP_DUP_FILE"`
@@ -39,5 +43,6 @@ type ConfigType struct {
 	HttpConfig     HttpConfigType     `envPrefix:"HTTP__"`
 	MinioConfig    MinioConfigType    `envPrefix:"MINIO__"`
 	MongoDBConfig  MongoDBConfigType  `envPrefix:"MONGODB__"`
+	FuseConfig     FuseConfigType     `envPrefix:"FUSE__"`
 	RuntimeConfig  RuntimeConfigType  `envPrefix:"RUNTIME__"`
 }
