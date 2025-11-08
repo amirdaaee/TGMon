@@ -30,8 +30,11 @@ type MongoDBConfigType struct {
 	DBName string `env:"DB_NAME,required"`
 }
 type FuseConfigType struct {
-	AllowOther bool `env:"ALLOW_OTHER" envDefault:"true"`
-	Debug      bool `env:"DEBUG" envDefault:"false"`
+	Enabled     bool   `env:"ENABLED" envDefault:"true"`
+	AllowOther  bool   `env:"ALLOW_OTHER" envDefault:"true"`
+	Debug       bool   `env:"DEBUG" envDefault:"false"`
+	MediaDir    string `env:"MEDIA_DIR" envDefault:"/tgmon-data/media"`
+	StashGenDir string `env:"STASH_GEN_DIR" envDefault:"/tgmon-data/stash-gen"`
 }
 type RuntimeConfigType struct {
 	LogLevel       string `env:"LOG_LEVEL" envDefault:"warning"`

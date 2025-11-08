@@ -328,7 +328,7 @@ func (mfs *MediaFS) getExtensionFromMimeType(mimeType string) string {
 }
 
 func (mfs *MediaFS) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", mfs, fn))
+	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mfs, fn))
 }
 
 // NewMediaFS creates a new MediaFS filesystem
@@ -357,7 +357,7 @@ type MountOptions struct {
 
 // MountWithOptions mounts the media filesystem with custom options
 func MountWithOptions(mountPoint string, dbContainer db.IDbContainer, streamWorkerPool stream.IWorkerPool, opts *MountOptions) (*fuse.Server, error) {
-	ll := log.GetLogger(log.WebModule).WithField("func", "Mount")
+	ll := log.GetLogger(log.FuseModule).WithField("func", "Mount")
 	ll.Infof("Mounting filesystem at: %s", mountPoint)
 
 	if opts == nil {
@@ -419,7 +419,7 @@ func MountWithOptions(mountPoint string, dbContainer db.IDbContainer, streamWork
 
 // Unmount unmounts the filesystem
 func Unmount(mountPoint string) error {
-	ll := log.GetLogger(log.WebModule).WithField("func", "Unmount")
+	ll := log.GetLogger(log.FuseModule).WithField("func", "Unmount")
 	ll.Infof("Unmounting filesystem at: %s", mountPoint)
 
 	// Try to unmount using fusermount

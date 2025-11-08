@@ -114,5 +114,5 @@ func (mfh *MediaFileHandle) Release(ctx context.Context) syscall.Errno {
 }
 
 func (mfh *MediaFileHandle) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", mfh, fn))
+	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mfh, fn))
 }

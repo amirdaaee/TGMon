@@ -60,5 +60,5 @@ func (mf *MediaFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uin
 }
 
 func (mf *MediaFile) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", mf, fn))
+	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mf, fn))
 }
