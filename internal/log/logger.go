@@ -13,6 +13,7 @@ const (
 	BotModule    LogModule = "bot"
 	StreamModule LogModule = "stream"
 	WebModule    LogModule = "web"
+	FuseModule   LogModule = "fuse"
 )
 
 func GetLogger(module LogModule) *logrus.Entry {
