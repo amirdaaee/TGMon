@@ -179,11 +179,11 @@ func (h *StashVTTRedirectorApiHandler) Get(g *gin.Context) {
 		g.Error(NewHttpError(err, http.StatusNotFound)) //nolint:golint,errcheck
 		return
 	}
-	if media != nil {
+	if media != nil && media.Vtt != "" {
 		g.Redirect(http.StatusPermanentRedirect, fmt.Sprintf("%s/%s", h.MinioUrl, media.Vtt))
 
 	} else {
-		g.Error(NewHttpError(err, http.StatusNotFound)) //nolint:golint,errcheck
+		g.Error(NewHttpError(errors.New("no vtt file found"), http.StatusNotFound)) //nolint:golint,errcheck
 	}
 }
 func (h *StashVTTRedirectorApiHandler) AuthGet() bool {
