@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/shurcooL/graphql"
-	"golang.org/x/oauth2"
 )
 
 type StashQlClient struct {
@@ -54,12 +53,14 @@ func (st *StashQlClient) FindSceneById(ctx context.Context, id string) (*Scene, 
 	return &Query.Scene, nil
 }
 func NewStashQlClient(endpoint string, apiKey string) *StashQlClient {
-	var httpCl *http.Client
+	httpCl := http.DefaultClient
 	if apiKey != "" {
-		src := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: apiKey},
-		)
-		httpCl = oauth2.NewClient(context.Background(), src)
+		httpCl = &http.Client{
+			Transport: &apiKeyTransport{
+				apiKey: apiKey,
+				base:   http.DefaultTransport,
+			},
+		}
 	}
 	graphqlEndpoint := fmt.Sprintf("%s/graphql", endpoint)
 	return &StashQlClient{
@@ -67,4 +68,15 @@ func NewStashQlClient(endpoint string, apiKey string) *StashQlClient {
 		APIKey:   apiKey,
 		cl:       *graphql.NewClient(graphqlEndpoint, httpCl),
 	}
+}
+
+type apiKeyTransport struct {
+	apiKey string
+	base   http.RoundTripper
+}
+
+func (t *apiKeyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.Header.Set("ApiKey", t.apiKey)
+	return t.base.RoundTrip(req)
 }
