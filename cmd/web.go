@@ -214,6 +214,10 @@ func fuseServerHandler(dbContainer db.IDbContainer, wp stream.IWorkerPool, errG 
 			return nil
 		})
 		return func() error {
+			if fuseSrv == nil {
+				ll.Warn("fuse server instance is nil")
+				return nil
+			}
 			if err := fuseSrv.Unmount(); err != nil {
 				return fmt.Errorf("can not unmount filesystem: %w", err)
 			}
