@@ -7,6 +7,8 @@ COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w"  -o ./tgmon
 
 FROM alpine AS app
+RUN apk add --no-cache fuse fuse3
+RUN echo "user_allow_other" >> /etc/fuse.conf
 ENV GIN_MODE=release
 ENV TELEGRAM__SESSION_DIR="/TGMon/session"
 ENV TELEGRAM__WORKER_CACHE_ROOT="/TGMon/worker-cache"

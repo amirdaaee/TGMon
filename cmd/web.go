@@ -84,8 +84,12 @@ var webCmd = &cobra.Command{
 		errG.Go(func() error {
 			sigChan := make(chan os.Signal, 1)
 			signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-			sig := <-sigChan
-			return fmt.Errorf("received signal to stop server: %s", sig) // to stop error group
+			select {
+			case sig := <-sigChan:
+				return fmt.Errorf("received signal to stop server: %s", sig)
+			case <-ctx.Done():
+				return nil
+			}
 		})
 		errG.Go(func() error {
 			<-ctx.Done()

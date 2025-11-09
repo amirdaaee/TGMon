@@ -364,6 +364,15 @@ func MountWithOptions(mountPoint string, dbContainer db.IDbContainer, streamWork
 		opts = &MountOptions{}
 	}
 
+	// Check if FUSE device is available (required for mounting)
+	// This helps diagnose issues in Docker containers
+	if _, err := os.Stat("/dev/fuse"); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("FUSE device /dev/fuse not found - container may need --device /dev/fuse or --privileged flag")
+		}
+		ll.WithError(err).Warn("Could not stat /dev/fuse - mount may fail")
+	}
+
 	// ensure mount point exists with proper permissions
 	// Use 0755 for normal, 0777 if allow-other is enabled (needed for container access)
 	mountPerms := os.FileMode(0755)
@@ -372,6 +381,17 @@ func MountWithOptions(mountPoint string, dbContainer db.IDbContainer, streamWork
 	}
 	if err := os.MkdirAll(mountPoint, mountPerms); err != nil {
 		return nil, fmt.Errorf("failed to create mount point: %w", err)
+	}
+
+	// Check if mount point is already a mount point (to avoid conflicts)
+	// This is a best-effort check - it may not catch all cases
+	var stat syscall.Stat_t
+	if err := syscall.Stat(mountPoint, &stat); err == nil {
+		// If the mount point is on a different device than root, it might already be mounted
+		var rootStat syscall.Stat_t
+		if err := syscall.Stat("/", &rootStat); err == nil && stat.Dev != rootStat.Dev {
+			ll.Warnf("Mount point %s appears to be on a different filesystem - ensure it's not already mounted", mountPoint)
+		}
 	}
 
 	// Create root filesystem
