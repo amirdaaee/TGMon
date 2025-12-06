@@ -12,10 +12,9 @@ import (
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stash"
 	"github.com/amirdaaee/TGMon/internal/types"
-	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
+	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type IPostApiHandler interface {
@@ -198,16 +197,14 @@ func (h *StashVTTRedirectorApiHandler) RelativePathGet() string {
 // }
 
 func (h *StashVTTRedirectorApiHandler) getMediaByScene(ctx context.Context, scene *stash.Scene) (*types.MediaFileDoc, error) {
-	fname := scene.Files[0].Basename
-	fIDSplit := strings.Split(fname, "-")
-	fID := strings.Split(fIDSplit[len(fIDSplit)-1], ".")[0]
-	mongoID, err := bson.ObjectIDFromHex(fID)
-	if err != nil {
-		return nil, fmt.Errorf("can not parse mongo id: %w", err)
+	file := scene.Files[0]
+	fname := file.Basename
+	if idx := strings.LastIndex(fname, "."); idx != -1 {
+		fname = fname[:idx]
 	}
-	media, err := h.MediaFacade.GetCollection().Finder().Filter(bsonx.Id(mongoID)).FindOne(ctx)
+	media, err := h.MediaFacade.GetCollection().Finder().Filter(query.Eq(types.MediaFileDoc__UnameField, fname)).FindOne(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("can not query media by mongo id (%s): %w", mongoID, err)
+		return nil, fmt.Errorf("can not query media by uname (%s): %w", fname, err)
 	}
 	return media, nil
 }
