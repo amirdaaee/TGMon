@@ -18,15 +18,16 @@ type HandlerContainer struct {
 	RandomMediaHandler          *ApiHandler
 	StashVTTRedirectorHandler   *ApiHandler
 	StashCoverRedirectorHandler *ApiHandler
+	StreamHandler               *Streamhandler
 }
 
-func RegisterRoutes(r *gin.Engine, streamHandler *Streamhandler, hndlrs HandlerContainer, apiToken string, swag bool) {
+func RegisterRoutes(r *gin.Engine, hndlrs *HandlerContainer, apiToken string, swag bool) {
 	webRoot := r.Group("/", errMiddleware())
 	if swag {
 		docs.SwaggerInfo.Title = "Tgmon API"
 		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	}
-	webRoot.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", streamHandler.Stream)
+	webRoot.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", hndlrs.StreamHandler.Stream)
 	authMiddleware := apiAuthMiddleware(apiToken)
 	apiRoot := webRoot.Group("api/")
 	hndlrs.MediaHandler.RegisterRoutes(apiRoot, authMiddleware)
