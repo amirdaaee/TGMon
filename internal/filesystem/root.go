@@ -2,20 +2,18 @@ package filesystem
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"os"
 	"sort"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
-	"unicode"
 
-	"github.com/amirdaaee/TGMon/internal/db"
+	"github.com/amirdaaee/TGMon/internal/facade"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/sirupsen/logrus"
@@ -24,7 +22,7 @@ import (
 // MediaFS is the root filesystem node that lists all media files
 type MediaFS struct {
 	fs.Inode
-	dbContainer      db.IDbContainer
+	mediaFacade      facade.IFacade[types.MediaFileDoc]
 	streamWorkerPool stream.IWorkerPool
 	mediaCache       map[string]*types.MediaFileDoc
 	cacheMutex       sync.RWMutex
@@ -37,6 +35,7 @@ var _ fs.NodeReaddirer = (*MediaFS)(nil)
 var _ fs.NodeLookuper = (*MediaFS)(nil)
 var _ fs.NodeGetattrer = (*MediaFS)(nil)
 var _ fs.NodeOpendirer = (*MediaFS)(nil)
+var _ fs.NodeUnlinker = (*MediaFS)(nil)
 
 // OnAdd is called when the filesystem is mounted
 func (mfs *MediaFS) OnAdd(ctx context.Context) {
@@ -102,9 +101,9 @@ func (mfs *MediaFS) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 
 	// Create directory entries directly (avoid intermediate struct for better performance)
 	for _, media := range mediaFiles {
-		filename := mfs.getFilename(media)
+		filename := getFilename(media)
 		// Set Ino to match what we use in Lookup - use hash of ObjectID for uniqueness
-		ino := mfs.getInodeNumber(media.ID)
+		ino := getInodeNumber(media.ID)
 		entries = append(entries, fuse.DirEntry{
 			Name: filename,
 			Mode: fuse.S_IFREG | 0444, // Regular file, read-only
@@ -153,7 +152,7 @@ func (mfs *MediaFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut)
 	// Find the media file by name
 	var media *types.MediaFileDoc
 	for _, m := range mediaFiles {
-		if mfs.getFilename(m) == name {
+		if getFilename(m) == name {
 			media = m
 			break
 		}
@@ -167,7 +166,6 @@ func (mfs *MediaFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut)
 	// Create file node
 	fileNode := &MediaFile{
 		media:            media,
-		dbContainer:      mfs.dbContainer,
 		streamWorkerPool: mfs.streamWorkerPool,
 	}
 
@@ -180,11 +178,30 @@ func (mfs *MediaFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut)
 
 	stable := fs.StableAttr{
 		Mode: fuse.S_IFREG,
-		Ino:  mfs.getInodeNumber(media.ID),
+		Ino:  getInodeNumber(media.ID),
 	}
 
 	ll.Debugf("Found file: %s (size: %d)", name, media.Meta.FileSize)
 	return mfs.NewInode(ctx, fileNode, stable), 0
+}
+func (mfs *MediaFS) Unlink(ctx context.Context, name string) syscall.Errno {
+	mfs.cacheMutex.Lock()
+	defer mfs.cacheMutex.Unlock()
+	ll := mfs.getLogger("Unlink")
+	uname := types.RemoveExtension(name)
+	ll.Infof("removing media file: %s", uname)
+	filter := bsonx.NewD().Add(types.MediaFileDoc__UnameField, uname).Build()
+	// ...
+	if _, err := mfs.mediaFacade.DeleteOne(ctx, filter); err != nil {
+		ll.WithError(err).Error("failed to delete media file")
+		return syscall.EIO
+	}
+	ll.Debugf("deleted media file: %s", uname)
+	// ...
+	delete(mfs.mediaCache, name)
+	// mfs.RmChild(name)
+	// ...
+	return 0
 }
 
 // getMediaFiles retrieves all media files from the database, with caching
@@ -216,7 +233,7 @@ func (mfs *MediaFS) getMediaFiles(ctx context.Context) ([]*types.MediaFileDoc, e
 	}
 
 	// Fetch from database
-	collection := mfs.dbContainer.GetMongoContainer().GetMediaFileCollection()
+	collection := mfs.mediaFacade.GetCollection()
 	mediaFiles, err := collection.Finder().Find(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find media files: %w", err)
@@ -225,7 +242,7 @@ func (mfs *MediaFS) getMediaFiles(ctx context.Context) ([]*types.MediaFileDoc, e
 	// Update cache
 	mfs.mediaCache = make(map[string]*types.MediaFileDoc)
 	for _, media := range mediaFiles {
-		filename := mfs.getFilename(media)
+		filename := getFilename(media)
 		mfs.mediaCache[filename] = media
 	}
 	mfs.cacheExpiry = time.Now().Add(mfs.cacheTTL)
@@ -233,108 +250,16 @@ func (mfs *MediaFS) getMediaFiles(ctx context.Context) ([]*types.MediaFileDoc, e
 	return mediaFiles, nil
 }
 
-// getInodeNumber generates a unique inode number from an ObjectID
-// Uses SHA256 hash to ensure uniqueness even if timestamps collide
-func (mfs *MediaFS) getInodeNumber(id interface{}) uint64 {
-	// Convert ObjectID to bytes for hashing
-	var idBytes []byte
-	switch v := id.(type) {
-	case fmt.Stringer:
-		idBytes = []byte(v.String())
-	default:
-		idBytes = []byte(fmt.Sprintf("%v", id))
-	}
-
-	// Use first 8 bytes of SHA256 hash as inode number
-	hash := sha256.Sum256(idBytes)
-	// Convert first 8 bytes to uint64, ensuring it's non-zero
-	ino := uint64(hash[0])<<56 | uint64(hash[1])<<48 | uint64(hash[2])<<40 | uint64(hash[3])<<32 |
-		uint64(hash[4])<<24 | uint64(hash[5])<<16 | uint64(hash[6])<<8 | uint64(hash[7])
-
-	// Ensure inode is never 0 (0 is reserved)
-	if ino == 0 {
-		ino = 1
-	}
-	return ino
-}
-
-// sanitizeFilename makes a filename safe for use in filesystems by replacing
-// unsafe characters with underscores. This handles slashes, colons, and other
-// characters that are problematic in filenames.
-func (mfs *MediaFS) sanitizeFilename(filename string) string {
-	var builder strings.Builder
-	builder.Grow(len(filename) * 2) // Pre-allocate space for potential encoding
-
-	for _, r := range filename {
-		// Replace unsafe characters with underscore
-		// Unsafe characters: / \ : * ? " < > | and control characters
-		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' ||
-			r == '"' || r == '<' || r == '>' || r == '|' ||
-			unicode.IsControl(r) {
-			builder.WriteRune('_')
-		} else {
-			builder.WriteRune(r)
-		}
-	}
-
-	result := builder.String()
-	// Remove leading/trailing spaces and dots (problematic on Windows)
-	result = strings.Trim(result, " .")
-	// If the result is empty after trimming, use a default name
-	if result == "" {
-		result = "file"
-	}
-	return result
-}
-
-// getFilename returns the filename for a media file
-func (mfs *MediaFS) getFilename(media *types.MediaFileDoc) string {
-	ext := mfs.getExtensionFromMimeType(media.Meta.MimeType)
-	if media.Meta.FileName != "" {
-		safeName := mfs.sanitizeFilename(media.Meta.FileName)
-		name := fmt.Sprintf("%s-%s%s", safeName, media.ID.Hex(), ext)
-		return name
-	}
-	// Use ID as filename with appropriate extension based on mime type
-	return fmt.Sprintf("%s%s", media.ID.Hex(), ext)
-}
-
-// getExtensionFromMimeType returns a file extension based on mime type
-func (mfs *MediaFS) getExtensionFromMimeType(mimeType string) string {
-	switch mimeType {
-	case "video/mp4":
-		return ".mp4"
-	case "video/webm":
-		return ".webm"
-	case "video/x-matroska":
-		return ".mkv"
-	case "video/quicktime":
-		return ".mov"
-	case "audio/mpeg":
-		return ".mp3"
-	case "audio/ogg":
-		return ".ogg"
-	case "audio/webm":
-		return ".weba"
-	case "image/jpeg":
-		return ".jpg"
-	case "image/png":
-		return ".png"
-	case "image/gif":
-		return ".gif"
-	default:
-		return ".bin"
-	}
-}
-
 func (mfs *MediaFS) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mfs, fn))
 }
 
+// ...
+
 // NewMediaFS creates a new MediaFS filesystem
-func NewMediaFS(dbContainer db.IDbContainer, streamWorkerPool stream.IWorkerPool) *MediaFS {
+func NewMediaFS(mediaFacade facade.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) *MediaFS {
 	return &MediaFS{
-		dbContainer:      dbContainer,
+		mediaFacade:      mediaFacade,
 		streamWorkerPool: streamWorkerPool,
 		mediaCache:       make(map[string]*types.MediaFileDoc),
 		cacheTTL:         30 * time.Second, // Cache media list for 30 seconds
@@ -342,8 +267,8 @@ func NewMediaFS(dbContainer db.IDbContainer, streamWorkerPool stream.IWorkerPool
 }
 
 // Mount mounts the media filesystem at the specified mount point
-func Mount(mountPoint string, dbContainer db.IDbContainer, streamWorkerPool stream.IWorkerPool) (*fuse.Server, error) {
-	return MountWithOptions(mountPoint, dbContainer, streamWorkerPool, &MountOptions{})
+func Mount(mountPoint string, mediaFacade facade.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) (*fuse.Server, error) {
+	return MountWithOptions(mountPoint, mediaFacade, streamWorkerPool, &MountOptions{})
 }
 
 // MountOptions configures the filesystem mount behavior
@@ -356,7 +281,7 @@ type MountOptions struct {
 }
 
 // MountWithOptions mounts the media filesystem with custom options
-func MountWithOptions(mountPoint string, dbContainer db.IDbContainer, streamWorkerPool stream.IWorkerPool, opts *MountOptions) (*fuse.Server, error) {
+func MountWithOptions(mountPoint string, mediaFacade facade.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool, opts *MountOptions) (*fuse.Server, error) {
 	ll := log.GetLogger(log.FuseModule).WithField("func", "Mount")
 	ll.Infof("Mounting filesystem at: %s", mountPoint)
 
@@ -395,7 +320,7 @@ func MountWithOptions(mountPoint string, dbContainer db.IDbContainer, streamWork
 	}
 
 	// Create root filesystem
-	root := NewMediaFS(dbContainer, streamWorkerPool)
+	root := NewMediaFS(mediaFacade, streamWorkerPool)
 
 	// Create FUSE server
 	fuseOpts := &fs.Options{}

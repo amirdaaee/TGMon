@@ -67,6 +67,14 @@ func (crd *MediaCrud) PostCreate(ctx context.Context, doc *types.MediaFileDoc) e
 		}
 		ll.Info("initial thumbnail set")
 	}()
+	go func() {
+
+		if _, err := crd.GetCollection().Updater().Filter(query.Id(doc.ID)).Updates(update.Set(types.MediaFileDoc__UnameField, doc.Name())).UpdateOne(newCtx); err != nil {
+			ll.WithError(err).Error("failed to set uname")
+			return
+		}
+		ll.Info("uname set")
+	}()
 	return nil
 }
 

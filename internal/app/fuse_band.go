@@ -8,7 +8,7 @@ import (
 	"github.com/mazrean/kessoku"
 )
 
-func InitializeFuzeServer(configType *config.ConfigType) (*fuse.Server, error) {
+func InitializeFuseServer(configType *config.ConfigType) (*fuse.Server, error) {
 	var err error
 	idbContainer, err := kessoku.Provide(NewDbContainer).Fn()(configType)
 	if err != nil {
@@ -22,8 +22,9 @@ func InitializeFuzeServer(configType *config.ConfigType) (*fuse.Server, error) {
 		var zero *fuse.Server
 		return zero, err0
 	}
+	ifacade := kessoku.Provide(NewMediaFacade).Fn()(idbContainer, iworkerPool)
 	var err1 error
-	server, err1 := kessoku.Provide(NewFuzeServer).Fn()(configType, idbContainer, iworkerPool)
+	server, err1 := kessoku.Provide(NewFuzeServer).Fn()(configType, ifacade, iworkerPool)
 	if err1 != nil {
 		var zero *fuse.Server
 		return zero, err1

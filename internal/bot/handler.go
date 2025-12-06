@@ -100,7 +100,7 @@ func (h *handler) buildMediaFileDoc(newDoc any, msgID int) (types.MediaFileDoc, 
 func (h *handler) sendSuccessMsg(ctx *ext.Context, u *ext.Update, doc *types.MediaFileDoc) error {
 	ll := h.getLogger("sendSuccessMsg")
 	ll.Debugf("sending success message")
-	m := fmt.Sprintf("ok: %s (%d)", doc.Meta.FileName, doc.Meta.FileID)
+	m := fmt.Sprintf("ok: %s (%d)", doc.NameExt(), doc.Meta.FileID)
 	if _, err := ctx.Reply(u, ext.ReplyTextString(m), &ext.ReplyOpts{ReplyToMessageId: u.EffectiveMessage.ID}); err != nil {
 		return NewBotError("failed to send success message", err)
 	}

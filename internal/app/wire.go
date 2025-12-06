@@ -16,6 +16,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	"github.com/amirdaaee/TGMon/internal/types"
+	tgmonTypes "github.com/amirdaaee/TGMon/internal/types"
 	"github.com/amirdaaee/TGMon/internal/web"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -33,14 +34,14 @@ func NewWebServer(cfg *config.ConfigType, g *gin.Engine, hndl *web.HandlerContai
 		Handler: g,
 	}
 }
-func NewFuzeServer(cfg *config.ConfigType, dbContainer db.IDbContainer, wp stream.IWorkerPool) (*fuse.Server, error) {
+func NewFuzeServer(cfg *config.ConfigType, mediaFacade facade.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool) (*fuse.Server, error) {
 	fCfg := cfg.FuseConfig
 	mountDir := fCfg.MediaDir
 	opts := &filesystem.MountOptions{
 		AllowOther: fCfg.AllowOther,
 		Debug:      fCfg.Debug,
 	}
-	server, err := filesystem.MountWithOptions(mountDir, dbContainer, wp, opts)
+	server, err := filesystem.MountWithOptions(mountDir, mediaFacade, wp, opts)
 	if err != nil {
 		return nil, fmt.Errorf("can not mount filesystem: %w", err)
 	}
@@ -62,7 +63,7 @@ func NewGinEngine(cfg *config.ConfigType, hndlr *web.HandlerContainer) *gin.Engi
 	return g
 }
 
-func NewWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade facade.IFacade[types.MediaFileDoc], jobReqFacade facade.IFacade[types.JobReqDoc], jobResFacade facade.IFacade[types.JobResDoc], wp stream.IWorkerPool, stshCl *stash.StashQlClient) *web.HandlerContainer {
+func NewWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade facade.IFacade[tgmonTypes.MediaFileDoc], jobReqFacade facade.IFacade[types.JobReqDoc], jobResFacade facade.IFacade[tgmonTypes.JobResDoc], wp stream.IWorkerPool, stshCl *stash.StashQlClient) *web.HandlerContainer {
 	hCfg := cfg.HttpConfig
 	sCfg := config.Config().StashRedirectorConfig
 
@@ -138,16 +139,16 @@ func NewDbContainer(cfg *config.ConfigType) (db.IDbContainer, error) {
 }
 
 // ... Facades
-func NewMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool) facade.IFacade[types.MediaFileDoc] {
+func NewMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool) facade.IFacade[tgmonTypes.MediaFileDoc] {
 	cfg := config.Config()
 	return facade.NewFacade(facade.NewMediaCrud(dbContainer, workerContainer, cfg.RuntimeConfig.KeepDupFiles))
 }
 
-func NewJobReqFacade(dbContainer db.IDbContainer) facade.IFacade[types.JobReqDoc] {
+func NewJobReqFacade(dbContainer db.IDbContainer) facade.IFacade[tgmonTypes.JobReqDoc] {
 	return facade.NewFacade(facade.NewJobReqCrud(dbContainer))
 }
 
-func NewJobResFacade(dbContainer db.IDbContainer) facade.IFacade[types.JobResDoc] {
+func NewJobResFacade(dbContainer db.IDbContainer) facade.IFacade[tgmonTypes.JobResDoc] {
 	return facade.NewFacade(facade.NewJobResCrud(dbContainer))
 }
 
@@ -186,7 +187,7 @@ var TgProviderSet = kessoku.Set(
 )
 
 // ... Bot
-func NewBot(tgClient tlg.IClient, mediafacade facade.IFacade[types.MediaFileDoc], wp stream.IWorkerPool) (*bot.Bot, error) {
+func NewBot(tgClient tlg.IClient, mediafacade facade.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool) (*bot.Bot, error) {
 	tgBot, err := bot.NewBot(tgClient)
 	if err != nil {
 		return nil, fmt.Errorf("can not create bot: %w", err)

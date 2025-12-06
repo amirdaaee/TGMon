@@ -63,6 +63,8 @@ definitions:
         type: string
       Thumbnail:
         type: string
+      UName:
+        type: string
       UpdatedAt:
         type: string
       Vtt:

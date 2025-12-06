@@ -431,6 +431,9 @@ const docTemplate = `{
                 "Thumbnail": {
                     "type": "string"
                 },
+                "UName": {
+                    "type": "string"
+                },
                 "UpdatedAt": {
                     "type": "string"
                 },

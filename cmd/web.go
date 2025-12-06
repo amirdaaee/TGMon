@@ -56,7 +56,7 @@ var webCmd = &cobra.Command{
 		})
 		// ...
 		if cfg.FuseConfig.Enabled {
-			fuseServer, err := app.InitializeFuzeServer(cfg)
+			fuseServer, err := app.InitializeFuseServer(cfg)
 			if err != nil {
 				logrus.WithError(err).Fatal("can not initialize fuse server")
 			}
