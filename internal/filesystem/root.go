@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/amirdaaee/TGMon/internal/facade"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
@@ -22,7 +22,7 @@ import (
 // MediaFS is the root filesystem node that lists all media files
 type MediaFS struct {
 	fs.Inode
-	mediaFacade      facade.IFacade[types.MediaFileDoc]
+	mediaFacade      ftypes.IFacade[types.MediaFileDoc]
 	streamWorkerPool stream.IWorkerPool
 	mediaCache       map[string]*types.MediaFileDoc
 	cacheMutex       sync.RWMutex
@@ -257,7 +257,7 @@ func (mfs *MediaFS) getLogger(fn string) *logrus.Entry {
 // ...
 
 // NewMediaFS creates a new MediaFS filesystem
-func NewMediaFS(mediaFacade facade.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) *MediaFS {
+func NewMediaFS(mediaFacade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) *MediaFS {
 	return &MediaFS{
 		mediaFacade:      mediaFacade,
 		streamWorkerPool: streamWorkerPool,
@@ -267,7 +267,7 @@ func NewMediaFS(mediaFacade facade.IFacade[types.MediaFileDoc], streamWorkerPool
 }
 
 // Mount mounts the media filesystem at the specified mount point
-func Mount(mountPoint string, mediaFacade facade.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) (*fuse.Server, error) {
+func Mount(mountPoint string, mediaFacade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) (*fuse.Server, error) {
 	return MountWithOptions(mountPoint, mediaFacade, streamWorkerPool, &MountOptions{})
 }
 
@@ -281,7 +281,7 @@ type MountOptions struct {
 }
 
 // MountWithOptions mounts the media filesystem with custom options
-func MountWithOptions(mountPoint string, mediaFacade facade.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool, opts *MountOptions) (*fuse.Server, error) {
+func MountWithOptions(mountPoint string, mediaFacade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool, opts *MountOptions) (*fuse.Server, error) {
 	ll := log.GetLogger(log.FuseModule).WithField("func", "Mount")
 	ll.Infof("Mounting filesystem at: %s", mountPoint)
 

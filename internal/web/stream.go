@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/amirdaaee/TGMon/internal/db"
-	"github.com/amirdaaee/TGMon/internal/facade"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
@@ -21,7 +21,7 @@ import (
 
 type Streamhandler struct {
 	dbContainer db.IDbContainer
-	mediaFacade facade.IFacade[types.MediaFileDoc]
+	mediaFacade ftypes.IFacade[types.MediaFileDoc]
 	streamPool  stream.IWorkerPool
 }
 
@@ -137,7 +137,7 @@ func (s *Streamhandler) getStreamHeaders(req *http.Request, meta *StreamMetaData
 func (s *Streamhandler) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", s, fn))
 }
-func NewStreamHandler(dbContainer db.IDbContainer, mediaFacade facade.IFacade[types.MediaFileDoc], wp stream.IWorkerPool) *Streamhandler {
+func NewStreamHandler(dbContainer db.IDbContainer, mediaFacade ftypes.IFacade[types.MediaFileDoc], wp stream.IWorkerPool) *Streamhandler {
 	return &Streamhandler{
 		dbContainer: dbContainer,
 		mediaFacade: mediaFacade,

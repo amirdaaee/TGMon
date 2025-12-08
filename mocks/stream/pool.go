@@ -11,7 +11,6 @@ package mocks
 
 import (
 	bufio "bufio"
-	context "context"
 	reflect "reflect"
 
 	stream "github.com/amirdaaee/TGMon/internal/stream"
@@ -56,21 +55,6 @@ func (mr *MockIWorkerPoolMockRecorder) GetNextWorker() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNextWorker", reflect.TypeOf((*MockIWorkerPool)(nil).GetNextWorker))
 }
 
-// Stream mocks base method.
-func (m *MockIWorkerPool) Stream(ctx context.Context, msgID int, offset, end int64) (stream.IStreamer, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stream", ctx, msgID, offset, end)
-	ret0, _ := ret[0].(stream.IStreamer)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Stream indicates an expected call of Stream.
-func (mr *MockIWorkerPoolMockRecorder) Stream(ctx, msgID, offset, end any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stream", reflect.TypeOf((*MockIWorkerPool)(nil).Stream), ctx, msgID, offset, end)
-}
-
 // MockIStreamer is a mock of IStreamer interface.
 type MockIStreamer struct {
 	ctrl     *gomock.Controller
@@ -95,20 +79,6 @@ func (m *MockIStreamer) EXPECT() *MockIStreamerMockRecorder {
 	return m.recorder
 }
 
-// GetBuffer mocks base method.
-func (m *MockIStreamer) GetBuffer() *bufio.Reader {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBuffer")
-	ret0, _ := ret[0].(*bufio.Reader)
-	return ret0
-}
-
-// GetBuffer indicates an expected call of GetBuffer.
-func (mr *MockIStreamerMockRecorder) GetBuffer() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuffer", reflect.TypeOf((*MockIStreamer)(nil).GetBuffer))
-}
-
 // Read mocks base method.
 func (m *MockIStreamer) Read(p []byte) (int, error) {
 	m.ctrl.T.Helper()
@@ -122,4 +92,18 @@ func (m *MockIStreamer) Read(p []byte) (int, error) {
 func (mr *MockIStreamerMockRecorder) Read(p any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockIStreamer)(nil).Read), p)
+}
+
+// ReadBuffered mocks base method.
+func (m *MockIStreamer) ReadBuffered() *bufio.Reader {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadBuffered")
+	ret0, _ := ret[0].(*bufio.Reader)
+	return ret0
+}
+
+// ReadBuffered indicates an expected call of ReadBuffered.
+func (mr *MockIStreamerMockRecorder) ReadBuffered() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadBuffered", reflect.TypeOf((*MockIStreamer)(nil).ReadBuffered))
 }

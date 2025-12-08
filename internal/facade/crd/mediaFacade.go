@@ -1,5 +1,4 @@
-// Package facade provides CRUD logic for media file documents.
-package facade
+package crd
 
 import (
 	"context"
@@ -9,6 +8,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/amirdaaee/TGMon/internal/db/minio"
 	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
@@ -22,12 +22,12 @@ import (
 // MediaCrud implements ICrud for MediaFileDoc, providing CRUD hooks and collection access.
 type MediaCrud struct {
 	dbContainer     db.IDbContainer
-	jReqFac         IFacade[types.JobReqDoc]
+	jReqFac         ftypes.IFacade[types.JobReqDoc]
 	workerContainer stream.IWorkerPool
 	keepDup         bool
 }
 
-var _ ICrud[types.MediaFileDoc] = (*MediaCrud)(nil)
+var _ ftypes.ICrud[types.MediaFileDoc] = (*MediaCrud)(nil)
 
 // PreCreate checks for duplicates before creating a MediaFileDoc. Returns an error if the document is nil or a duplicate is found.
 func (crd *MediaCrud) PreCreate(ctx context.Context, doc *types.MediaFileDoc) error {
@@ -41,7 +41,7 @@ func (crd *MediaCrud) PreCreate(ctx context.Context, doc *types.MediaFileDoc) er
 	if n, err := crd.GetCollection().Finder().Filter(bsonx.NewD().Add(types.MediaFileDoc__FileIDField, doc.Meta.FileID).Build()).Count(ctx); err != nil {
 		ll.WithError(err).Error("failed to check for duplicates")
 	} else if n > 0 {
-		return fmt.Errorf("%w: %d", ErrFileAlreadyExists, doc.Meta.FileID)
+		return fmt.Errorf("%w: %d", ftypes.ErrFileAlreadyExists, doc.Meta.FileID)
 	}
 	return nil
 }
@@ -131,8 +131,7 @@ func (crd *MediaCrud) getLogger(fn string) *logrus.Entry {
 }
 
 // NewMediaCrud creates a new MediaCrud with the provided database container.
-func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool, keepDup bool) ICrud[types.MediaFileDoc] {
-	jobReqFacade := NewFacade(NewJobReqCrud(dbContainer))
+func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool, keepDup bool, jobReqFacade ftypes.IFacade[types.JobReqDoc]) ftypes.ICrud[types.MediaFileDoc] {
 	return &MediaCrud{dbContainer: dbContainer, jReqFac: jobReqFacade, workerContainer: workerContainer, keepDup: keepDup}
 }
 

@@ -1,4 +1,4 @@
-package facade
+package types
 
 import "errors"
 

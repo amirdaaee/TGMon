@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/amirdaaee/TGMon/internal/facade"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stash"
 	"github.com/amirdaaee/TGMon/internal/types"
@@ -29,7 +29,7 @@ type IGetApiHandler interface {
 }
 
 type InfoApiHandler struct {
-	MediaFacade facade.IFacade[types.MediaFileDoc]
+	MediaFacade ftypes.IFacade[types.MediaFileDoc]
 }
 type LoginApiHandler struct {
 	UserName string
@@ -40,12 +40,12 @@ type SessionApiHandler struct {
 	Token string
 }
 type RandomMediaApiHandler struct {
-	MediaFacade facade.IFacade[types.MediaFileDoc]
+	MediaFacade ftypes.IFacade[types.MediaFileDoc]
 }
 type StashVTTRedirectorApiHandler struct {
 	MinioUrl    string
 	StashCl     *stash.StashQlClient
-	MediaFacade facade.IFacade[types.MediaFileDoc]
+	MediaFacade ftypes.IFacade[types.MediaFileDoc]
 }
 type StashCoverRedirectorApiHandler struct {
 	StashVTTRedirectorApiHandler

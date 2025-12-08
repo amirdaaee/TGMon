@@ -1,5 +1,4 @@
-// Package facade provides CRUD logic for job request and result documents.
-package facade
+package crd
 
 import (
 	"bytes"
@@ -8,6 +7,7 @@ import (
 
 	"github.com/amirdaaee/TGMon/internal/db"
 	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
@@ -21,7 +21,7 @@ type JobReqCrud struct {
 	container db.IDbContainer
 }
 
-var _ ICrud[types.JobReqDoc] = (*JobReqCrud)(nil)
+var _ ftypes.ICrud[types.JobReqDoc] = (*JobReqCrud)(nil)
 
 // PreCreate checks for duplicates before creating a JobReqDoc. Returns an error if the document is nil or a duplicate is found.
 func (crd *JobReqCrud) PreCreate(ctx context.Context, doc *types.JobReqDoc) error {
@@ -53,17 +53,17 @@ func (crd *JobReqCrud) GetCollection() mngo.ICollection[types.JobReqDoc] {
 }
 
 // NewJobReqCrud creates a new JobReqCrud with the provided database container.
-func NewJobReqCrud(container db.IDbContainer) ICrud[types.JobReqDoc] {
+func NewJobReqCrud(container db.IDbContainer) ftypes.ICrud[types.JobReqDoc] {
 	return &JobReqCrud{container: container}
 }
 
 // JobResCrud implements ICrud for JobResDoc, providing CRUD hooks and collection access.
 type JobResCrud struct {
 	container db.IDbContainer
-	jReqFac   IFacade[types.JobReqDoc]
+	jReqFac   ftypes.IFacade[types.JobReqDoc]
 }
 
-var _ ICrud[types.JobResDoc] = (*JobResCrud)(nil)
+var _ ftypes.ICrud[types.JobResDoc] = (*JobResCrud)(nil)
 
 // PreCreate processes the job result and updates the related media document. Returns an error if the document is nil or processing fails.
 func (crd *JobResCrud) PreCreate(ctx context.Context, doc *types.JobResDoc) error {
@@ -209,7 +209,6 @@ func (crd *JobResCrud) spriteFileName(s string) string {
 }
 
 // NewJobResCrud creates a new JobResCrud with the provided database container.
-func NewJobResCrud(container db.IDbContainer) ICrud[types.JobResDoc] {
-	jobReqFacade := NewFacade(NewJobReqCrud(container))
+func NewJobResCrud(container db.IDbContainer, jobReqFacade ftypes.IFacade[types.JobReqDoc]) ftypes.ICrud[types.JobResDoc] {
 	return &JobResCrud{container: container, jReqFac: jobReqFacade}
 }

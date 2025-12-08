@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/amirdaaee/TGMon/internal/facade"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -13,7 +13,7 @@ import (
 
 type CRDApiHandler[T any] struct {
 	hndler any
-	fac    facade.IFacade[T]
+	fac    ftypes.IFacade[T]
 	name   string
 }
 
@@ -55,7 +55,7 @@ func (a *CRDApiHandler[T]) HandleRead(g *gin.Context) {
 	}
 	res, err := a.fac.GetCRD().GetCollection().Finder().Filter(q).FindOne(g.Request.Context())
 	if err != nil {
-		if errors.Is(err, facade.ErrNoDocumentsFound) || errors.Is(err, facade.ErrMultipleDocumentsFound) {
+		if errors.Is(err, ftypes.ErrNoDocumentsFound) || errors.Is(err, ftypes.ErrMultipleDocumentsFound) {
 			g.Error(NewHttpError(err, http.StatusBadRequest)) //nolint:golint,errcheck
 			return
 		}
@@ -106,7 +106,7 @@ func (a *CRDApiHandler[T]) HandleDelete(g *gin.Context) {
 		return
 	}
 	if _, err := a.fac.DeleteOne(g.Request.Context(), q); err != nil {
-		if errors.Is(err, facade.ErrNoDocumentsFound) || errors.Is(err, facade.ErrMultipleDocumentsFound) {
+		if errors.Is(err, ftypes.ErrNoDocumentsFound) || errors.Is(err, ftypes.ErrMultipleDocumentsFound) {
 			g.Error(NewHttpError(err, http.StatusBadRequest)) //nolint:golint,errcheck
 			return
 		}
@@ -131,7 +131,7 @@ func (a *CRDApiHandler[T]) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin
 		apiG.GET("/:id", authMiddleware, a.HandleRead)
 	}
 }
-func NewCRDApiHandler[T any](hndler any, fac facade.IFacade[T], name string) *CRDApiHandler[T] {
+func NewCRDApiHandler[T any](hndler any, fac ftypes.IFacade[T], name string) *CRDApiHandler[T] {
 	// NewApiHandler creates a new ApiHandler for the given handler, manager, and resource name.
 	return &CRDApiHandler[T]{
 		hndler: hndler,

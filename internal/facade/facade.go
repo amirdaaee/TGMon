@@ -1,4 +1,3 @@
-// Package facade provides generic CRUD and facade logic for TGMon entities.
 package facade
 
 import (
@@ -6,38 +5,18 @@ import (
 	"fmt"
 
 	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// ICrud defines hooks and collection access for CRUD operations on type T.
-//
-//go:generate mockgen -source=facade.go -destination=../../mocks/facade/facade.go -package=mocks
-type ICrud[T any] interface {
-	PreCreate(ctx context.Context, doc *T) error
-	PostCreate(ctx context.Context, doc *T) error // errors in post handlers won't affect main transaction (see docs)
-	PreDelete(ctx context.Context, doc *T) error
-	PostDelete(ctx context.Context, doc *T) error // errors in post handlers won't affect main transaction (see docs)
-	GetCollection() mngo.ICollection[T]
-}
-
-// IFacade defines the main facade interface for CRUD operations on type T.
-//
-//go:generate mockgen -source=facade.go -destination=../../mocks/facade/facade.go -package=mocks
-type IFacade[T any] interface {
-	CreateOne(ctx context.Context, doc *T) (*T, error)
-	DeleteOne(ctx context.Context, filter bson.D) (*T, error)
-	GetCRD() ICrud[T]
-	GetCollection() mngo.ICollection[T]
-}
-
 // BaseFacade provides a generic implementation of IFacade for type T.
 type BaseFacade[T any] struct {
-	crd ICrud[T]
+	crd ftypes.ICrud[T]
 }
 
-var _ IFacade[any] = (*BaseFacade[any])(nil)
+var _ ftypes.IFacade[any] = (*BaseFacade[any])(nil)
 
 // CreateOne creates a document after running pre-create hooks. Post-create hooks run in a goroutine; errors are logged but not returned.
 func (f *BaseFacade[T]) CreateOne(ctx context.Context, doc *T) (*T, error) {
@@ -74,9 +53,9 @@ func (f *BaseFacade[T]) DeleteOne(ctx context.Context, filter bson.D) (*T, error
 		return nil, fmt.Errorf("error counting existing documents: %w", err)
 	}
 	if c == 0 {
-		return nil, ErrNoDocumentsFound
+		return nil, ftypes.ErrNoDocumentsFound
 	} else if c > 1 {
-		return nil, ErrMultipleDocumentsFound
+		return nil, ftypes.ErrMultipleDocumentsFound
 	}
 	doc, err := fnd.FindOne(ctx)
 	if err != nil {
@@ -101,7 +80,7 @@ func (f *BaseFacade[T]) DeleteOne(ctx context.Context, filter bson.D) (*T, error
 }
 
 // GetCRD returns the underlying CRUD implementation for type T.
-func (f *BaseFacade[T]) GetCRD() ICrud[T] {
+func (f *BaseFacade[T]) GetCRD() ftypes.ICrud[T] {
 	return f.crd
 }
 
@@ -116,6 +95,6 @@ func (f *BaseFacade[T]) getLogger(fn string) *logrus.Entry {
 }
 
 // NewFacade returns a new BaseFacade for the given CRD implementation.
-func NewFacade[T any](crd ICrud[T]) IFacade[T] {
+func NewFacade[T any](crd ftypes.ICrud[T]) ftypes.IFacade[T] {
 	return &BaseFacade[T]{crd: crd}
 }

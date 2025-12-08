@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/amirdaaee/TGMon/internal/facade"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	mDb "github.com/amirdaaee/TGMon/mocks/db"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	mMongo "github.com/amirdaaee/TGMon/mocks/db/mongo"
-	mFacade "github.com/amirdaaee/TGMon/mocks/facade"
+	mFacade "github.com/amirdaaee/TGMon/mocks/facade/types"
 	mMongoX "github.com/chenmingyong0423/go-mongox/v2/mock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,7 +31,7 @@ var _ = Describe("BaseFacade", func() {
 		mockCollection     *mMongo.MockICollection[testDoc]
 		testContext        context.Context
 		ctrl               *gomock.Controller
-		fac                facade.IFacade[testDoc]
+		fac                ftypes.IFacade[testDoc]
 		tDoc               *testDoc
 		testQ              bson.D
 	)

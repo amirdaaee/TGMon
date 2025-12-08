@@ -1,15 +1,15 @@
+//go:build wireinject
+// +build wireinject
+
 package app
 
 import (
 	"github.com/amirdaaee/TGMon/internal/bot"
-	"github.com/mazrean/kessoku"
+	"github.com/amirdaaee/TGMon/internal/config"
+	"github.com/google/wire"
 )
 
-//go:generate go tool kessoku $GOFILE
-var _ = kessoku.Inject[*bot.Bot](
-	"InitializeBot",
-	kessoku.Provide(NewBot),
-	kessoku.Provide(NewDbContainer),
-	TgProviderSet,
-	FacadeProviderSet,
-)
+func InitializeBot(cfg *config.ConfigType) (*bot.Bot, error) {
+	wire.Build(NewBot, NewDbContainer, TgProviderSet, FacadeProviderSet)
+	return nil, nil
+}

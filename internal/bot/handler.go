@@ -4,7 +4,7 @@ package bot
 import (
 	"fmt"
 
-	"github.com/amirdaaee/TGMon/internal/facade"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
@@ -27,7 +27,7 @@ type IHandler interface {
 // handler implements IHandler for processing media messages.
 type handler struct {
 	channelID       int64
-	mediaFacade     facade.IFacade[types.MediaFileDoc]
+	mediaFacade     ftypes.IFacade[types.MediaFileDoc]
 	workerContainer stream.IWorkerPool
 }
 
@@ -121,7 +121,7 @@ var _ IHandler = (*handler)(nil)
 
 // NewHandler creates a new handler instance with the given dependencies.
 // Returns an error if any dependency is nil.
-func NewHandler(mediaFacade facade.IFacade[types.MediaFileDoc], channelID int64, wp stream.IWorkerPool) (IHandler, error) {
+func NewHandler(mediaFacade ftypes.IFacade[types.MediaFileDoc], channelID int64, wp stream.IWorkerPool) (IHandler, error) {
 	if mediaFacade == nil {
 		return nil, NewBotError("mediaFacade cannot be nil", nil)
 	}
