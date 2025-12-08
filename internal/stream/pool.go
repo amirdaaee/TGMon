@@ -23,9 +23,6 @@ import (
 type IWorkerPool interface {
 	// GetNextWorker returns the next worker in a round-robin fashion.
 	GetNextWorker() IWorker
-	// Stream creates a buffered reader that streams document content from
-	// Telegram using the pool for resiliency.
-	Stream(ctx context.Context, msgID int, offset int64, end int64) (IStreamer, error)
 }
 type workerPool struct {
 	Bots     []IWorker
@@ -51,12 +48,6 @@ func (wp *workerPool) GetNextWorker() IWorker {
 	return worker
 }
 
-// Stream constructs a new Streamer over the pool for the specified message
-// and byte range [offset, end].
-func (wp *workerPool) Stream(ctx context.Context, msgID int, offset int64, end int64) (IStreamer, error) {
-	return NewStreamer(ctx, wp, msgID, offset, end)
-
-}
 func (wp *workerPool) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", wp, fn))
 }

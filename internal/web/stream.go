@@ -50,7 +50,7 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 		}
 		return
 	}
-	streamer, err := s.streamPool.Stream(g.Request.Context(), media.MessageID, meta.Start, meta.End)
+	streamer, err := stream.NewStreamer(g.Request.Context(), s.streamPool, media.MessageID, meta.Start, meta.End)
 	if err != nil {
 		g.Error(NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
 		return

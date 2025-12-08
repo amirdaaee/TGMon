@@ -70,10 +70,10 @@ func (mfh *MediaFileHandle) Read(ctx context.Context, dest []byte, off int64) (f
 	defer streamCancel() // Ensure stream context is canceled when Read returns
 
 	// Use the combined context for stream operations
-	streamer, err := mfh.streamWorkerPool.Stream(streamCtx, mfh.media.MessageID, off, end)
+	streamer, err := stream.NewStreamer(streamCtx, mfh.streamWorkerPool, mfh.media.MessageID, off, end)
 	if err != nil {
 		ll.WithError(err).Error("Failed to create streamer")
-		return nil, syscall.EIO
+		return fuse.ReadResultData(nil), syscall.EIO
 	}
 
 	// Read the data
