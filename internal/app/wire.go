@@ -197,7 +197,7 @@ func NewBot(tgClient tlg.IClient, mediafacade ftypes.IFacade[tgmonTypes.MediaFil
 	if err != nil {
 		return nil, fmt.Errorf("can not create bot: %w", err)
 	}
-	hndler, err := bot.NewHandler(mediafacade, config.Config().TelegramConfig.ChannelID, wp)
+	hndler, err := bot.NewMediaHandler(mediafacade, config.Config().TelegramConfig.ChannelID, wp)
 	if err != nil {
 		return nil, fmt.Errorf("can not create bot handler: %w", err)
 	}
