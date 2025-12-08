@@ -19,6 +19,12 @@ import (
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	tgmonTypes "github.com/amirdaaee/TGMon/internal/types"
 	"github.com/amirdaaee/TGMon/internal/web"
+	wApi "github.com/amirdaaee/TGMon/internal/web/api"
+	waHndlr "github.com/amirdaaee/TGMon/internal/web/api/handler"
+	wRest "github.com/amirdaaee/TGMon/internal/web/rest"
+	wrCrd "github.com/amirdaaee/TGMon/internal/web/rest/crd"
+	wStream "github.com/amirdaaee/TGMon/internal/web/stream"
+	wtypes "github.com/amirdaaee/TGMon/internal/web/types"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
@@ -42,7 +48,7 @@ func NewFuzeServer(cfg *config.ConfigType, mediaFacade ftypes.IFacade[tgmonTypes
 }
 
 // ... Web
-func NewWebServer(cfg *config.ConfigType, g *gin.Engine, hndl *web.HandlerContainer) *http.Server {
+func NewWebServer(cfg *config.ConfigType, g *gin.Engine, hndl []wtypes.Registereable) *http.Server {
 	hCfg := cfg.HttpConfig
 	web.RegisterRoutes(g, hndl, cfg.HttpConfig.ApiToken, cfg.HttpConfig.Swagger)
 	return &http.Server{
@@ -50,7 +56,7 @@ func NewWebServer(cfg *config.ConfigType, g *gin.Engine, hndl *web.HandlerContai
 		Handler: g,
 	}
 }
-func NewGinEngine(cfg *config.ConfigType, hndlr *web.HandlerContainer) *gin.Engine {
+func NewGinEngine(cfg *config.ConfigType, hndlr []wtypes.Registereable) *gin.Engine {
 	hCfg := cfg.HttpConfig
 	g := gin.Default()
 	coresCfg := cors.DefaultConfig()
@@ -64,52 +70,52 @@ func NewGinEngine(cfg *config.ConfigType, hndlr *web.HandlerContainer) *gin.Engi
 	return g
 }
 
-func NewWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], jobReqFacade ftypes.IFacade[tgmonTypes.JobReqDoc], jobResFacade ftypes.IFacade[tgmonTypes.JobResDoc], wp stream.IWorkerPool, stshCl *stash.StashQlClient) *web.HandlerContainer {
+func NewWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], jobReqFacade ftypes.IFacade[tgmonTypes.JobReqDoc], jobResFacade ftypes.IFacade[tgmonTypes.JobResDoc], wp stream.IWorkerPool, stshCl *stash.StashQlClient) []wtypes.Registereable {
 	hCfg := cfg.HttpConfig
 	sCfg := config.Config().StashRedirectorConfig
 
-	streamHandler := web.NewStreamHandler(dbCnt, mediafacade, wp)
-	mediaHandler := web.MediaHandler{DBContainer: dbCnt}
-	jobReqHandler := web.JobReqHandler{}
-	jobResHandler := web.JobResHandler{}
-	infoHandler := web.InfoApiHandler{
+	streamHandler := wStream.NewStreamHandler(dbCnt, mediafacade, wp)
+	mediaHandler := wrCrd.MediaHandler{DBContainer: dbCnt}
+	jobReqHandler := wrCrd.JobReqHandler{}
+	jobResHandler := wrCrd.JobResHandler{}
+	infoHandler := waHndlr.MediaInfoApiHandler{
 		MediaFacade: mediafacade,
 	}
-	loginHandler := web.LoginApiHandler{
+	loginHandler := waHndlr.LoginApiHandler{
 		UserName: hCfg.UserName,
 		UserPass: hCfg.UserPass,
 		Token:    hCfg.ApiToken,
 	}
-	sessionHandler := web.SessionApiHandler{
+	sessionHandler := waHndlr.SessionApiHandler{
 		Token: hCfg.ApiToken,
 	}
-	randomMediaHandler := web.RandomMediaApiHandler{
+	randomMediaHandler := waHndlr.RandomMediaApiHandler{
 		MediaFacade: mediafacade,
 	}
-	hndlrs := web.HandlerContainer{
-		MediaHandler:       web.NewCRDApiHandler(&mediaHandler, mediafacade, "media"),
-		JobReqHandler:      web.NewCRDApiHandler(&jobReqHandler, jobReqFacade, "jobReq"),
-		JobResHandler:      web.NewCRDApiHandler(&jobResHandler, jobResFacade, "jobRes"),
-		InfoHandler:        web.NewApiHandler(&infoHandler, "info"),
-		LoginHandler:       web.NewApiHandler(&loginHandler, "auth/login"),
-		SessionHandler:     web.NewApiHandler(&sessionHandler, "auth/session"),
-		RandomMediaHandler: web.NewApiHandler(&randomMediaHandler, "media/random"),
-		StreamHandler:      streamHandler,
+	result := []wtypes.Registereable{
+		streamHandler,
+		wRest.NewCRDApiHandler(&mediaHandler, mediafacade, "media"),
+		wRest.NewCRDApiHandler(&jobReqHandler, jobReqFacade, "jobReq"),
+		wRest.NewCRDApiHandler(&jobResHandler, jobResFacade, "jobRes"),
+		wApi.NewApiHandler(&infoHandler, "info"),
+		wApi.NewApiHandler(&loginHandler, "auth/login"),
+		wApi.NewApiHandler(&sessionHandler, "auth/session"),
+		wApi.NewApiHandler(&randomMediaHandler, "media/random"),
 	}
 	if sCfg.Enabled {
 		stachCl := stash.NewStashQlClient(sCfg.StashEndpoint, sCfg.StashApiKey)
-		stashVTTRedirectorHandler := web.StashVTTRedirectorApiHandler{
+		stashVTTRedirectorHandler := waHndlr.StashVTTRedirectorApiHandler{
 			MinioUrl:    sCfg.MinioUrl,
 			StashCl:     stachCl,
 			MediaFacade: mediafacade,
 		}
-		stashCoverRedirectorHandler := web.StashCoverRedirectorApiHandler{
+		stashCoverRedirectorHandler := waHndlr.StashCoverRedirectorApiHandler{
 			StashVTTRedirectorApiHandler: stashVTTRedirectorHandler,
 		}
-		hndlrs.StashVTTRedirectorHandler = web.NewApiHandler(&stashVTTRedirectorHandler, "")
-		hndlrs.StashCoverRedirectorHandler = web.NewApiHandler(&stashCoverRedirectorHandler, "")
+		result = append(result, wApi.NewApiHandler(&stashVTTRedirectorHandler, ""))
+		result = append(result, wApi.NewApiHandler(&stashCoverRedirectorHandler, ""))
 	}
-	return &hndlrs
+	return result
 }
 
 var WebHandlerProviderSet = wire.NewSet(

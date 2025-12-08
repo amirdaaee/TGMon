@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	wtypes "github.com/amirdaaee/TGMon/internal/web/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -38,7 +39,7 @@ func errMiddleware() gin.HandlerFunc {
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last()
 			switch e := err.Err.(type) {
-			case HttpErr:
+			case wtypes.HttpErr:
 				c.AbortWithStatusJSON(e.StatusCode, e)
 			default:
 				c.AbortWithStatusJSON(http.StatusInternalServerError,
