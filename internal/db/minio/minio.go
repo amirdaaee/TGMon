@@ -33,7 +33,13 @@ type IMinioCl interface {
 	// RemoveObject deletes an object from the specified bucket.
 	// Returns an error if the deletion fails.
 	RemoveObject(ctx context.Context, bucketName string, objectName string, opts minio.RemoveObjectOptions) error
+
+	// GetObject downloads an object from the specified bucket.
+	// Returns the object data and any error encountered during the download.
+	GetObject(ctx context.Context, bucketName string, objectName string, opts minio.GetObjectOptions) (*minio.Object, error)
 }
+
+var _ IMinioCl = (*minio.Client)(nil)
 
 // IMinioClient defines the high-level interface for MinIO client operations.
 // This interface provides simplified methods for common file operations on a specific bucket.
@@ -47,15 +53,23 @@ type IMinioClient interface {
 
 	// FileAdd uploads binary data to the bucket with the specified filename.
 	// The data is provided as a byte slice.
-	FileAdd(ctx context.Context, fileName string, data []byte) error
+	FileAdd(ctx context.Context, fileName string, data []byte) error // TODO: use reader instead of []byte
 
 	// FileAddStr uploads string data to the bucket with the specified filename.
 	// The data is provided as a string and will be converted to bytes internally.
-	FileAddStr(ctx context.Context, fileName string, data string) error
+	FileAddStr(ctx context.Context, fileName string, data string) error // TODO: use reader instead of string
 
 	// FileRm removes a file from the bucket.
 	// The removal is forced, meaning it will delete the file even if it has versioning enabled.
 	FileRm(ctx context.Context, fileName string) error
+
+	// FileGet downloads an object from the specified bucket.
+	// Returns the object data and any error encountered during the download.
+	FileGet(ctx context.Context, fileName string) (*minio.Object, error)
+
+	// FileInfo gets the information about a file from the specified bucket.
+	// Returns the object information and any error encountered during the retrieval.
+	FileInfo(ctx context.Context, fileName string) (*minio.ObjectInfo, error)
 }
 
 // MinioClient implements the IMinioClient interface and provides high-level file operations
@@ -65,6 +79,8 @@ type MinioClient struct {
 	IMinioCl
 	bucket string
 }
+
+var _ IMinioClient = (*MinioClient)(nil)
 
 // MinioConfig holds the configuration parameters needed to connect to a MinIO server.
 // All fields are required for proper MinIO client initialization.
@@ -117,16 +133,6 @@ func (cl *MinioClient) FileAddStr(ctx context.Context, fileName string, data str
 	return cl.fileAddAnything(ctx, fileName, reader, reader.Size())
 }
 
-// fileAddAnything is a private helper method that handles the actual upload logic
-// for both binary and string data. It accepts any io.Reader and the size of the data.
-func (cl *MinioClient) fileAddAnything(ctx context.Context, fileName string, r io.Reader, s int64) error {
-	_, err := cl.PutObject(ctx, cl.bucket, fileName, r, s, minio.PutObjectOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to upload file '%s' to bucket '%s': %w", fileName, cl.bucket, err)
-	}
-	return nil
-}
-
 // FileRm removes a file from the configured bucket.
 // The removal is forced, meaning versioned objects will be permanently deleted.
 // Returns an error if the file cannot be removed.
@@ -137,8 +143,38 @@ func (cl *MinioClient) FileRm(ctx context.Context, fileName string) error {
 	}
 	return nil
 }
+func (cl *MinioClient) FileGet(ctx context.Context, fileName string) (*minio.Object, error) {
+	return cl.getFileObject(ctx, fileName)
+}
+func (cl *MinioClient) FileInfo(ctx context.Context, fileName string) (*minio.ObjectInfo, error) {
+	obj, err := cl.getFileObject(ctx, fileName)
+	if err != nil {
+		return nil, err
+	}
+	info, err := obj.Stat()
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
 
-var _ IMinioClient = (*MinioClient)(nil)
+// fileAddAnything is a private helper method that handles the actual upload logic
+// for both binary and string data. It accepts any io.Reader and the size of the data.
+func (cl *MinioClient) fileAddAnything(ctx context.Context, fileName string, r io.Reader, s int64) error {
+	_, err := cl.PutObject(ctx, cl.bucket, fileName, r, s, minio.PutObjectOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to upload file '%s' to bucket '%s': %w", fileName, cl.bucket, err)
+	}
+	return nil
+}
+
+func (cl *MinioClient) getFileObject(ctx context.Context, fileName string) (*minio.Object, error) {
+	obj, err := cl.GetObject(ctx, cl.bucket, fileName, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file '%s' from bucket '%s': %w", fileName, cl.bucket, err)
+	}
+	return obj, nil
+}
 
 // NewMinioClient creates a new MinioClient instance with the specified low-level client and bucket name.
 // This constructor function wraps a low-level IMinioCl implementation to provide high-level file operations

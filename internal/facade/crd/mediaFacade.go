@@ -95,7 +95,7 @@ func (crd *MediaCrud) PostDelete(ctx context.Context, doc *types.MediaFileDoc) e
 	} else if dl.DeletedCount > 0 {
 		ll.Infof("deleted %d orphaned jobs", dl.DeletedCount)
 	}
-	for _, fn := range []string{doc.Vtt, doc.Thumbnail} {
+	for _, fn := range []string{doc.Vtt, doc.Thumbnail, doc.Srt} {
 		if fn != "" {
 			var lastErr error
 			for i := 0; i < 3; i++ {

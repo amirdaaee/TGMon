@@ -34,8 +34,8 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-func NewFuseSrcs(mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool) []fsSrc.ISrc {
-	return []fsSrc.ISrc{fsSrc.NewMediaFileSrc(mediafacade, wp)}
+func NewFuseSrcs(mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool, dbC db.IDbContainer) []fsSrc.ISrc {
+	return []fsSrc.ISrc{fsSrc.NewMediaFileSrc(mediafacade, wp), fsSrc.NewSrtSrc(mediafacade, dbC.GetMinioContainer().GetMinioClient())}
 }
 func NewFuzeServer(cfg *config.ConfigType, srcs []fsSrc.ISrc) (*fuse.Server, error) {
 	fCfg := cfg.FuseConfig

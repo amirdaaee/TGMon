@@ -11,6 +11,7 @@ import (
 
 // ...
 const (
+	MediaFileDoc__SrtField       = "Srt"
 	MediaFileDoc__VttField       = "Vtt"
 	MediaFileDoc__SpriteField    = "Sprite"
 	MediaFileDoc__ThumbnailField = "Thumbnail"
@@ -33,6 +34,7 @@ type MediaFileDoc struct {
 	Thumbnail    string        `bson:"Thumbnail"`
 	Vtt          string        `bson:"Vtt"`
 	Sprite       string        `bson:"Sprite"`
+	Srt          string        `bson:"Srt"`
 	UName        string        `bson:"UName"`
 }
 

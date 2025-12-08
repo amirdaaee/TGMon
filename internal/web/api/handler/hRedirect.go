@@ -109,6 +109,3 @@ func (h *StashCoverRedirectorApiHandler) Get(g *gin.Context) {
 func (h *StashCoverRedirectorApiHandler) RelativePathGet() string {
 	return "/scene/:id/screenshot"
 }
-func (h *StashCoverRedirectorApiHandler) RegisterToRoot() bool {
-	return true
-}

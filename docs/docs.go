@@ -495,6 +495,9 @@ const docTemplate = `{
                 "Sprite": {
                     "type": "string"
                 },
+                "Srt": {
+                    "type": "string"
+                },
                 "Thumbnail": {
                     "type": "string"
                 },
