@@ -59,7 +59,7 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 	// remove content-length from header map
 	delete(headers, "Content-Length")
 	delete(headers, "Content-Type")
-	g.DataFromReader(status, meta.ContentLength, meta.MimeType, streamer.GetBuffer(), headers)
+	g.DataFromReader(status, meta.ContentLength, meta.MimeType, streamer.ReadBuffered(), headers)
 }
 func (s *Streamhandler) getMedia(g *gin.Context, id string) (*types.MediaFileDoc, error) {
 	if id == "" {

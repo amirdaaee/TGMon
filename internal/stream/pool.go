@@ -99,7 +99,7 @@ func NewWorkerPool(tokens []string, sessCfg *tlg.SessionConfig, channelID int64,
 
 type IStreamer interface {
 	io.Reader
-	GetBuffer() *bufio.Reader
+	ReadBuffered() *bufio.Reader
 }
 type Streamer struct {
 	ctx      context.Context
@@ -150,8 +150,8 @@ func (s *Streamer) Read(p []byte) (n int, err error) {
 	}
 }
 
-// GetBuffer returns the sized bufio.Reader created for this Streamer.
-func (s *Streamer) GetBuffer() *bufio.Reader {
+// ReadBuffered returns the sized bufio.Reader created for this Streamer.
+func (s *Streamer) ReadBuffered() *bufio.Reader {
 	return s.buff
 }
 func (s *Streamer) getLogger(fn string) *logrus.Entry {
