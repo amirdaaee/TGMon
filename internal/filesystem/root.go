@@ -3,53 +3,135 @@ package filesystem
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"sync"
 	"syscall"
 	"time"
 
-	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
+	"github.com/amirdaaee/TGMon/internal/filesystem/src"
 	"github.com/amirdaaee/TGMon/internal/log"
-	"github.com/amirdaaee/TGMon/internal/stream"
-	"github.com/amirdaaee/TGMon/internal/types"
-	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/sirupsen/logrus"
 )
 
-// MediaFS is the root filesystem node that lists all media files
-type MediaFS struct {
-	fs.Inode
-	mediaFacade      ftypes.IFacade[types.MediaFileDoc]
-	streamWorkerPool stream.IWorkerPool
-	mediaCache       map[string]*types.MediaFileDoc
-	cacheMutex       sync.RWMutex
-	cacheExpiry      time.Time
-	cacheTTL         time.Duration
+type uidMapEntryType struct {
+	inode      uint64
+	src        int
+	uid        string
+	name       string
+	nameSuffix int
+	ext        string
+	mu         sync.RWMutex
 }
 
-var _ fs.NodeOnAdder = (*MediaFS)(nil)
-var _ fs.NodeReaddirer = (*MediaFS)(nil)
-var _ fs.NodeLookuper = (*MediaFS)(nil)
-var _ fs.NodeGetattrer = (*MediaFS)(nil)
-var _ fs.NodeOpendirer = (*MediaFS)(nil)
-var _ fs.NodeUnlinker = (*MediaFS)(nil)
+func (e *uidMapEntryType) Name() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	v := e.name
+	if e.nameSuffix > 0 {
+		v = fmt.Sprintf("%s-%d", v, e.nameSuffix)
+	}
+	return sanitizeFilename(v) + e.ext
+}
+func (e *uidMapEntryType) IncrementNameSuffix() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.nameSuffix++
+}
+
+// RootFS is the root filesystem node
+type uidMapType struct {
+	mappedUID       map[string]*uidMapEntryType // uid -> entry
+	inodeNumCounter uint64
+	seenNames       map[string]bool
+	mu              sync.RWMutex
+}
+
+func (r *uidMapType) Add(uid string, src int, name, ext string) error {
+	key := fmt.Sprintf("%s-%d", uid, src)
+	if r.Exists(uid, src) {
+		return fmt.Errorf("uid %s already exists in src %d", uid, src)
+	}
+	inode := r.getFreeInodeNum()
+	r.mu.Lock()
+	r.mappedUID[key] = &uidMapEntryType{
+		inode:      inode,
+		src:        src,
+		uid:        uid,
+		name:       name,
+		nameSuffix: 0,
+		ext:        ext,
+	}
+	for {
+		if _, ok := r.seenNames[r.mappedUID[key].Name()]; !ok {
+			r.seenNames[name] = true
+			break
+		}
+		r.mappedUID[key].IncrementNameSuffix()
+	}
+	r.mu.Unlock()
+	return nil
+}
+func (r *uidMapType) Get(uid string, src int) (*uidMapEntryType, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	key := fmt.Sprintf("%s-%d", uid, src)
+	v, ok := r.mappedUID[key]
+	return v, ok
+}
+
+func (r *uidMapType) Exists(uid string, src int) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	key := fmt.Sprintf("%s-%d", uid, src)
+	_, ok := r.mappedUID[key]
+	return ok
+}
+func (r *uidMapType) GetByName(name string) (*uidMapEntryType, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, v := range r.mappedUID {
+		if v.Name() == name {
+			return v, true
+		}
+	}
+	return nil, false
+}
+func (r *uidMapType) getFreeInodeNum() uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.inodeNumCounter++
+	return r.inodeNumCounter
+}
+
+type RootFS struct {
+	fs.Inode
+	uidMap uidMapType
+	srcs   []src.ISrc
+}
+
+var _ fs.NodeOnAdder = (*RootFS)(nil)
+var _ fs.NodeReaddirer = (*RootFS)(nil)
+var _ fs.NodeLookuper = (*RootFS)(nil)
+var _ fs.NodeGetattrer = (*RootFS)(nil)
+var _ fs.NodeOpendirer = (*RootFS)(nil)
+
+// var _ fs.NodeUnlinker = (*RootFS)(nil)
 
 // OnAdd is called when the filesystem is mounted
-func (mfs *MediaFS) OnAdd(ctx context.Context) {
+func (mfs *RootFS) OnAdd(ctx context.Context) {
 	mfs.getLogger("OnAdd").Info("MediaFS mounted")
 }
 
 // Opendir opens a directory for reading
-func (mfs *MediaFS) Opendir(ctx context.Context) syscall.Errno {
+func (mfs *RootFS) Opendir(ctx context.Context) syscall.Errno {
 	mfs.getLogger("Opendir").Debug("Opening directory")
 	return 0
 }
 
 // Getattr returns directory attributes for the root directory
-func (mfs *MediaFS) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+func (mfs *RootFS) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	// Use 0755 permissions to allow directory traversal
 	// When allow-other is enabled, the mount point itself will have 0777
 	out.Mode = fuse.S_IFDIR | 0755 // Directory, read and execute permissions
@@ -63,15 +145,9 @@ func (mfs *MediaFS) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.Attr
 }
 
 // Readdir lists all media files in the root directory
-func (mfs *MediaFS) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
+func (mfs *RootFS) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 	ll := mfs.getLogger("Readdir")
 	ll.Debug("Reading directory")
-
-	// Check if context is already canceled
-	if ctx.Err() != nil {
-		ll.Debug("Context canceled before reading directory")
-		return nil, syscall.EINTR
-	}
 
 	// Create a context with timeout for database operations
 	// Increased timeout for large directories (1000+ files)
@@ -80,35 +156,17 @@ func (mfs *MediaFS) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 	defer cancel()
 
 	// Get all media files from database
-	mediaFiles, err := mfs.getMediaFiles(queryCtx)
+	entries, err := mfs.listFiles(queryCtx)
 	if err != nil {
 		// Check if error is due to context cancellation or timeout
 		if ctx.Err() != nil || queryCtx.Err() != nil {
 			ll.WithError(err).Debug("Context canceled or timed out during getMediaFiles")
-			// Return empty directory instead of error to prevent I/O errors
-			// This allows the container to continue working even if DB is temporarily unavailable
-			return fs.NewListDirStream([]fuse.DirEntry{}), 0
+		} else {
+			ll.WithError(err).Error("Failed to get media files, returning empty directory")
 		}
-		ll.WithError(err).Warn("Failed to get media files, returning empty directory")
 		// Return empty directory instead of error to prevent I/O errors
 		// This is safer for container access - they can retry later
 		return fs.NewListDirStream([]fuse.DirEntry{}), 0
-	}
-
-	// For large directories, optimize memory allocation
-	// Pre-allocate slice with exact capacity to avoid reallocations
-	entries := make([]fuse.DirEntry, 0, len(mediaFiles))
-
-	// Create directory entries directly (avoid intermediate struct for better performance)
-	for _, media := range mediaFiles {
-		filename := getFilename(media)
-		// Set Ino to match what we use in Lookup - use hash of ObjectID for uniqueness
-		ino := getInodeNumber(media.ID)
-		entries = append(entries, fuse.DirEntry{
-			Name: filename,
-			Mode: fuse.S_IFREG | 0444, // Regular file, read-only
-			Ino:  ino,
-		})
 	}
 
 	// Sort entries by filename for deterministic ordering
@@ -123,259 +181,104 @@ func (mfs *MediaFS) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 }
 
 // Lookup finds a file by name and returns a file node
-func (mfs *MediaFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+func (mfs *RootFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	ll := mfs.getLogger("Lookup")
 	ll.Debugf("Looking up file: %s", name)
 
-	// Check if context is already canceled
-	if ctx.Err() != nil {
-		ll.Debug("Context canceled before lookup")
-		return nil, syscall.EINTR
+	entry, ok := mfs.uidMap.GetByName(name)
+	if !ok {
+		return nil, syscall.ENOENT // TODO
 	}
-
-	// Create a context with timeout for database operations
-	queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	// ...
+	qContext, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-
-	// Get all media files
-	mediaFiles, err := mfs.getMediaFiles(queryCtx)
+	file, err := mfs.srcs[entry.src].Lookup(qContext, entry.uid)
 	if err != nil {
-		// Check if error is due to context cancellation or timeout
-		if ctx.Err() != nil || queryCtx.Err() != nil {
-			ll.WithError(err).Debug("Context canceled or timed out during getMediaFiles in Lookup")
-			return nil, syscall.EINTR
+		if err == context.Canceled || err == context.DeadlineExceeded {
+			ll.Warn("Context canceled or timed out during src Lookup")
+			return nil, syscall.EINTR // TODO
 		}
-		ll.WithError(err).Warn("Failed to get media files in Lookup")
-		return nil, syscall.EIO
-	}
-
-	// Find the media file by name
-	var media *types.MediaFileDoc
-	for _, m := range mediaFiles {
-		if getFilename(m) == name {
-			media = m
-			break
-		}
-	}
-
-	if media == nil {
-		ll.Debugf("File not found: %s", name)
-		return nil, syscall.ENOENT
-	}
-
-	// Create file node
-	fileNode := &MediaFile{
-		media:            media,
-		streamWorkerPool: mfs.streamWorkerPool,
+		ll.WithError(err).Error("failed to lookup file")
+		return nil, syscall.EIO // TODO
 	}
 
 	// Set entry attributes
 	out.Mode = fuse.S_IFREG | 0444
-	out.Size = uint64(media.Meta.FileSize)
-	out.Mtime = uint64(media.CreatedAt.Unix())
-	out.Atime = uint64(media.UpdatedAt.Unix())
-	out.Ctime = uint64(media.CreatedAt.Unix())
+	out.Size = file.Size()
+	out.Mtime = file.Mtime()
+	out.Atime = file.Atime()
+	out.Ctime = file.Ctime()
 
 	stable := fs.StableAttr{
 		Mode: fuse.S_IFREG,
-		Ino:  getInodeNumber(media.ID),
+		Ino:  entry.inode,
 	}
-
-	ll.Debugf("Found file: %s (size: %d)", name, media.Meta.FileSize)
-	return mfs.NewInode(ctx, fileNode, stable), 0
-}
-func (mfs *MediaFS) Unlink(ctx context.Context, name string) syscall.Errno {
-	mfs.cacheMutex.Lock()
-	defer mfs.cacheMutex.Unlock()
-	ll := mfs.getLogger("Unlink")
-	uname := types.RemoveExtension(name)
-	ll.Infof("removing media file: %s", uname)
-	filter := bsonx.NewD().Add(types.MediaFileDoc__UnameField, uname).Build()
-	// ...
-	if _, err := mfs.mediaFacade.DeleteOne(ctx, filter); err != nil {
-		ll.WithError(err).Error("failed to delete media file")
-		return syscall.EIO
-	}
-	ll.Debugf("deleted media file: %s", uname)
-	// ...
-	delete(mfs.mediaCache, name)
-	// mfs.RmChild(name)
-	// ...
-	return 0
+	ll.Debugf("Found file: %s (size: %d)", name, file.Size())
+	return mfs.NewInode(ctx, file, stable), 0
 }
 
-// getMediaFiles retrieves all media files from the database, with caching
-func (mfs *MediaFS) getMediaFiles(ctx context.Context) ([]*types.MediaFileDoc, error) {
-	mfs.cacheMutex.RLock()
-	// Check if cache is still valid
-	if time.Now().Before(mfs.cacheExpiry) && len(mfs.mediaCache) > 0 {
-		// Return cached data
-		mediaFiles := make([]*types.MediaFileDoc, 0, len(mfs.mediaCache))
-		for _, media := range mfs.mediaCache {
-			mediaFiles = append(mediaFiles, media)
+// func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
+// 	mfs.cacheMutex.Lock()
+// 	defer mfs.cacheMutex.Unlock()
+// 	ll := mfs.getLogger("Unlink")
+// 	uname := types.RemoveExtension(name)
+// 	ll.Infof("removing media file: %s", uname)
+// 	filter := bsonx.NewD().Add(types.MediaFileDoc__UnameField, uname).Build()
+// 	// ...
+// 	if _, err := mfs.mediaFacade.DeleteOne(ctx, filter); err != nil {
+// 		ll.WithError(err).Error("failed to delete media file")
+// 		return syscall.EIO
+// 	}
+// 	ll.Debugf("deleted media file: %s", uname)
+// 	// ...
+// 	delete(mfs.mediaCache, name)
+// 	// mfs.RmChild(name)
+// 	// ...
+// 	return 0
+// }
+
+// listFiles retrieves all files from all data sources
+func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
+	ll := mfs.getLogger("listFiles")
+	entries := make([]fuse.DirEntry, 0)
+	for srcC, src := range mfs.srcs {
+		llSrc := ll.WithField("src", srcC)
+		srcEntries, err := src.List(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list files from src %d: %w", srcC, err)
 		}
-		mfs.cacheMutex.RUnlock()
-		return mediaFiles, nil
-	}
-	mfs.cacheMutex.RUnlock()
-
-	// Cache expired or empty, fetch from database
-	mfs.cacheMutex.Lock()
-	defer mfs.cacheMutex.Unlock()
-
-	// Double-check after acquiring write lock
-	if time.Now().Before(mfs.cacheExpiry) && len(mfs.mediaCache) > 0 {
-		mediaFiles := make([]*types.MediaFileDoc, 0, len(mfs.mediaCache))
-		for _, media := range mfs.mediaCache {
-			mediaFiles = append(mediaFiles, media)
+		for _, _f := range srcEntries {
+			llEntry := llSrc.WithField("file", _f.Name()).WithField("uid", _f.UID())
+			if !mfs.uidMap.Exists(_f.UID(), srcC) {
+				if err := mfs.uidMap.Add(_f.UID(), srcC, _f.Name(), _f.Ext()); err != nil {
+					llEntry.WithError(err).Error("failed to add entry to uid map. skipping file.")
+					continue
+				}
+			}
+			entr, _ := mfs.uidMap.Get(_f.UID(), srcC)
+			entries = append(entries, fuse.DirEntry{
+				Name: entr.Name(),
+				Mode: fuse.S_IFREG | 0444,
+				Ino:  entr.inode,
+			})
 		}
-		return mediaFiles, nil
 	}
-
-	// Fetch from database
-	collection := mfs.mediaFacade.GetCollection()
-	mediaFiles, err := collection.Finder().Find(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find media files: %w", err)
-	}
-
-	// Update cache
-	mfs.mediaCache = make(map[string]*types.MediaFileDoc)
-	for _, media := range mediaFiles {
-		filename := getFilename(media)
-		mfs.mediaCache[filename] = media
-	}
-	mfs.cacheExpiry = time.Now().Add(mfs.cacheTTL)
-
-	return mediaFiles, nil
+	return entries, nil
 }
 
-func (mfs *MediaFS) getLogger(fn string) *logrus.Entry {
+func (mfs *RootFS) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mfs, fn))
 }
 
 // ...
 
 // NewMediaFS creates a new MediaFS filesystem
-func NewMediaFS(mediaFacade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) *MediaFS {
-	return &MediaFS{
-		mediaFacade:      mediaFacade,
-		streamWorkerPool: streamWorkerPool,
-		mediaCache:       make(map[string]*types.MediaFileDoc),
-		cacheTTL:         30 * time.Second, // Cache media list for 30 seconds
+func NewMediaFS(srcs []src.ISrc) *RootFS {
+	return &RootFS{
+		uidMap: uidMapType{
+			mappedUID: make(map[string]*uidMapEntryType),
+			seenNames: make(map[string]bool),
+		},
+		srcs: srcs,
 	}
-}
-
-// Mount mounts the media filesystem at the specified mount point
-func Mount(mountPoint string, mediaFacade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) (*fuse.Server, error) {
-	return MountWithOptions(mountPoint, mediaFacade, streamWorkerPool, &MountOptions{})
-}
-
-// MountOptions configures the filesystem mount behavior
-type MountOptions struct {
-	// AllowOther allows other users (including containers) to access the filesystem
-	// Note: This requires /etc/fuse.conf to have "user_allow_other" enabled
-	AllowOther bool
-	// Debug enables FUSE debug logging
-	Debug bool
-}
-
-// MountWithOptions mounts the media filesystem with custom options
-func MountWithOptions(mountPoint string, mediaFacade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool, opts *MountOptions) (*fuse.Server, error) {
-	ll := log.GetLogger(log.FuseModule).WithField("func", "Mount")
-	ll.Infof("Mounting filesystem at: %s", mountPoint)
-
-	if opts == nil {
-		opts = &MountOptions{}
-	}
-
-	// Check if FUSE device is available (required for mounting)
-	// This helps diagnose issues in Docker containers
-	if _, err := os.Stat("/dev/fuse"); err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("FUSE device /dev/fuse not found - container may need --device /dev/fuse or --privileged flag")
-		}
-		ll.WithError(err).Warn("Could not stat /dev/fuse - mount may fail")
-	}
-
-	// ensure mount point exists with proper permissions
-	// Use 0755 for normal, 0777 if allow-other is enabled (needed for container access)
-	mountPerms := os.FileMode(0755)
-	if opts.AllowOther {
-		mountPerms = 0777
-	}
-	if err := os.MkdirAll(mountPoint, mountPerms); err != nil {
-		return nil, fmt.Errorf("failed to create mount point: %w", err)
-	}
-
-	// Check if mount point is already a mount point (to avoid conflicts)
-	// This is a best-effort check - it may not catch all cases
-	var stat syscall.Stat_t
-	if err := syscall.Stat(mountPoint, &stat); err == nil {
-		// If the mount point is on a different device than root, it might already be mounted
-		var rootStat syscall.Stat_t
-		if err := syscall.Stat("/", &rootStat); err == nil && stat.Dev != rootStat.Dev {
-			ll.Warnf("Mount point %s appears to be on a different filesystem - ensure it's not already mounted", mountPoint)
-		}
-	}
-
-	// Create root filesystem
-	root := NewMediaFS(mediaFacade, streamWorkerPool)
-
-	// Create FUSE server
-	fuseOpts := &fs.Options{}
-	fuseOpts.Debug = opts.Debug
-	fuseOpts.AllowOther = opts.AllowOther
-	// Set timeouts for better performance and stability
-	// These help with container access by caching attributes and entries
-	// Longer timeouts reduce database load when containers scan directories frequently
-	attrTimeout := 5 * time.Second
-	entryTimeout := 5 * time.Second
-	fuseOpts.AttrTimeout = &attrTimeout
-	fuseOpts.EntryTimeout = &entryTimeout
-	// NegativeTimeout of 0 means don't cache failed lookups (safer)
-	zeroTimeout := time.Duration(0)
-	fuseOpts.NegativeTimeout = &zeroTimeout
-	// Set MaxBackground to handle concurrent requests from containers
-	// Higher value is needed for large directory scans (1000+ files)
-	// This allows more concurrent FUSE operations without blocking
-	// Default is typically 12, increasing to 128 helps with large directories and concurrent access
-	fuseOpts.MaxBackground = 128
-
-	if opts.AllowOther {
-		ll.Info("AllowOther enabled - filesystem will be accessible to other users/containers")
-	}
-
-	server, err := fs.Mount(mountPoint, root, fuseOpts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to mount filesystem: %w", err)
-	}
-
-	// After successful mount, try to set permissions for allow-other access
-	if opts.AllowOther {
-		if err := os.Chmod(mountPoint, 0777); err != nil {
-			ll.WithError(err).Warn("Failed to set mount point permissions to 0777 (this may be normal)")
-		}
-	}
-
-	ll.Info("Filesystem mounted successfully")
-	return server, nil
-}
-
-// Unmount unmounts the filesystem
-func Unmount(mountPoint string) error {
-	ll := log.GetLogger(log.FuseModule).WithField("func", "Unmount")
-	ll.Infof("Unmounting filesystem at: %s", mountPoint)
-
-	// Try to unmount using fusermount
-	if err := syscall.Unmount(mountPoint, 0); err != nil {
-		// If that fails, try with MNT_FORCE
-		ll.WithError(err).Error("failed to unmount filesystem using fusermount. trying with MNT_FORCE")
-		if err := syscall.Unmount(mountPoint, syscall.MNT_FORCE); err != nil {
-			return fmt.Errorf("failed to unmount: %w", err)
-		}
-	}
-
-	ll.Info("Filesystem unmounted successfully")
-	return nil
 }

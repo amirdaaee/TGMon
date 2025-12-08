@@ -1,4 +1,4 @@
-package filesystem
+package src
 
 import (
 	"context"
@@ -6,13 +6,125 @@ import (
 	"io"
 	"syscall"
 
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
+
+type MediaFileSrc struct {
+	facade           ftypes.IFacade[types.MediaFileDoc]
+	streamWorkerPool stream.IWorkerPool
+}
+
+var _ ISrc = (*MediaFileSrc)(nil)
+
+func (mfs *MediaFileSrc) List(ctx context.Context) ([]IFile, error) {
+	docs, err := mfs.facade.GetCollection().Finder().Sort(bson.D{{Key: "_id", Value: 1}}).Find(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list media files from db: %w", err)
+	}
+	files := make([]IFile, 0, len(docs))
+	for _, doc := range docs {
+		files = append(files, &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool})
+	}
+	return files, nil
+}
+func (mfs *MediaFileSrc) Lookup(ctx context.Context, uid string) (IFile, error) {
+	oid, err := bson.ObjectIDFromHex(uid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert uid to object id: %w", err)
+	}
+	doc, err := mfs.facade.GetCollection().Finder().Filter(bson.D{{Key: "_id", Value: oid}}).FindOne(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup media file from db: %w", err)
+	}
+	return &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool}, nil
+}
+
+func NewMediaFileSrc(facade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) *MediaFileSrc {
+	return &MediaFileSrc{
+		facade:           facade,
+		streamWorkerPool: streamWorkerPool,
+	}
+}
+
+// ===
+//
+// MediaFile represents a single media file in the filesystem
+type MediaFile struct {
+	fs.Inode
+	media            *types.MediaFileDoc
+	streamWorkerPool stream.IWorkerPool
+}
+
+var _ IFile = (*MediaFile)(nil)
+
+// Getattr returns file attributes
+func (mf *MediaFile) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+	out.Mode = fuse.S_IFREG | 0444
+	out.Size = uint64(mf.media.Meta.FileSize)
+	out.Mtime = uint64(mf.media.CreatedAt.Unix())
+	out.Atime = uint64(mf.media.UpdatedAt.Unix())
+	out.Ctime = uint64(mf.media.CreatedAt.Unix())
+	return 0
+}
+
+// Open opens the file for reading
+func (mf *MediaFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
+	ll := mf.getLogger("Open")
+	ll.Debugf("Opening file: %s (flags: %d)", mf.media.ID.Hex(), flags)
+
+	// Only allow read operations
+	if flags&fuse.O_ANYWRITE != 0 {
+		return nil, 0, syscall.EACCES
+	}
+
+	// Create a cancelable context for this file handle
+	// This context will be canceled when the file is closed
+	fileCtx, cancel := context.WithCancel(ctx)
+
+	fileHandle := &MediaFileHandle{
+		media:            mf.media,
+		streamWorkerPool: mf.streamWorkerPool,
+		ctx:              fileCtx,
+		cancel:           cancel,
+	}
+
+	return fileHandle, fuse.FOPEN_KEEP_CACHE, 0
+}
+
+func (mf *MediaFile) Name() string {
+	return mf.media.UName
+}
+func (mf *MediaFile) UID() string {
+	return mf.media.ID.Hex()
+}
+
+func (mf *MediaFile) Size() uint64 {
+	return uint64(mf.media.Meta.FileSize)
+}
+func (mf *MediaFile) Mtime() uint64 {
+	return uint64(mf.media.CreatedAt.Unix())
+}
+func (mf *MediaFile) Atime() uint64 {
+	return uint64(mf.media.UpdatedAt.Unix())
+}
+func (mf *MediaFile) Ctime() uint64 {
+	return uint64(mf.media.CreatedAt.Unix())
+}
+func (mf *MediaFile) Ext() string {
+	return types.GetExtensionFromMimeType(mf.media.Meta.MimeType)
+}
+func (mf *MediaFile) getLogger(fn string) *logrus.Entry {
+	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mf, fn))
+}
+
+// ===
 
 // MediaFileHandle handles read operations on a media file
 type MediaFileHandle struct {

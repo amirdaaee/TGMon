@@ -17,6 +17,6 @@ type ServerModules struct {
 }
 
 func InitializeServer(cfg *config.ConfigType) (*ServerModules, error) {
-	wire.Build(WebHandlerProviderSet, NewStashQlClient, NewFuzeServer, NewDbContainer, TgProviderSet, FacadeProviderSet, wire.Struct(new(ServerModules), "*"))
+	wire.Build(WebHandlerProviderSet, NewStashQlClient, FuseProviderSet, NewDbContainer, TgProviderSet, FacadeProviderSet, wire.Struct(new(ServerModules), "*"))
 	return nil, nil
 }

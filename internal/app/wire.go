@@ -14,6 +14,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/facade/crd"
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/filesystem"
+	fsSrc "github.com/amirdaaee/TGMon/internal/filesystem/src"
 	"github.com/amirdaaee/TGMon/internal/stash"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/tlg"
@@ -33,19 +34,27 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-func NewFuzeServer(cfg *config.ConfigType, mediaFacade ftypes.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool) (*fuse.Server, error) {
+func NewFuseSrcs(mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool) []fsSrc.ISrc {
+	return []fsSrc.ISrc{fsSrc.NewMediaFileSrc(mediafacade, wp)}
+}
+func NewFuzeServer(cfg *config.ConfigType, srcs []fsSrc.ISrc) (*fuse.Server, error) {
 	fCfg := cfg.FuseConfig
 	mountDir := fCfg.MediaDir
 	opts := &filesystem.MountOptions{
 		AllowOther: fCfg.AllowOther,
 		Debug:      fCfg.Debug,
 	}
-	server, err := filesystem.MountWithOptions(mountDir, mediaFacade, wp, opts)
+	server, err := filesystem.MountWithOptions(mountDir, srcs, opts)
 	if err != nil {
 		return nil, fmt.Errorf("can not mount filesystem: %w", err)
 	}
 	return server, nil
 }
+
+var FuseProviderSet = wire.NewSet(
+	NewFuseSrcs,
+	NewFuzeServer,
+)
 
 // ... Web
 func NewWebServer(cfg *config.ConfigType, g *gin.Engine, hndl []wtypes.Registereable) *http.Server {

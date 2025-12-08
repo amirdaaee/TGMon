@@ -55,7 +55,8 @@ func InitializeServer(cfg *config.ConfigType) (*ServerModules, error) {
 	v := NewWebHandler(cfg, iDbContainer, typesIFacade, iFacade, iFacade2, iWorkerPool, stashQlClient)
 	engine := NewGinEngine(cfg, v)
 	server := NewWebServer(cfg, engine, v)
-	fuseServer, err := NewFuzeServer(cfg, typesIFacade, iWorkerPool)
+	v2 := NewFuseSrcs(typesIFacade, iWorkerPool)
+	fuseServer, err := NewFuzeServer(cfg, v2)
 	if err != nil {
 		return nil, err
 	}
