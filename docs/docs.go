@@ -32,7 +32,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/web.LoginPostReqType"
+                            "$ref": "#/definitions/handler.LoginPostReqType"
                         }
                     }
                 ],
@@ -40,7 +40,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/web.LoginPostResType"
+                            "$ref": "#/definitions/handler.LoginPostResType"
                         }
                     }
                 }
@@ -61,7 +61,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/web.LoginPostResType"
+                            "$ref": "#/definitions/handler.LoginPostResType"
                         }
                     }
                 }
@@ -82,7 +82,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/web.InfoGetResType"
+                            "$ref": "#/definitions/handler.InfoGetResType"
                         }
                     }
                 }
@@ -245,7 +245,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/web.MediaListResType"
+                            "$ref": "#/definitions/crd.MediaListResType"
                         }
                     }
                 }
@@ -266,7 +266,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/web.RandomMediaGetResType"
+                            "$ref": "#/definitions/handler.RandomMediaGetResType"
                         }
                     }
                 }
@@ -299,7 +299,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/web.MediaReadResType"
+                            "$ref": "#/definitions/crd.MediaReadResType"
                         }
                     }
                 }
@@ -335,6 +335,73 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "crd.MediaListResType": {
+            "type": "object",
+            "properties": {
+                "Media": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.MediaFileDoc"
+                    }
+                },
+                "Total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "crd.MediaReadResType": {
+            "type": "object",
+            "properties": {
+                "Media": {
+                    "$ref": "#/definitions/types.MediaFileDoc"
+                },
+                "nextID": {
+                    "type": "string"
+                },
+                "pervID": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.InfoGetResType": {
+            "type": "object",
+            "properties": {
+                "MediaCount": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.LoginPostReqType": {
+            "type": "object",
+            "required": [
+                "Password",
+                "Username"
+            ],
+            "properties": {
+                "Password": {
+                    "type": "string"
+                },
+                "Username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.LoginPostResType": {
+            "type": "object",
+            "properties": {
+                "Token": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.RandomMediaGetResType": {
+            "type": "object",
+            "properties": {
+                "MediaID": {
+                    "type": "string"
+                }
+            }
+        },
         "types.JobReqDoc": {
             "type": "object",
             "properties": {
@@ -428,6 +495,9 @@ const docTemplate = `{
                 "Sprite": {
                     "type": "string"
                 },
+                "Srt": {
+                    "type": "string"
+                },
                 "Thumbnail": {
                     "type": "string"
                 },
@@ -458,73 +528,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "MimeType": {
-                    "type": "string"
-                }
-            }
-        },
-        "web.InfoGetResType": {
-            "type": "object",
-            "properties": {
-                "MediaCount": {
-                    "type": "integer"
-                }
-            }
-        },
-        "web.LoginPostReqType": {
-            "type": "object",
-            "required": [
-                "Password",
-                "Username"
-            ],
-            "properties": {
-                "Password": {
-                    "type": "string"
-                },
-                "Username": {
-                    "type": "string"
-                }
-            }
-        },
-        "web.LoginPostResType": {
-            "type": "object",
-            "properties": {
-                "Token": {
-                    "type": "string"
-                }
-            }
-        },
-        "web.MediaListResType": {
-            "type": "object",
-            "properties": {
-                "Media": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.MediaFileDoc"
-                    }
-                },
-                "Total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "web.MediaReadResType": {
-            "type": "object",
-            "properties": {
-                "Media": {
-                    "$ref": "#/definitions/types.MediaFileDoc"
-                },
-                "nextID": {
-                    "type": "string"
-                },
-                "pervID": {
-                    "type": "string"
-                }
-            }
-        },
-        "web.RandomMediaGetResType": {
-            "type": "object",
-            "properties": {
-                "MediaID": {
                     "type": "string"
                 }
             }

@@ -1,4 +1,47 @@
 definitions:
+  crd.MediaListResType:
+    properties:
+      Media:
+        items:
+          $ref: '#/definitions/types.MediaFileDoc'
+        type: array
+      Total:
+        type: integer
+    type: object
+  crd.MediaReadResType:
+    properties:
+      Media:
+        $ref: '#/definitions/types.MediaFileDoc'
+      nextID:
+        type: string
+      pervID:
+        type: string
+    type: object
+  handler.InfoGetResType:
+    properties:
+      MediaCount:
+        type: integer
+    type: object
+  handler.LoginPostReqType:
+    properties:
+      Password:
+        type: string
+      Username:
+        type: string
+    required:
+    - Password
+    - Username
+    type: object
+  handler.LoginPostResType:
+    properties:
+      Token:
+        type: string
+    type: object
+  handler.RandomMediaGetResType:
+    properties:
+      MediaID:
+        type: string
+    type: object
   types.JobReqDoc:
     properties:
       CreatedAt:
@@ -61,6 +104,8 @@ definitions:
         $ref: '#/definitions/types.MediaFileMeta'
       Sprite:
         type: string
+      Srt:
+        type: string
       Thumbnail:
         type: string
       UName:
@@ -83,49 +128,6 @@ definitions:
       MimeType:
         type: string
     type: object
-  web.InfoGetResType:
-    properties:
-      MediaCount:
-        type: integer
-    type: object
-  web.LoginPostReqType:
-    properties:
-      Password:
-        type: string
-      Username:
-        type: string
-    required:
-    - Password
-    - Username
-    type: object
-  web.LoginPostResType:
-    properties:
-      Token:
-        type: string
-    type: object
-  web.MediaListResType:
-    properties:
-      Media:
-        items:
-          $ref: '#/definitions/types.MediaFileDoc'
-        type: array
-      Total:
-        type: integer
-    type: object
-  web.MediaReadResType:
-    properties:
-      Media:
-        $ref: '#/definitions/types.MediaFileDoc'
-      nextID:
-        type: string
-      pervID:
-        type: string
-    type: object
-  web.RandomMediaGetResType:
-    properties:
-      MediaID:
-        type: string
-    type: object
 info:
   contact: {}
   title: TGMon API
@@ -142,14 +144,14 @@ paths:
         name: data
         required: true
         schema:
-          $ref: '#/definitions/web.LoginPostReqType'
+          $ref: '#/definitions/handler.LoginPostReqType'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/web.LoginPostResType'
+            $ref: '#/definitions/handler.LoginPostResType'
       summary: Login
   /api/auth/session/:
     get:
@@ -159,7 +161,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/web.LoginPostResType'
+            $ref: '#/definitions/handler.LoginPostResType'
       security:
       - ApiKeyAuth: []
       summary: Session data
@@ -171,7 +173,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/web.InfoGetResType'
+            $ref: '#/definitions/handler.InfoGetResType'
       security:
       - ApiKeyAuth: []
       summary: Info summary
@@ -267,7 +269,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/web.MediaListResType'
+            $ref: '#/definitions/crd.MediaListResType'
       security:
       - ApiKeyAuth: []
       summary: List media
@@ -304,7 +306,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/web.MediaReadResType'
+            $ref: '#/definitions/crd.MediaReadResType'
       security:
       - ApiKeyAuth: []
       summary: Read media
@@ -318,7 +320,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/web.RandomMediaGetResType'
+            $ref: '#/definitions/handler.RandomMediaGetResType'
       security:
       - ApiKeyAuth: []
       summary: Get random media

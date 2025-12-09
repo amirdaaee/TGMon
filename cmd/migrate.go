@@ -25,7 +25,7 @@ var migrateCmd = &cobra.Command{
 		if err != nil {
 			logrus.WithError(err).Fatal("can not initialize db container")
 		}
-		facade := app.NewMediaFacade(dbContainer, nil)
+		facade := app.NewMediaFacade(dbContainer, nil, nil)
 		ctx := context.TODO()
 		// ... fill uname
 		ll := logrus.WithField("step", "fill uname")

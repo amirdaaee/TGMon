@@ -10,11 +10,11 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-faster/errors v0.7.1
 	github.com/google/uuid v1.6.0
+	github.com/google/wire v0.7.0
 	github.com/gotd/td v0.127.0
 	github.com/hanwen/go-fuse/v2 v2.9.0
 	github.com/hasura/go-graphql-client v0.13.1
 	github.com/joho/godotenv v1.5.1
-	github.com/mazrean/kessoku v1.0.0
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.35.1
 	github.com/shurcooL/graphql v0.0.0-20230722043721-ed46e5a46466
@@ -75,6 +75,7 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mazrean/kessoku v1.0.0 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect

@@ -2,41 +2,31 @@ package web
 
 import (
 	docs "github.com/amirdaaee/TGMon/docs"
-	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/amirdaaee/TGMon/internal/log"
+	wtypes "github.com/amirdaaee/TGMon/internal/web/types"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-type HandlerContainer struct {
-	MediaHandler                *CRDApiHandler[types.MediaFileDoc]
-	JobReqHandler               *CRDApiHandler[types.JobReqDoc]
-	JobResHandler               *CRDApiHandler[types.JobResDoc]
-	InfoHandler                 *ApiHandler
-	LoginHandler                *ApiHandler
-	SessionHandler              *ApiHandler
-	RandomMediaHandler          *ApiHandler
-	StashVTTRedirectorHandler   *ApiHandler
-	StashCoverRedirectorHandler *ApiHandler
-	StreamHandler               *Streamhandler
-}
-
-func RegisterRoutes(r *gin.Engine, hndlrs *HandlerContainer, apiToken string, swag bool) {
+func RegisterRoutes(r *gin.Engine, hndlrs []wtypes.Registereable, apiToken string, swag bool) {
+	ll := log.GetLogger(log.WebModule)
+	authMiddleware := apiAuthMiddleware(apiToken)
 	webRoot := r.Group("/", errMiddleware())
+	apiRoot := webRoot.Group("api/")
+
 	if swag {
 		docs.SwaggerInfo.Title = "Tgmon API"
 		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	}
-	webRoot.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", hndlrs.StreamHandler.Stream)
-	authMiddleware := apiAuthMiddleware(apiToken)
-	apiRoot := webRoot.Group("api/")
-	hndlrs.MediaHandler.RegisterRoutes(apiRoot, authMiddleware)
-	hndlrs.JobReqHandler.RegisterRoutes(apiRoot, authMiddleware)
-	hndlrs.JobResHandler.RegisterRoutes(apiRoot, authMiddleware)
-	hndlrs.InfoHandler.RegisterRoutes(apiRoot, authMiddleware)
-	hndlrs.LoginHandler.RegisterRoutes(apiRoot, authMiddleware)
-	hndlrs.SessionHandler.RegisterRoutes(apiRoot, authMiddleware)
-	hndlrs.RandomMediaHandler.RegisterRoutes(apiRoot, authMiddleware)
-	hndlrs.StashVTTRedirectorHandler.RegisterRoutes(apiRoot, authMiddleware)
-	hndlrs.StashCoverRedirectorHandler.RegisterRoutes(apiRoot, authMiddleware)
+	for _, hndlr := range hndlrs {
+		r := apiRoot
+		if hndlr.RegisterToRoot() {
+			r = webRoot
+		}
+		if err := hndlr.RegisterRoutes(r, authMiddleware); err != nil {
+			ll.WithError(err).Errorf("error registering routes for %+T", hndlr)
+			continue
+		}
+	}
 }

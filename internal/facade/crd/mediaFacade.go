@@ -1,5 +1,4 @@
-// Package facade provides CRUD logic for media file documents.
-package facade
+package crd
 
 import (
 	"context"
@@ -9,6 +8,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/amirdaaee/TGMon/internal/db/minio"
 	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
@@ -22,12 +22,12 @@ import (
 // MediaCrud implements ICrud for MediaFileDoc, providing CRUD hooks and collection access.
 type MediaCrud struct {
 	dbContainer     db.IDbContainer
-	jReqFac         IFacade[types.JobReqDoc]
+	jReqFac         ftypes.IFacade[types.JobReqDoc]
 	workerContainer stream.IWorkerPool
 	keepDup         bool
 }
 
-var _ ICrud[types.MediaFileDoc] = (*MediaCrud)(nil)
+var _ ftypes.ICrud[types.MediaFileDoc] = (*MediaCrud)(nil)
 
 // PreCreate checks for duplicates before creating a MediaFileDoc. Returns an error if the document is nil or a duplicate is found.
 func (crd *MediaCrud) PreCreate(ctx context.Context, doc *types.MediaFileDoc) error {
@@ -41,7 +41,7 @@ func (crd *MediaCrud) PreCreate(ctx context.Context, doc *types.MediaFileDoc) er
 	if n, err := crd.GetCollection().Finder().Filter(bsonx.NewD().Add(types.MediaFileDoc__FileIDField, doc.Meta.FileID).Build()).Count(ctx); err != nil {
 		ll.WithError(err).Error("failed to check for duplicates")
 	} else if n > 0 {
-		return fmt.Errorf("%w: %d", ErrFileAlreadyExists, doc.Meta.FileID)
+		return fmt.Errorf("%w: %d", ftypes.ErrFileAlreadyExists, doc.Meta.FileID)
 	}
 	return nil
 }
@@ -53,22 +53,9 @@ func (crd *MediaCrud) PostCreate(ctx context.Context, doc *types.MediaFileDoc) e
 		return fmt.Errorf("MediaFileDoc is nil")
 	}
 	newCtx := context.TODO()
+	go setInitialJobs(newCtx, crd, doc, ll)
+	go setMediaThumbnail(newCtx, crd, doc, ll)
 	go func() {
-		if err := setSpriteJob(newCtx, crd, doc); err != nil {
-			ll.WithError(err).Error("failed to set sprite job")
-			return
-		}
-		ll.Info("sprite job set")
-	}()
-	go func() {
-		if err := setMediaThumbnail(newCtx, crd, doc); err != nil {
-			ll.WithError(err).Error("failed to set initial thumbnail")
-			return
-		}
-		ll.Info("initial thumbnail set")
-	}()
-	go func() {
-
 		if _, err := crd.GetCollection().Updater().Filter(query.Id(doc.ID)).Updates(update.Set(types.MediaFileDoc__UnameField, doc.Name())).UpdateOne(newCtx); err != nil {
 			ll.WithError(err).Error("failed to set uname")
 			return
@@ -95,7 +82,7 @@ func (crd *MediaCrud) PostDelete(ctx context.Context, doc *types.MediaFileDoc) e
 	} else if dl.DeletedCount > 0 {
 		ll.Infof("deleted %d orphaned jobs", dl.DeletedCount)
 	}
-	for _, fn := range []string{doc.Vtt, doc.Thumbnail} {
+	for _, fn := range []string{doc.Vtt, doc.Thumbnail, doc.Srt} {
 		if fn != "" {
 			var lastErr error
 			for i := 0; i < 3; i++ {
@@ -131,31 +118,38 @@ func (crd *MediaCrud) getLogger(fn string) *logrus.Entry {
 }
 
 // NewMediaCrud creates a new MediaCrud with the provided database container.
-func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool, keepDup bool) ICrud[types.MediaFileDoc] {
-	jobReqFacade := NewFacade(NewJobReqCrud(dbContainer))
+func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool, keepDup bool, jobReqFacade ftypes.IFacade[types.JobReqDoc]) ftypes.ICrud[types.MediaFileDoc] {
 	return &MediaCrud{dbContainer: dbContainer, jReqFac: jobReqFacade, workerContainer: workerContainer, keepDup: keepDup}
 }
 
 // ...
-func setMediaThumbnail(ctx context.Context, crd *MediaCrud, doc *types.MediaFileDoc) error {
+func setMediaThumbnail(ctx context.Context, crd *MediaCrud, doc *types.MediaFileDoc, ll *logrus.Entry) {
 	thumb, err := crd.workerContainer.GetNextWorker().GetThumbnail(ctx, doc.MessageID)
 	if err != nil {
-		return fmt.Errorf("failed to set initial thumbnail: %w", err)
+		ll.WithError(err).Error("failed to set initial thumbnail")
+		return
 	}
 	fname := fmt.Sprintf("%s.jpg", uuid.NewString())
 	if err := crd.dbContainer.GetMinioContainer().GetMinioClient().FileAdd(ctx, fname, thumb); err != nil {
-		return fmt.Errorf("failed to add thumbnail to minio: %w", err)
+		ll.WithError(err).Error("failed to add thumbnail to minio")
+		return
 	}
 	if _, err := crd.GetCollection().Updater().Filter(query.Id(doc.ID)).Updates(update.Set(types.MediaFileDoc__ThumbnailField, fname)).UpdateOne(ctx); err != nil {
-		return fmt.Errorf("failed to update thumbnail in db: %w", err)
+		ll.WithError(err).Error("failed to update thumbnail in db")
+		return
 	}
-	return nil
+	ll.Info("initial thumbnail set")
 }
 
-func setSpriteJob(ctx context.Context, crd *MediaCrud, doc *types.MediaFileDoc) error {
-	_, err := crd.jReqFac.CreateOne(ctx, &types.JobReqDoc{
-		Type:    types.SPRITEJobType,
-		MediaID: doc.ID,
-	})
-	return err
+func setInitialJobs(ctx context.Context, crd *MediaCrud, doc *types.MediaFileDoc, ll *logrus.Entry) {
+	for _, jobType := range []types.JobTypeEnum{types.SPRITEJobType, types.THUMBNAILJobType, types.EmbeddingJobType, types.TranscriptionJobType} {
+		if _, err := crd.jReqFac.CreateOne(ctx, &types.JobReqDoc{
+			Type:    jobType,
+			MediaID: doc.ID,
+		}); err != nil {
+			ll.WithError(err).Errorf("failed to create %s job", jobType)
+		} else {
+			ll.Infof("%s job created", jobType)
+		}
+	}
 }

@@ -11,22 +11,53 @@ import (
 	"github.com/amirdaaee/TGMon/internal/db/minio"
 	"github.com/amirdaaee/TGMon/internal/db/mongo"
 	"github.com/amirdaaee/TGMon/internal/facade"
+	"github.com/amirdaaee/TGMon/internal/facade/crd"
+	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/filesystem"
+	fsSrc "github.com/amirdaaee/TGMon/internal/filesystem/src"
 	"github.com/amirdaaee/TGMon/internal/stash"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/tlg"
-	"github.com/amirdaaee/TGMon/internal/types"
 	tgmonTypes "github.com/amirdaaee/TGMon/internal/types"
 	"github.com/amirdaaee/TGMon/internal/web"
+	wApi "github.com/amirdaaee/TGMon/internal/web/api"
+	waHndlr "github.com/amirdaaee/TGMon/internal/web/api/handler"
+	wRest "github.com/amirdaaee/TGMon/internal/web/rest"
+	wrCrd "github.com/amirdaaee/TGMon/internal/web/rest/crd"
+	wStream "github.com/amirdaaee/TGMon/internal/web/stream"
+	wtypes "github.com/amirdaaee/TGMon/internal/web/types"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/google/wire"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/mazrean/kessoku"
 	realMinio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-func NewWebServer(cfg *config.ConfigType, g *gin.Engine, hndl *web.HandlerContainer) *http.Server {
+func NewFuseSrcs(mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool, dbC db.IDbContainer) []fsSrc.ISrc {
+	return []fsSrc.ISrc{fsSrc.NewMediaFileSrc(mediafacade, wp), fsSrc.NewSrtSrc(mediafacade, dbC.GetMinioContainer().GetMinioClient())}
+}
+func NewFuzeServer(cfg *config.ConfigType, srcs []fsSrc.ISrc) (*fuse.Server, error) {
+	fCfg := cfg.FuseConfig
+	mountDir := fCfg.MediaDir
+	opts := &filesystem.MountOptions{
+		AllowOther: fCfg.AllowOther,
+		Debug:      fCfg.Debug,
+	}
+	server, err := filesystem.MountWithOptions(mountDir, srcs, opts)
+	if err != nil {
+		return nil, fmt.Errorf("can not mount filesystem: %w", err)
+	}
+	return server, nil
+}
+
+var FuseProviderSet = wire.NewSet(
+	NewFuseSrcs,
+	NewFuzeServer,
+)
+
+// ... Web
+func NewWebServer(cfg *config.ConfigType, g *gin.Engine, hndl []wtypes.Registereable) *http.Server {
 	hCfg := cfg.HttpConfig
 	web.RegisterRoutes(g, hndl, cfg.HttpConfig.ApiToken, cfg.HttpConfig.Swagger)
 	return &http.Server{
@@ -34,22 +65,7 @@ func NewWebServer(cfg *config.ConfigType, g *gin.Engine, hndl *web.HandlerContai
 		Handler: g,
 	}
 }
-func NewFuzeServer(cfg *config.ConfigType, mediaFacade facade.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool) (*fuse.Server, error) {
-	fCfg := cfg.FuseConfig
-	mountDir := fCfg.MediaDir
-	opts := &filesystem.MountOptions{
-		AllowOther: fCfg.AllowOther,
-		Debug:      fCfg.Debug,
-	}
-	server, err := filesystem.MountWithOptions(mountDir, mediaFacade, wp, opts)
-	if err != nil {
-		return nil, fmt.Errorf("can not mount filesystem: %w", err)
-	}
-	return server, nil
-}
-
-// ... Web
-func NewGinEngine(cfg *config.ConfigType, hndlr *web.HandlerContainer) *gin.Engine {
+func NewGinEngine(cfg *config.ConfigType, hndlr []wtypes.Registereable) *gin.Engine {
 	hCfg := cfg.HttpConfig
 	g := gin.Default()
 	coresCfg := cors.DefaultConfig()
@@ -63,53 +79,57 @@ func NewGinEngine(cfg *config.ConfigType, hndlr *web.HandlerContainer) *gin.Engi
 	return g
 }
 
-func NewWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade facade.IFacade[tgmonTypes.MediaFileDoc], jobReqFacade facade.IFacade[types.JobReqDoc], jobResFacade facade.IFacade[tgmonTypes.JobResDoc], wp stream.IWorkerPool, stshCl *stash.StashQlClient) *web.HandlerContainer {
+func NewWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], jobReqFacade ftypes.IFacade[tgmonTypes.JobReqDoc], jobResFacade ftypes.IFacade[tgmonTypes.JobResDoc], wp stream.IWorkerPool, stshCl *stash.StashQlClient) []wtypes.Registereable {
 	hCfg := cfg.HttpConfig
 	sCfg := config.Config().StashRedirectorConfig
 
-	streamHandler := web.NewStreamHandler(dbCnt, mediafacade, wp)
-	mediaHandler := web.MediaHandler{DBContainer: dbCnt}
-	jobReqHandler := web.JobReqHandler{}
-	jobResHandler := web.JobResHandler{}
-	infoHandler := web.InfoApiHandler{
+	streamHandler := wStream.NewStreamHandler(dbCnt, mediafacade, wp)
+	mediaHandler := wrCrd.MediaHandler{DBContainer: dbCnt}
+	jobReqHandler := wrCrd.JobReqHandler{}
+	jobResHandler := wrCrd.JobResHandler{}
+	infoHandler := waHndlr.MediaInfoApiHandler{
 		MediaFacade: mediafacade,
 	}
-	loginHandler := web.LoginApiHandler{
+	loginHandler := waHndlr.LoginApiHandler{
 		UserName: hCfg.UserName,
 		UserPass: hCfg.UserPass,
 		Token:    hCfg.ApiToken,
 	}
-	sessionHandler := web.SessionApiHandler{
+	sessionHandler := waHndlr.SessionApiHandler{
 		Token: hCfg.ApiToken,
 	}
-	randomMediaHandler := web.RandomMediaApiHandler{
+	randomMediaHandler := waHndlr.RandomMediaApiHandler{
 		MediaFacade: mediafacade,
 	}
-	hndlrs := web.HandlerContainer{
-		MediaHandler:       web.NewCRDApiHandler(&mediaHandler, mediafacade, "media"),
-		JobReqHandler:      web.NewCRDApiHandler(&jobReqHandler, jobReqFacade, "jobReq"),
-		JobResHandler:      web.NewCRDApiHandler(&jobResHandler, jobResFacade, "jobRes"),
-		InfoHandler:        web.NewApiHandler(&infoHandler, "info"),
-		LoginHandler:       web.NewApiHandler(&loginHandler, "auth/login"),
-		SessionHandler:     web.NewApiHandler(&sessionHandler, "auth/session"),
-		RandomMediaHandler: web.NewApiHandler(&randomMediaHandler, "media/random"),
-		StreamHandler:      streamHandler,
+	result := []wtypes.Registereable{
+		streamHandler,
+		wRest.NewCRDApiHandler(&mediaHandler, mediafacade, "media"),
+		wRest.NewCRDApiHandler(&jobReqHandler, jobReqFacade, "jobReq"),
+		wRest.NewCRDApiHandler(&jobResHandler, jobResFacade, "jobRes"),
+		wApi.NewApiHandler(&infoHandler, "info"),
+		wApi.NewApiHandler(&loginHandler, "auth/login"),
+		wApi.NewApiHandler(&sessionHandler, "auth/session"),
+		wApi.NewApiHandler(&randomMediaHandler, "media/random"),
 	}
 	if sCfg.Enabled {
 		stachCl := stash.NewStashQlClient(sCfg.StashEndpoint, sCfg.StashApiKey)
-		stashVTTRedirectorHandler := web.StashVTTRedirectorApiHandler{
+		stashVTTRedirectorHandler := waHndlr.StashVTTRedirectorApiHandler{
 			MinioUrl:    sCfg.MinioUrl,
 			StashCl:     stachCl,
 			MediaFacade: mediafacade,
 		}
-		stashCoverRedirectorHandler := web.StashCoverRedirectorApiHandler{
+		stashCoverRedirectorHandler := waHndlr.StashCoverRedirectorApiHandler{
 			StashVTTRedirectorApiHandler: stashVTTRedirectorHandler,
 		}
-		hndlrs.StashVTTRedirectorHandler = web.NewApiHandler(&stashVTTRedirectorHandler, "")
-		hndlrs.StashCoverRedirectorHandler = web.NewApiHandler(&stashCoverRedirectorHandler, "")
+		result = append(result, wApi.NewApiHandler(&stashVTTRedirectorHandler, ""))
+		result = append(result, wApi.NewApiHandler(&stashCoverRedirectorHandler, ""))
 	}
-	return &hndlrs
+	return result
 }
+
+var WebHandlerProviderSet = wire.NewSet(
+	NewGinEngine, NewWebHandler, NewWebServer,
+)
 
 // ... Stash
 func NewStashQlClient(cfg *config.ConfigType) *stash.StashQlClient {
@@ -139,23 +159,23 @@ func NewDbContainer(cfg *config.ConfigType) (db.IDbContainer, error) {
 }
 
 // ... Facades
-func NewMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool) facade.IFacade[tgmonTypes.MediaFileDoc] {
+func NewMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool, jobReqFacade ftypes.IFacade[tgmonTypes.JobReqDoc]) ftypes.IFacade[tgmonTypes.MediaFileDoc] {
 	cfg := config.Config()
-	return facade.NewFacade(facade.NewMediaCrud(dbContainer, workerContainer, cfg.RuntimeConfig.KeepDupFiles))
+	return facade.NewFacade(crd.NewMediaCrud(dbContainer, workerContainer, cfg.RuntimeConfig.KeepDupFiles, jobReqFacade))
 }
 
-func NewJobReqFacade(dbContainer db.IDbContainer) facade.IFacade[tgmonTypes.JobReqDoc] {
-	return facade.NewFacade(facade.NewJobReqCrud(dbContainer))
+func NewJobReqFacade(dbContainer db.IDbContainer) ftypes.IFacade[tgmonTypes.JobReqDoc] {
+	return facade.NewFacade(crd.NewJobReqCrud(dbContainer))
 }
 
-func NewJobResFacade(dbContainer db.IDbContainer) facade.IFacade[tgmonTypes.JobResDoc] {
-	return facade.NewFacade(facade.NewJobResCrud(dbContainer))
+func NewJobResFacade(dbContainer db.IDbContainer, jobReqFacade ftypes.IFacade[tgmonTypes.JobReqDoc]) ftypes.IFacade[tgmonTypes.JobResDoc] {
+	return facade.NewFacade(crd.NewJobResCrud(dbContainer, jobReqFacade))
 }
 
-var FacadeProviderSet = kessoku.Set(
-	kessoku.Provide(NewMediaFacade),
-	kessoku.Provide(NewJobReqFacade),
-	kessoku.Provide(NewJobResFacade),
+var FacadeProviderSet = wire.NewSet(
+	NewMediaFacade,
+	NewJobReqFacade,
+	NewJobResFacade,
 )
 
 // ... Telegram
@@ -180,19 +200,19 @@ func NewTgWorkerPool(cfg *config.ConfigType, sessCfg *tlg.SessionConfig) (stream
 	return wp, nil
 }
 
-var TgProviderSet = kessoku.Set(
-	kessoku.Provide(NewTgSessionConfig),
-	kessoku.Provide(NewTgClient),
-	kessoku.Provide(NewTgWorkerPool),
+var TgProviderSet = wire.NewSet(
+	NewTgSessionConfig,
+	NewTgClient,
+	NewTgWorkerPool,
 )
 
 // ... Bot
-func NewBot(tgClient tlg.IClient, mediafacade facade.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool) (*bot.Bot, error) {
+func NewBot(tgClient tlg.IClient, mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool) (*bot.Bot, error) {
 	tgBot, err := bot.NewBot(tgClient)
 	if err != nil {
 		return nil, fmt.Errorf("can not create bot: %w", err)
 	}
-	hndler, err := bot.NewHandler(mediafacade, config.Config().TelegramConfig.ChannelID, wp)
+	hndler, err := bot.NewMediaHandler(mediafacade, config.Config().TelegramConfig.ChannelID, wp)
 	if err != nil {
 		return nil, fmt.Errorf("can not create bot handler: %w", err)
 	}

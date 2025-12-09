@@ -20,9 +20,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var webCmd = &cobra.Command{
-	Use:   "web",
-	Short: "Start TGmon web server",
+// serverCmd represents the server command
+var serverCmd = &cobra.Command{
+	Use:   "server",
+	Short: "Start TGmon web and fuse server",
 	Run: func(cmd *cobra.Command, args []string) {
 		ll := logrus.WithField("at", "web")
 		ll.Info("starting web server")
@@ -32,10 +33,12 @@ var webCmd = &cobra.Command{
 		defer cancl()
 		eg, ctx := errgroup.WithContext(ctx)
 		//...
-		webServer, err := app.InitializeWebServer(cfg)
+		servers, err := app.InitializeServer(cfg)
 		if err != nil {
-			logrus.WithError(err).Fatal("can not initialize web server")
+			logrus.WithError(err).Fatal("can not initialize servers")
 		}
+		webServer := servers.WebServer
+		fuseServer := servers.FuzeServer
 		eg.Go(func() error {
 			if err := webServer.ListenAndServe(); err != nil {
 				return fmt.Errorf("error running webserver: %w", err)
@@ -56,10 +59,6 @@ var webCmd = &cobra.Command{
 		})
 		// ...
 		if cfg.FuseConfig.Enabled {
-			fuseServer, err := app.InitializeFuseServer(cfg)
-			if err != nil {
-				logrus.WithError(err).Fatal("can not initialize fuse server")
-			}
 			ll.Info("fuse server started")
 			eg.Go(func() error {
 				<-ctx.Done()
@@ -98,5 +97,5 @@ var webCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(webCmd)
+	rootCmd.AddCommand(serverCmd)
 }

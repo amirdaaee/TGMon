@@ -57,6 +57,21 @@ func (mr *MockIMinioClMockRecorder) BucketExists(ctx, bucketName any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BucketExists", reflect.TypeOf((*MockIMinioCl)(nil).BucketExists), ctx, bucketName)
 }
 
+// GetObject mocks base method.
+func (m *MockIMinioCl) GetObject(ctx context.Context, bucketName, objectName string, opts minio.GetObjectOptions) (*minio.Object, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetObject", ctx, bucketName, objectName, opts)
+	ret0, _ := ret[0].(*minio.Object)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetObject indicates an expected call of GetObject.
+func (mr *MockIMinioClMockRecorder) GetObject(ctx, bucketName, objectName, opts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetObject", reflect.TypeOf((*MockIMinioCl)(nil).GetObject), ctx, bucketName, objectName, opts)
+}
+
 // MakeBucket mocks base method.
 func (m *MockIMinioCl) MakeBucket(ctx context.Context, bucketName string, opts minio.MakeBucketOptions) error {
 	m.ctrl.T.Helper()
@@ -164,6 +179,36 @@ func (m *MockIMinioClient) FileAddStr(ctx context.Context, fileName, data string
 func (mr *MockIMinioClientMockRecorder) FileAddStr(ctx, fileName, data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FileAddStr", reflect.TypeOf((*MockIMinioClient)(nil).FileAddStr), ctx, fileName, data)
+}
+
+// FileGet mocks base method.
+func (m *MockIMinioClient) FileGet(ctx context.Context, fileName string) (*minio.Object, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FileGet", ctx, fileName)
+	ret0, _ := ret[0].(*minio.Object)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FileGet indicates an expected call of FileGet.
+func (mr *MockIMinioClientMockRecorder) FileGet(ctx, fileName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FileGet", reflect.TypeOf((*MockIMinioClient)(nil).FileGet), ctx, fileName)
+}
+
+// FileInfo mocks base method.
+func (m *MockIMinioClient) FileInfo(ctx context.Context, fileName string) (*minio.ObjectInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FileInfo", ctx, fileName)
+	ret0, _ := ret[0].(*minio.ObjectInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FileInfo indicates an expected call of FileInfo.
+func (mr *MockIMinioClientMockRecorder) FileInfo(ctx, fileName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FileInfo", reflect.TypeOf((*MockIMinioClient)(nil).FileInfo), ctx, fileName)
 }
 
 // FileRm mocks base method.
