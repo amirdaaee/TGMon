@@ -53,22 +53,9 @@ func (crd *MediaCrud) PostCreate(ctx context.Context, doc *types.MediaFileDoc) e
 		return fmt.Errorf("MediaFileDoc is nil")
 	}
 	newCtx := context.TODO()
+	go setInitialJobs(newCtx, crd, doc, ll)
+	go setMediaThumbnail(newCtx, crd, doc, ll)
 	go func() {
-		if err := setSpriteJob(newCtx, crd, doc); err != nil {
-			ll.WithError(err).Error("failed to set sprite job")
-			return
-		}
-		ll.Info("sprite job set")
-	}()
-	go func() {
-		if err := setMediaThumbnail(newCtx, crd, doc); err != nil {
-			ll.WithError(err).Error("failed to set initial thumbnail")
-			return
-		}
-		ll.Info("initial thumbnail set")
-	}()
-	go func() {
-
 		if _, err := crd.GetCollection().Updater().Filter(query.Id(doc.ID)).Updates(update.Set(types.MediaFileDoc__UnameField, doc.Name())).UpdateOne(newCtx); err != nil {
 			ll.WithError(err).Error("failed to set uname")
 			return
@@ -136,25 +123,33 @@ func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerPoo
 }
 
 // ...
-func setMediaThumbnail(ctx context.Context, crd *MediaCrud, doc *types.MediaFileDoc) error {
+func setMediaThumbnail(ctx context.Context, crd *MediaCrud, doc *types.MediaFileDoc, ll *logrus.Entry) {
 	thumb, err := crd.workerContainer.GetNextWorker().GetThumbnail(ctx, doc.MessageID)
 	if err != nil {
-		return fmt.Errorf("failed to set initial thumbnail: %w", err)
+		ll.WithError(err).Error("failed to set initial thumbnail")
+		return
 	}
 	fname := fmt.Sprintf("%s.jpg", uuid.NewString())
 	if err := crd.dbContainer.GetMinioContainer().GetMinioClient().FileAdd(ctx, fname, thumb); err != nil {
-		return fmt.Errorf("failed to add thumbnail to minio: %w", err)
+		ll.WithError(err).Error("failed to add thumbnail to minio")
+		return
 	}
 	if _, err := crd.GetCollection().Updater().Filter(query.Id(doc.ID)).Updates(update.Set(types.MediaFileDoc__ThumbnailField, fname)).UpdateOne(ctx); err != nil {
-		return fmt.Errorf("failed to update thumbnail in db: %w", err)
+		ll.WithError(err).Error("failed to update thumbnail in db")
+		return
 	}
-	return nil
+	ll.Info("initial thumbnail set")
 }
 
-func setSpriteJob(ctx context.Context, crd *MediaCrud, doc *types.MediaFileDoc) error {
-	_, err := crd.jReqFac.CreateOne(ctx, &types.JobReqDoc{
-		Type:    types.SPRITEJobType,
-		MediaID: doc.ID,
-	})
-	return err
+func setInitialJobs(ctx context.Context, crd *MediaCrud, doc *types.MediaFileDoc, ll *logrus.Entry) {
+	for _, jobType := range []types.JobTypeEnum{types.SPRITEJobType, types.THUMBNAILJobType, types.EmbeddingJobType, types.TranscriptionJobType} {
+		if _, err := crd.jReqFac.CreateOne(ctx, &types.JobReqDoc{
+			Type:    jobType,
+			MediaID: doc.ID,
+		}); err != nil {
+			ll.WithError(err).Errorf("failed to create %s job", jobType)
+		} else {
+			ll.Infof("%s job created", jobType)
+		}
+	}
 }

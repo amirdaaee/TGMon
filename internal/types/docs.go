@@ -17,6 +17,7 @@ const (
 	MediaFileDoc__ThumbnailField = "Thumbnail"
 	MediaFileDoc__FileIDField    = "Meta.FileID"
 	MediaFileDoc__UnameField     = "UName"
+	MediaFileDoc__HasHashField   = "HasHash"
 )
 
 type MediaFileMeta struct {
@@ -35,6 +36,7 @@ type MediaFileDoc struct {
 	Vtt          string        `bson:"Vtt"`
 	Sprite       string        `bson:"Sprite"`
 	Srt          string        `bson:"Srt"`
+	HasHash      bool          `bson:"HasHash"`
 	UName        string        `bson:"UName"`
 }
 
@@ -78,8 +80,10 @@ func (m *MediaFileMeta) FillFromDocument(doc *tg.Document) error {
 type JobTypeEnum string
 
 const (
-	THUMBNAILJobType JobTypeEnum = "THUMBNAIL"
-	SPRITEJobType    JobTypeEnum = "SPRITE"
+	THUMBNAILJobType     JobTypeEnum = "THUMBNAIL"
+	SPRITEJobType        JobTypeEnum = "SPRITE"
+	EmbeddingJobType     JobTypeEnum = "EMBEDDING"
+	TranscriptionJobType JobTypeEnum = "TRANSCRIPTION"
 )
 const (
 	JobReqDoc__MediaIDField = "MediaID"
@@ -96,11 +100,12 @@ func (m JobReqDoc) String() string {
 }
 
 type JobResDoc struct {
-	mongox.Model `bson:",inline"`
-	JobReqID     bson.ObjectID `bson:"JobReqID"`
-	Thumbnail    []byte        `bson:"-"`
-	Sprite       []byte        `bson:"-"`
-	Vtt          []byte        `bson:"-"`
+	mongox.Model  `bson:",inline"`
+	JobReqID      bson.ObjectID `bson:"JobReqID"`
+	Thumbnail     []byte        `bson:"-"`
+	Sprite        []byte        `bson:"-"`
+	Vtt           []byte        `bson:"-"`
+	Transcription []byte        `bson:"-"`
 }
 
 func (m JobResDoc) String() string {

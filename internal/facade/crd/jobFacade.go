@@ -1,7 +1,6 @@
 package crd
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -57,6 +56,9 @@ func NewJobReqCrud(container db.IDbContainer) ftypes.ICrud[types.JobReqDoc] {
 	return &JobReqCrud{container: container}
 }
 
+// ===
+// ===
+
 // JobResCrud implements ICrud for JobResDoc, providing CRUD hooks and collection access.
 type JobResCrud struct {
 	container db.IDbContainer
@@ -72,17 +74,12 @@ func (crd *JobResCrud) PreCreate(ctx context.Context, doc *types.JobResDoc) erro
 	}
 	jobReq, err := crd.getJobRequest(ctx, doc)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get corresponding job request: %w", err)
 	}
-
-	fileName := crd.generateFileName(jobReq)
-
-	updateField, err := crd.processJobResult(ctx, doc, jobReq, fileName)
-	if err != nil {
-		return err
+	if err := crd.processJobResult(ctx, doc, jobReq); err != nil {
+		return fmt.Errorf("failed to process job result: %w", err)
 	}
-
-	return crd.updateMediaDocument(ctx, jobReq.MediaID, updateField)
+	return nil
 }
 
 // PostCreate deletes the related job request after creating a job result. Logs errors but does not return them.
@@ -91,7 +88,7 @@ func (crd *JobResCrud) PostCreate(ctx context.Context, doc *types.JobResDoc) err
 	if doc == nil {
 		return fmt.Errorf("JobResDoc is nil")
 	}
-	if _, err := crd.jReqFac.DeleteOne(ctx, getJobReqQ(doc)); err != nil {
+	if _, err := crd.jReqFac.DeleteOne(ctx, crd.getJobReqQ(doc)); err != nil {
 		ll.WithError(err).Error("failed to delete job req")
 	}
 	return nil
@@ -118,14 +115,14 @@ func (crd *JobResCrud) getLogger(fn string) *logrus.Entry {
 }
 
 // getJobReqQ constructs a BSON query for the JobReqID in the given JobResDoc.
-func getJobReqQ(doc *types.JobResDoc) bson.D {
+func (crd *JobResCrud) getJobReqQ(doc *types.JobResDoc) bson.D {
 	q := query.Id(doc.JobReqID)
 	return q
 }
 
 // getJobRequest retrieves the related JobReqDoc for the given JobResDoc. Returns an error if not found or multiple found.
 func (crd *JobResCrud) getJobRequest(ctx context.Context, doc *types.JobResDoc) (*types.JobReqDoc, error) {
-	jobReqD, err := crd.jReqFac.GetCollection().Finder().Filter(getJobReqQ(doc)).Find(ctx)
+	jobReqD, err := crd.jReqFac.GetCollection().Finder().Filter(crd.getJobReqQ(doc)).Find(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get job req doc: %w", err)
 	}
@@ -139,76 +136,172 @@ func (crd *JobResCrud) getJobRequest(ctx context.Context, doc *types.JobResDoc) 
 	return jobReqD[0], nil
 }
 
-// generateFileName generates a file name for the job result based on the JobResDoc and JobReqDoc.
-func (crd *JobResCrud) generateFileName(jobReq *types.JobReqDoc) string {
-	return fmt.Sprintf("%s_%s", jobReq.MediaID.Hex(), jobReq.Type)
-}
-
 // processJobResult processes the job result, stores the result in Minio, and returns the update field for the media document.
-func (crd *JobResCrud) processJobResult(ctx context.Context, doc *types.JobResDoc, jobReq *types.JobReqDoc, fileName string) ([]bson.D, error) {
-	ll := crd.getLogger("processJobResult")
-	mno := crd.container.GetMinioContainer().GetMinioClient()
-	if doc.Thumbnail != nil {
-		fname := crd.thumbFileName(fileName)
-		if err := mno.FileAdd(ctx, fname, doc.Thumbnail); err != nil {
-			return nil, fmt.Errorf("failed to add thumbnail file to minio: %w", err)
-		} else {
-			ll.Debugf("thumbnail file added to minio: %s", fname)
+func (crd *JobResCrud) processJobResult(ctx context.Context, doc *types.JobResDoc, jobReq *types.JobReqDoc) error {
+	ll := crd.getLogger("processJobResult").WithField("mediaID", jobReq.MediaID.Hex()).WithField("jobType", jobReq.Type)
+	jp, err := NewResultProcessor(jobReq, doc, crd.container)
+	if err != nil {
+		return fmt.Errorf("failed to create result processor: %w", err)
+	}
+	if err := jp.Validate(); err != nil {
+		return fmt.Errorf("failed to validate job result: %w", err)
+	}
+	files, updates, err := jp.Process(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to process job result: %w", err)
+	}
+	mnio := crd.container.GetMinioContainer().GetMinioClient()
+	for fname, data := range files {
+		if err := mnio.FileAdd(ctx, fname, data); err != nil {
+			return fmt.Errorf("failed to add file to minio: %w", err)
 		}
 	}
-	if doc.Sprite != nil {
-		fname := crd.spriteFileName(fileName)
-		if err := mno.FileAdd(ctx, fname, doc.Sprite); err != nil {
-			return nil, fmt.Errorf("failed to add sprite file to minio: %w", err)
-		} else {
-			ll.Debugf("sprite file added to minio: %s", fname)
-		}
-	}
-	if doc.Vtt != nil {
-		fname := crd.vttFileName(fileName)
-		sprt := crd.spriteFileName(fileName)
-		if err := mno.FileAdd(ctx, fname, bytes.ReplaceAll(doc.Vtt, []byte("__NAME__"), []byte(sprt))); err != nil {
-			return nil, fmt.Errorf("failed to add vtt file to minio: %w", err)
-		} else {
-			ll.Debugf("vtt file added to minio: %s", fname)
-		}
-	}
-	return crd.getUpdateField(jobReq.Type, fileName)
-}
-
-// getUpdateField returns the BSON update field for the given job type and file name.
-func (crd *JobResCrud) getUpdateField(jobType types.JobTypeEnum, fileName string) ([]bson.D, error) {
-	switch jobType {
-	case types.THUMBNAILJobType:
-		return []bson.D{update.Set(types.MediaFileDoc__ThumbnailField, crd.thumbFileName(fileName))}, nil
-	case types.SPRITEJobType:
-		return []bson.D{update.Set(types.MediaFileDoc__SpriteField, crd.spriteFileName(fileName)), update.Set(types.MediaFileDoc__VttField, crd.vttFileName(fileName))}, nil
-	default:
-		return nil, fmt.Errorf("unknown job type: %s", jobType)
-	}
-}
-
-// updateMediaDocument updates the media document with the given media ID and update field.
-func (crd *JobResCrud) updateMediaDocument(ctx context.Context, mediaID bson.ObjectID, updateFields []bson.D) error {
-	for _, q := range updateFields {
-		if _, err := crd.container.GetMongoContainer().GetMediaFileCollection().Updater().Filter(query.Id(mediaID)).Updates(q).UpdateOne(ctx); err != nil {
+	ll.Info("minio files added")
+	// ...
+	mngoColl := crd.container.GetMongoContainer().GetMediaFileCollection()
+	for _, q := range updates {
+		if _, err := mngoColl.Updater().Filter(query.Id(jobReq.MediaID)).Updates(q).UpdateOne(ctx); err != nil {
 			return fmt.Errorf("failed to update media doc: %w", err)
 		}
 	}
-
+	ll.Info("mongo doc updated")
 	return nil
-}
-func (crd *JobResCrud) vttFileName(s string) string {
-	return fmt.Sprintf("%s.vtt", s)
-}
-func (crd *JobResCrud) thumbFileName(s string) string {
-	return fmt.Sprintf("%s.jpeg", s)
-}
-func (crd *JobResCrud) spriteFileName(s string) string {
-	return fmt.Sprintf("%s.jpeg", s)
+
 }
 
 // NewJobResCrud creates a new JobResCrud with the provided database container.
 func NewJobResCrud(container db.IDbContainer, jobReqFacade ftypes.IFacade[types.JobReqDoc]) ftypes.ICrud[types.JobResDoc] {
 	return &JobResCrud{container: container, jReqFac: jobReqFacade}
+}
+
+// ===
+// ===
+type TaskResultProcessor interface {
+	Validate() error
+	Process(ctx context.Context) (map[string][]byte, []bson.D, error)
+}
+type baseResultProcessor struct {
+	jobReqDoc *types.JobReqDoc
+	jobResDoc *types.JobResDoc
+	container db.IDbContainer
+}
+type ThumbnailResultProcessor struct {
+	baseResultProcessor
+}
+
+var _ TaskResultProcessor = (*ThumbnailResultProcessor)(nil)
+
+func (p *ThumbnailResultProcessor) Validate() error {
+	if p.jobReqDoc.Type != types.THUMBNAILJobType {
+		return fmt.Errorf("job type is not thumbnail")
+	}
+	if p.jobResDoc.Thumbnail == nil {
+		return fmt.Errorf("thumbnail is nil")
+	}
+	return nil
+}
+
+func (p *ThumbnailResultProcessor) Process(ctx context.Context) (map[string][]byte, []bson.D, error) {
+	fname := generateSuffixedFileName(p.jobReqDoc, ".jpeg")
+	files := map[string][]byte{fname: p.jobResDoc.Thumbnail}
+	MongoUpdates := []bson.D{update.Set(types.MediaFileDoc__ThumbnailField, fname)}
+	return files, MongoUpdates, nil
+}
+
+// ---
+type SpriteResultProcessor struct {
+	baseResultProcessor
+}
+
+var _ TaskResultProcessor = (*SpriteResultProcessor)(nil)
+
+func (p *SpriteResultProcessor) Validate() error {
+	if p.jobReqDoc.Type != types.SPRITEJobType {
+		return fmt.Errorf("job type is not sprite")
+	}
+	if p.jobResDoc.Sprite == nil {
+		return fmt.Errorf("sprite is nil")
+	}
+	if p.jobResDoc.Vtt == nil {
+		return fmt.Errorf("vtt is nil")
+	}
+	return nil
+}
+
+func (p *SpriteResultProcessor) Process(ctx context.Context) (map[string][]byte, []bson.D, error) {
+	fname := generateSuffixedFileName(p.jobReqDoc, "")
+	spriteFname := fmt.Sprintf("%s.jpeg", fname)
+	vttFname := fmt.Sprintf("%s.vtt", fname)
+	files := map[string][]byte{spriteFname: p.jobResDoc.Sprite, vttFname: p.jobResDoc.Vtt}
+	MongoUpdates := []bson.D{update.Set(types.MediaFileDoc__SpriteField, spriteFname), update.Set(types.MediaFileDoc__VttField, vttFname)}
+	return files, MongoUpdates, nil
+}
+
+// ---
+type EmbeddingResultProcessor struct {
+	baseResultProcessor
+}
+
+var _ TaskResultProcessor = (*EmbeddingResultProcessor)(nil)
+
+func (p *EmbeddingResultProcessor) Validate() error {
+	if p.jobReqDoc.Type != types.EmbeddingJobType {
+		return fmt.Errorf("job type is not embedding")
+	}
+	return nil
+}
+func (p *EmbeddingResultProcessor) Process(ctx context.Context) (map[string][]byte, []bson.D, error) {
+	MongoUpdates := []bson.D{update.Set(types.MediaFileDoc__HasHashField, true)}
+	return nil, MongoUpdates, nil
+}
+
+// ---
+type TranscriptionResultProcessor struct {
+	baseResultProcessor
+}
+
+var _ TaskResultProcessor = (*TranscriptionResultProcessor)(nil)
+
+func (p *TranscriptionResultProcessor) Validate() error {
+	if p.jobReqDoc.Type != types.TranscriptionJobType {
+		return fmt.Errorf("job type is not transcription")
+	}
+	if p.jobResDoc.Transcription == nil {
+		return fmt.Errorf("transcription is nil")
+	}
+	return nil
+}
+func (p *TranscriptionResultProcessor) Process(ctx context.Context) (map[string][]byte, []bson.D, error) {
+	fname := generateSuffixedFileName(p.jobReqDoc, ".srt")
+	files := map[string][]byte{fname: p.jobResDoc.Transcription}
+	MongoUpdates := []bson.D{update.Set(types.MediaFileDoc__SrtField, fname)}
+	return files, MongoUpdates, nil
+}
+
+// ---
+func NewResultProcessor(jobReqDoc *types.JobReqDoc, jobResDoc *types.JobResDoc, container db.IDbContainer) (TaskResultProcessor, error) {
+	baseProcessor := baseResultProcessor{jobReqDoc: jobReqDoc, jobResDoc: jobResDoc, container: container}
+	switch jobReqDoc.Type {
+	case types.THUMBNAILJobType:
+		return &ThumbnailResultProcessor{baseProcessor}, nil
+	case types.SPRITEJobType:
+		return &SpriteResultProcessor{baseProcessor}, nil
+	case types.EmbeddingJobType:
+		return &EmbeddingResultProcessor{baseProcessor}, nil
+	case types.TranscriptionJobType:
+		return &TranscriptionResultProcessor{baseProcessor}, nil
+	default:
+		return nil, fmt.Errorf("unknown job type: %s", jobReqDoc.Type)
+	}
+}
+
+// ===
+// ===
+// generateFileName generates a file name for the job result based on the JobResDoc and JobReqDoc.
+func generateSuffixedFileName(jobReq *types.JobReqDoc, ext string) string {
+	v := fmt.Sprintf("%s_%s", jobReq.MediaID.Hex(), jobReq.Type)
+	if ext != "" {
+		v = fmt.Sprintf("%s%s", v, ext)
+	}
+	return v
 }
