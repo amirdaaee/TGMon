@@ -13,7 +13,9 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-// MountOptions configures the filesystem mount behavior
+// MountOptions configures the filesystem mount behavior.
+// It provides options for controlling FUSE mount parameters such as
+// access permissions and debugging.
 type MountOptions struct {
 	// AllowOther allows other users (including containers) to access the filesystem
 	// Note: This requires /etc/fuse.conf to have "user_allow_other" enabled

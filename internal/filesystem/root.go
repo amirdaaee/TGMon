@@ -15,6 +15,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// RootFS represents the root filesystem node in the FUSE filesystem.
+// It implements the core FUSE operations for directory traversal, file lookup,
+// and file management (unlink, rename). It maintains a mapping of unique
+// identifiers to file entries and manages multiple data sources.
 type RootFS struct {
 	fs.Inode
 	uidMap uidMapType
@@ -131,6 +135,8 @@ func (mfs *RootFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 	return mfs.NewInode(ctx, file, stable), 0
 }
 
+// Unlink removes a file from the filesystem by name.
+// It deletes the file from both the UID map and the underlying data source.
 func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
 	ll := mfs.getLogger("Unlink")
 	ll.Debugf("Removing file: %s", name)
@@ -149,6 +155,8 @@ func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
 	return 0
 }
 
+// Rename renames a file within the same directory.
+// It does not allow renaming to a different parent directory.
 func (mfs *RootFS) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
 	ll := mfs.getLogger("Rename")
 	ll.Debugf("Renaming file: %s to %s", name, newName)
@@ -203,6 +211,9 @@ func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 	}()
 	return entries, nil
 }
+
+// removeOrphanedEntries removes entries from the UID map that no longer
+// exist in their respective data sources.
 func (mfs *RootFS) removeOrphanedEntries(ctx context.Context) error {
 	ll := mfs.getLogger("removeOrphanedEntries")
 	for _, entry := range mfs.uidMap.mappedUID {
