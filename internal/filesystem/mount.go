@@ -6,13 +6,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/amirdaaee/TGMon/internal/filesystem/src"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-// MountOptions configures the filesystem mount behavior
+// MountOptions configures the filesystem mount behavior.
+// It provides options for controlling FUSE mount parameters such as
+// access permissions and debugging.
 type MountOptions struct {
 	// AllowOther allows other users (including containers) to access the filesystem
 	// Note: This requires /etc/fuse.conf to have "user_allow_other" enabled
@@ -22,7 +25,7 @@ type MountOptions struct {
 }
 
 // MountWithOptions mounts the filesystem with custom options
-func MountWithOptions(mountPoint string, srcs []src.ISrc, opts *MountOptions) (*fuse.Server, error) {
+func MountWithOptions(mountPoint string, srcs []src.ISrc, dbContainer db.IDbContainer, opts *MountOptions) (*fuse.Server, error) {
 	ll := log.GetLogger(log.FuseModule).WithField("func", "Mount")
 	ll.Infof("Mounting filesystem at: %s", mountPoint)
 
@@ -61,8 +64,7 @@ func MountWithOptions(mountPoint string, srcs []src.ISrc, opts *MountOptions) (*
 	}
 
 	// Create root filesystem
-	root := NewMediaFS(srcs)
-
+	root := NewMediaFS(srcs, dbContainer)
 	// Create FUSE server
 	fuseOpts := &fs.Options{}
 	fuseOpts.Debug = opts.Debug

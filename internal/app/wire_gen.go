@@ -56,7 +56,7 @@ func InitializeServer(cfg *config.ConfigType) (*ServerModules, error) {
 	engine := NewGinEngine(cfg, v)
 	server := NewWebServer(cfg, engine, v)
 	v2 := NewFuseSrcs(typesIFacade, iWorkerPool, iDbContainer)
-	fuseServer, err := NewFuzeServer(cfg, v2)
+	fuseServer, err := NewFuzeServer(cfg, v2, iDbContainer)
 	if err != nil {
 		return nil, err
 	}

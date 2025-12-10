@@ -443,6 +443,12 @@
                         "type": "integer"
                     }
                 },
+                "Transcription": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "UpdatedAt": {
                     "type": "string"
                 },
@@ -458,11 +464,15 @@
             "type": "string",
             "enum": [
                 "THUMBNAIL",
-                "SPRITE"
+                "SPRITE",
+                "EMBEDDING",
+                "TRANSCRIPTION"
             ],
             "x-enum-varnames": [
                 "THUMBNAILJobType",
-                "SPRITEJobType"
+                "SPRITEJobType",
+                "EmbeddingJobType",
+                "TranscriptionJobType"
             ]
         },
         "types.MediaFileDoc": {
@@ -473,6 +483,9 @@
                 },
                 "DeletedAt": {
                     "type": "string"
+                },
+                "HasHash": {
+                    "type": "boolean"
                 },
                 "ID": {
                     "type": "string"

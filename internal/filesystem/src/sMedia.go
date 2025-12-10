@@ -10,12 +10,16 @@ import (
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+// MediaFileSrc is a data source implementation that provides media files
+// from the database. It uses a facade to access media file documents and
+// a stream worker pool for reading file data.
 type MediaFileSrc struct {
 	facade           ftypes.IFacade[types.MediaFileDoc]
 	streamWorkerPool stream.IWorkerPool
@@ -23,6 +27,7 @@ type MediaFileSrc struct {
 
 var _ ISrc = (*MediaFileSrc)(nil)
 
+// List retrieves all media files from the database and returns them as IFile instances.
 func (mfs *MediaFileSrc) List(ctx context.Context) ([]IFile, error) {
 	docs, err := mfs.facade.GetCollection().Finder().Sort(bson.D{{Key: "_id", Value: 1}}).Find(ctx)
 	if err != nil {
@@ -34,18 +39,60 @@ func (mfs *MediaFileSrc) List(ctx context.Context) ([]IFile, error) {
 	}
 	return files, nil
 }
+
+// Lookup finds a media file by its UID.
 func (mfs *MediaFileSrc) Lookup(ctx context.Context, uid string) (IFile, error) {
-	oid, err := bson.ObjectIDFromHex(uid)
+	qID, err := mfs.getIdQ(uid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert uid to object id: %w", err)
+		return nil, fmt.Errorf("failed to get id query: %w", err)
 	}
-	doc, err := mfs.facade.GetCollection().Finder().Filter(bson.D{{Key: "_id", Value: oid}}).FindOne(ctx)
+	doc, err := mfs.facade.GetCollection().Finder().Filter(qID).FindOne(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to lookup media file from db: %w", err)
+		return nil, fmt.Errorf("failed to find media file from db: %w", err)
 	}
 	return &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool}, nil
 }
 
+// UID returns the unique identifier for this source type.
+func (mfs *MediaFileSrc) UID() string {
+	return "MEDIA"
+}
+
+// Delete removes a media file from the database.
+func (mfs *MediaFileSrc) Delete(ctx context.Context, uid string) error {
+	qID, err := mfs.getIdQ(uid)
+	if err != nil {
+		return fmt.Errorf("failed to get id query: %w", err)
+	}
+	if _, err := mfs.facade.GetCollection().Deleter().Filter(qID).DeleteOne(ctx); err != nil {
+		return fmt.Errorf("failed to delete media file from db: %w", err)
+	}
+	return nil
+}
+
+// Exists checks if a media file exists in the database.
+func (mfs *MediaFileSrc) Exists(ctx context.Context, uid string) (bool, error) {
+	qID, err := mfs.getIdQ(uid)
+	if err != nil {
+		return false, fmt.Errorf("failed to get id query: %w", err)
+	}
+	n, err := mfs.facade.GetCollection().Finder().Filter(qID).Count(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if media file exists: %w", err)
+	}
+	return n > 0, nil
+}
+
+// getIdQ converts a UID string to a MongoDB query filter.
+func (mfs *MediaFileSrc) getIdQ(uid string) (bson.M, error) {
+	oid, err := bson.ObjectIDFromHex(uid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert uid to object id: %w", err)
+	}
+	return bsonx.Id(oid), nil
+}
+
+// NewMediaFileSrc creates a new MediaFileSrc instance.
 func NewMediaFileSrc(facade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) *MediaFileSrc {
 	return &MediaFileSrc{
 		facade:           facade,
@@ -55,7 +102,7 @@ func NewMediaFileSrc(facade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool
 
 // ===
 //
-// MediaFile represents a single media file in the filesystem
+// MediaFile represents a single media file in the filesystem.
 type MediaFile struct {
 	fs.Inode
 	media            *types.MediaFileDoc
@@ -98,25 +145,37 @@ func (mf *MediaFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uin
 	return fileHandle, fuse.FOPEN_KEEP_CACHE, 0
 }
 
+// Name returns the display name of the media file.
 func (mf *MediaFile) Name() string {
 	return mf.media.UName
 }
+
+// UID returns the unique identifier of the media file.
 func (mf *MediaFile) UID() string {
 	return mf.media.ID.Hex()
 }
 
+// Size returns the size of the media file in bytes.
 func (mf *MediaFile) Size() uint64 {
 	return uint64(mf.media.Meta.FileSize)
 }
+
+// Mtime returns the modification time of the media file as a Unix timestamp.
 func (mf *MediaFile) Mtime() uint64 {
 	return uint64(mf.media.CreatedAt.Unix())
 }
+
+// Atime returns the access time of the media file as a Unix timestamp.
 func (mf *MediaFile) Atime() uint64 {
 	return uint64(mf.media.UpdatedAt.Unix())
 }
+
+// Ctime returns the creation time of the media file as a Unix timestamp.
 func (mf *MediaFile) Ctime() uint64 {
 	return uint64(mf.media.CreatedAt.Unix())
 }
+
+// Ext returns the file extension with the '.' prefix.
 func (mf *MediaFile) Ext() string {
 	return types.GetExtensionFromMimeType(mf.media.Meta.MimeType)
 }
@@ -126,7 +185,7 @@ func (mf *MediaFile) getLogger(fn string) *logrus.Entry {
 
 // ===
 
-// MediaFileHandle handles read operations on a media file
+// MediaFileHandle handles read operations on a media file.
 type MediaFileHandle struct {
 	media            *types.MediaFileDoc
 	streamWorkerPool stream.IWorkerPool

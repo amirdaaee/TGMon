@@ -22,6 +22,7 @@ type IMongoContainer interface {
 	GetJobReqCollection() ICollection[types.JobReqDoc]
 	GetJobResCollection() ICollection[types.JobResDoc]
 	GetMediaFileCollection() ICollection[types.MediaFileDoc]
+	GetFuseRenameCollection() ICollection[types.FuseStateDoc]
 }
 
 // MongoContainer implements the IMongoContainer interface and holds references to the MongoDB client, database, and helper structs.
@@ -57,6 +58,12 @@ func (c *MongoContainer) GetJobResCollection() ICollection[types.JobResDoc] {
 func (c *MongoContainer) GetMediaFileCollection() ICollection[types.MediaFileDoc] {
 	xCol := mongox.NewCollection[types.MediaFileDoc](c.db.Database, string(FILE_COLLECTION_NAME))
 	return &Collection[types.MediaFileDoc]{xColl: xCol}
+}
+
+// GetFuseRenameCollection returns the collection for fuse rename documents.
+func (c *MongoContainer) GetFuseRenameCollection() ICollection[types.FuseStateDoc] {
+	xCol := mongox.NewCollection[types.FuseStateDoc](c.db.Database, string(FUSE_RENAME_COLLECTION_NAME))
+	return &Collection[types.FuseStateDoc]{xColl: xCol}
 }
 
 var _ IMongoContainer = (*MongoContainer)(nil)

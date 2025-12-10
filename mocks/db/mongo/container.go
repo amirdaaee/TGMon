@@ -41,6 +41,20 @@ func (m *MockIMongoContainer) EXPECT() *MockIMongoContainerMockRecorder {
 	return m.recorder
 }
 
+// GetFuseRenameCollection mocks base method.
+func (m *MockIMongoContainer) GetFuseRenameCollection() mongo.ICollection[types.FuseStateDoc] {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFuseRenameCollection")
+	ret0, _ := ret[0].(mongo.ICollection[types.FuseStateDoc])
+	return ret0
+}
+
+// GetFuseRenameCollection indicates an expected call of GetFuseRenameCollection.
+func (mr *MockIMongoContainerMockRecorder) GetFuseRenameCollection() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFuseRenameCollection", reflect.TypeOf((*MockIMongoContainer)(nil).GetFuseRenameCollection))
+}
+
 // GetJobReqCollection mocks base method.
 func (m *MockIMongoContainer) GetJobReqCollection() mongo.ICollection[types.JobReqDoc] {
 	m.ctrl.T.Helper()

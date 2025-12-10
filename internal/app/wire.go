@@ -37,14 +37,14 @@ import (
 func NewFuseSrcs(mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool, dbC db.IDbContainer) []fsSrc.ISrc {
 	return []fsSrc.ISrc{fsSrc.NewMediaFileSrc(mediafacade, wp), fsSrc.NewSrtSrc(mediafacade, dbC.GetMinioContainer().GetMinioClient())}
 }
-func NewFuzeServer(cfg *config.ConfigType, srcs []fsSrc.ISrc) (*fuse.Server, error) {
+func NewFuzeServer(cfg *config.ConfigType, srcs []fsSrc.ISrc, dbContainer db.IDbContainer) (*fuse.Server, error) {
 	fCfg := cfg.FuseConfig
 	mountDir := fCfg.MediaDir
 	opts := &filesystem.MountOptions{
 		AllowOther: fCfg.AllowOther,
 		Debug:      fCfg.Debug,
 	}
-	server, err := filesystem.MountWithOptions(mountDir, srcs, opts)
+	server, err := filesystem.MountWithOptions(mountDir, srcs, dbContainer, opts)
 	if err != nil {
 		return nil, fmt.Errorf("can not mount filesystem: %w", err)
 	}

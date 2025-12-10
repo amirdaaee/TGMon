@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"sync"
 	"syscall"
 	"time"
 
+	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/amirdaaee/TGMon/internal/filesystem/src"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/hanwen/go-fuse/v2/fs"
@@ -15,100 +15,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type uidMapEntryType struct {
-	inode      uint64
-	src        int
-	uid        string
-	name       string
-	nameSuffix int
-	ext        string
-	mu         sync.RWMutex
-}
-
-func (e *uidMapEntryType) Name() string {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	v := e.name
-	if e.nameSuffix > 0 {
-		v = fmt.Sprintf("%s-%d", v, e.nameSuffix)
-	}
-	return sanitizeFilename(v) + e.ext
-}
-func (e *uidMapEntryType) IncrementNameSuffix() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.nameSuffix++
-}
-
-// RootFS is the root filesystem node
-type uidMapType struct {
-	mappedUID       map[string]*uidMapEntryType // uid -> entry
-	inodeNumCounter uint64
-	seenNames       map[string]bool
-	mu              sync.RWMutex
-}
-
-func (r *uidMapType) Add(uid string, src int, name, ext string) error {
-	key := fmt.Sprintf("%s-%d", uid, src)
-	if r.Exists(uid, src) {
-		return fmt.Errorf("uid %s already exists in src %d", uid, src)
-	}
-	inode := r.getFreeInodeNum()
-	r.mu.Lock()
-	r.mappedUID[key] = &uidMapEntryType{
-		inode:      inode,
-		src:        src,
-		uid:        uid,
-		name:       name,
-		nameSuffix: 0,
-		ext:        ext,
-	}
-	for {
-		if _, ok := r.seenNames[r.mappedUID[key].Name()]; !ok {
-			r.seenNames[name] = true
-			break
-		}
-		r.mappedUID[key].IncrementNameSuffix()
-	}
-	r.mu.Unlock()
-	return nil
-}
-func (r *uidMapType) Get(uid string, src int) (*uidMapEntryType, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	key := fmt.Sprintf("%s-%d", uid, src)
-	v, ok := r.mappedUID[key]
-	return v, ok
-}
-
-func (r *uidMapType) Exists(uid string, src int) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	key := fmt.Sprintf("%s-%d", uid, src)
-	_, ok := r.mappedUID[key]
-	return ok
-}
-func (r *uidMapType) GetByName(name string) (*uidMapEntryType, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	for _, v := range r.mappedUID {
-		if v.Name() == name {
-			return v, true
-		}
-	}
-	return nil, false
-}
-func (r *uidMapType) getFreeInodeNum() uint64 {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.inodeNumCounter++
-	return r.inodeNumCounter
-}
-
+// RootFS represents the root filesystem node in the FUSE filesystem.
+// It implements the core FUSE operations for directory traversal, file lookup,
+// and file management (unlink, rename). It maintains a mapping of unique
+// identifiers to file entries and manages multiple data sources.
 type RootFS struct {
 	fs.Inode
 	uidMap uidMapType
-	srcs   []src.ISrc
+	srcs   map[string]src.ISrc
 }
 
 var _ fs.NodeOnAdder = (*RootFS)(nil)
@@ -116,12 +30,16 @@ var _ fs.NodeReaddirer = (*RootFS)(nil)
 var _ fs.NodeLookuper = (*RootFS)(nil)
 var _ fs.NodeGetattrer = (*RootFS)(nil)
 var _ fs.NodeOpendirer = (*RootFS)(nil)
-
-// var _ fs.NodeUnlinker = (*RootFS)(nil)
+var _ fs.NodeUnlinker = (*RootFS)(nil)
+var _ fs.NodeRenamer = (*RootFS)(nil)
 
 // OnAdd is called when the filesystem is mounted
 func (mfs *RootFS) OnAdd(ctx context.Context) {
-	mfs.getLogger("OnAdd").Info("MediaFS mounted")
+	if err := mfs.uidMap.SyncDB(ctx); err != nil {
+		mfs.getLogger("OnAdd").WithError(err).Error("failed to sync uid map with db")
+		return
+	}
+	mfs.getLogger("OnAdd").Info("RootFS mounted")
 }
 
 // Opendir opens a directory for reading
@@ -192,7 +110,7 @@ func (mfs *RootFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 	// ...
 	qContext, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	file, err := mfs.srcs[entry.src].Lookup(qContext, entry.uid)
+	file, err := mfs.srcs[entry.data.SrcID].Lookup(qContext, entry.data.UID)
 	if err != nil {
 		if err == context.Canceled || err == context.DeadlineExceeded {
 			ll.Warn("Context canceled or timed out during src Lookup")
@@ -217,45 +135,67 @@ func (mfs *RootFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 	return mfs.NewInode(ctx, file, stable), 0
 }
 
-// func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
-// 	mfs.cacheMutex.Lock()
-// 	defer mfs.cacheMutex.Unlock()
-// 	ll := mfs.getLogger("Unlink")
-// 	uname := types.RemoveExtension(name)
-// 	ll.Infof("removing media file: %s", uname)
-// 	filter := bsonx.NewD().Add(types.MediaFileDoc__UnameField, uname).Build()
-// 	// ...
-// 	if _, err := mfs.mediaFacade.DeleteOne(ctx, filter); err != nil {
-// 		ll.WithError(err).Error("failed to delete media file")
-// 		return syscall.EIO
-// 	}
-// 	ll.Debugf("deleted media file: %s", uname)
-// 	// ...
-// 	delete(mfs.mediaCache, name)
-// 	// mfs.RmChild(name)
-// 	// ...
-// 	return 0
-// }
+// Unlink removes a file from the filesystem by name.
+// It deletes the file from both the UID map and the underlying data source.
+func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
+	ll := mfs.getLogger("Unlink")
+	ll.Debugf("Removing file: %s", name)
+	entry, ok := mfs.uidMap.GetByName(name)
+	if !ok {
+		return syscall.ENOENT // TODO
+	}
+	if err := mfs.uidMap.DeleteByName(ctx, name); err != nil {
+		ll.WithError(err).Error("failed to delete entry from uid map")
+		return syscall.EIO // TODO
+	}
+	if err := mfs.srcs[entry.data.SrcID].Delete(ctx, entry.data.UID); err != nil {
+		ll.WithError(err).Error("failed to delete file from src")
+		return syscall.EIO // TODO
+	}
+	return 0
+}
+
+// Rename renames a file within the same directory.
+// It does not allow renaming to a different parent directory.
+func (mfs *RootFS) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
+	ll := mfs.getLogger("Rename")
+	ll.Debugf("Renaming file: %s to %s", name, newName)
+	// don't allow renaming to a different parent
+	if newParent.EmbeddedInode().Path(nil) != mfs.EmbeddedInode().Path(nil) {
+		return syscall.EPERM // TODO
+	}
+
+	_, ok := mfs.uidMap.GetByName(name)
+	if !ok {
+		return syscall.ENOENT // TODO
+	}
+	if err := mfs.uidMap.RenameByName(ctx, name, newName); err != nil {
+		ll.WithError(err).Error("failed to rename entry in uid map")
+		return syscall.EIO // TODO
+	}
+	return 0
+}
 
 // listFiles retrieves all files from all data sources
 func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 	ll := mfs.getLogger("listFiles")
 	entries := make([]fuse.DirEntry, 0)
-	for srcC, src := range mfs.srcs {
-		llSrc := ll.WithField("src", srcC)
+	for _, src := range mfs.srcs {
+		llSrc := ll.WithField("src", src.UID())
 		srcEntries, err := src.List(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list files from src %d: %w", srcC, err)
+			return nil, fmt.Errorf("failed to list files from src %s: %w", src.UID(), err)
 		}
+		// append new entries to
 		for _, _f := range srcEntries {
 			llEntry := llSrc.WithField("file", _f.Name()).WithField("uid", _f.UID())
-			if !mfs.uidMap.Exists(_f.UID(), srcC) {
-				if err := mfs.uidMap.Add(_f.UID(), srcC, _f.Name(), _f.Ext()); err != nil {
+			if !mfs.uidMap.Exists(_f.UID(), src.UID()) {
+				if err := mfs.uidMap.Add(ctx, _f.UID(), src.UID(), _f.Name(), _f.Ext()); err != nil {
 					llEntry.WithError(err).Error("failed to add entry to uid map. skipping file.")
 					continue
 				}
 			}
-			entr, _ := mfs.uidMap.Get(_f.UID(), srcC)
+			entr, _ := mfs.uidMap.Get(_f.UID(), src.UID())
 			entries = append(entries, fuse.DirEntry{
 				Name: entr.Name(),
 				Mode: fuse.S_IFREG | 0444,
@@ -263,9 +203,46 @@ func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 			})
 		}
 	}
+	go func() {
+		if err := mfs.removeOrphanedEntries(context.TODO()); err != nil {
+			ll.WithError(err).Error("failed to remove orphaned entries")
+		}
+
+	}()
 	return entries, nil
 }
 
+// removeOrphanedEntries removes entries from the UID map that no longer
+// exist in their respective data sources.
+func (mfs *RootFS) removeOrphanedEntries(ctx context.Context) error {
+	ll := mfs.getLogger("removeOrphanedEntries")
+	for _, entry := range mfs.uidMap.mappedUID {
+		ll2 := ll.WithFields(logrus.Fields{
+			"src":  entry.data.SrcID,
+			"uid":  entry.data.UID,
+			"name": entry.data.Name,
+		})
+		src, ok := mfs.srcs[entry.data.SrcID]
+		if !ok {
+			ll2.Warn("Removing orphaned entry (no valid src found)")
+			if err := mfs.uidMap.DeleteByName(ctx, entry.Name()); err != nil {
+				ll2.WithError(err).Error("failed to delete entry from uid map")
+			}
+			continue
+		}
+		if ok, err := src.Exists(ctx, entry.data.UID); err != nil {
+			ll2.WithError(err).Error("failed to check if src exists")
+			continue
+		} else if !ok {
+			ll2.Warn("Removing orphaned entry (src does not exist)")
+			if err := mfs.uidMap.DeleteByName(ctx, entry.Name()); err != nil {
+				ll2.WithError(err).Error("failed to delete entry from uid map")
+			}
+			continue
+		}
+	}
+	return nil
+}
 func (mfs *RootFS) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mfs, fn))
 }
@@ -273,12 +250,17 @@ func (mfs *RootFS) getLogger(fn string) *logrus.Entry {
 // ...
 
 // NewMediaFS creates a new MediaFS filesystem
-func NewMediaFS(srcs []src.ISrc) *RootFS {
-	return &RootFS{
+func NewMediaFS(srcs []src.ISrc, dbContainer db.IDbContainer) *RootFS {
+	v := RootFS{
 		uidMap: uidMapType{
 			mappedUID: make(map[string]*uidMapEntryType),
 			seenNames: make(map[string]bool),
+			dbColl:    dbContainer.GetMongoContainer().GetFuseRenameCollection(),
 		},
-		srcs: srcs,
+		srcs: make(map[string]src.ISrc),
 	}
+	for _, src := range srcs {
+		v.srcs[src.UID()] = src
+	}
+	return &v
 }

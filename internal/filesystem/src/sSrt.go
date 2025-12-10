@@ -12,7 +12,9 @@ import (
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
+	"github.com/chenmingyong0423/go-mongox/v2/builder/update"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	mnio "github.com/minio/minio-go/v7"
@@ -20,6 +22,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+// SrtFileSrc is a source implementation that provides access to SRT subtitle files
+// stored in MinIO and referenced in the database.
 type SrtFileSrc struct {
 	facade      ftypes.IFacade[types.MediaFileDoc]
 	minioClient minio.IMinioClient
@@ -27,6 +31,7 @@ type SrtFileSrc struct {
 
 var _ ISrc = (*SrtFileSrc)(nil)
 
+// List returns all SRT files from the database that have an associated SRT file.
 func (mfs *SrtFileSrc) List(ctx context.Context) ([]IFile, error) {
 	q := query.NewBuilder().Nor(query.Eq(types.MediaFileDoc__SrtField, ""), query.Exists(types.MediaFileDoc__SrtField, false)).Build()
 	docs, err := mfs.facade.GetCollection().Finder().Filter(q).Sort(bson.D{{Key: "_id", Value: 1}}).Find(ctx)
@@ -39,18 +44,62 @@ func (mfs *SrtFileSrc) List(ctx context.Context) ([]IFile, error) {
 	}
 	return files, nil
 }
+
+// Lookup finds an SRT file by its UID.
+// The UID should be in the format "srt-{mediaFileID}".
 func (mfs *SrtFileSrc) Lookup(ctx context.Context, uid string) (IFile, error) {
-	oid, err := bson.ObjectIDFromHex(strings.TrimPrefix(uid, "srt-"))
+	qID, err := mfs.getIdQ(uid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert uid to object id: %w", err)
+		return nil, fmt.Errorf("failed to get id query: %w", err)
 	}
-	doc, err := mfs.facade.GetCollection().Finder().Filter(bson.D{{Key: "_id", Value: oid}}).FindOne(ctx)
+	doc, err := mfs.facade.GetCollection().Finder().Filter(qID).FindOne(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to lookup media file from db: %w", err)
+		return nil, fmt.Errorf("failed to find media file from db: %w", err)
 	}
 	return &SrtFile{orgMedia: doc, minioClient: mfs.minioClient}, nil
 }
 
+// UID returns the unique identifier for this source type.
+func (mfs *SrtFileSrc) UID() string {
+	return "SRT"
+}
+
+// Delete removes the SRT file reference from the database by clearing the SRT field.
+func (mfs *SrtFileSrc) Delete(ctx context.Context, uid string) error {
+	qID, err := mfs.getIdQ(uid)
+	if err != nil {
+		return fmt.Errorf("failed to get id query: %w", err)
+	}
+	if _, err := mfs.facade.GetCollection().Updater().Filter(qID).Updates([]bson.D{update.Set(types.MediaFileDoc__SrtField, "")}).UpdateOne(ctx); err != nil {
+		return fmt.Errorf("failed to delete srt file refference in db: %w", err)
+	}
+	return nil
+}
+
+// Exists checks if an SRT file exists in the database.
+func (mfs *SrtFileSrc) Exists(ctx context.Context, uid string) (bool, error) {
+	qID, err := mfs.getIdQ(uid)
+	if err != nil {
+		return false, fmt.Errorf("failed to get id query: %w", err)
+	}
+	n, err := mfs.facade.GetCollection().Finder().Filter(qID).Count(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if srt file exists: %w", err)
+	}
+	return n > 0, nil
+}
+
+// getIdQ converts a UID string to a MongoDB query filter.
+// The UID should be in the format "srt-{mediaFileID}".
+func (mfs *SrtFileSrc) getIdQ(uid string) (bson.M, error) {
+	oid, err := bson.ObjectIDFromHex(strings.TrimPrefix(uid, "srt-"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert uid to object id: %w", err)
+	}
+	return bsonx.Id(oid), nil
+}
+
+// NewSrtSrc creates a new SrtFileSrc instance.
 func NewSrtSrc(facade ftypes.IFacade[types.MediaFileDoc], minioClient minio.IMinioClient) *SrtFileSrc {
 	return &SrtFileSrc{
 		facade:      facade,
@@ -60,7 +109,7 @@ func NewSrtSrc(facade ftypes.IFacade[types.MediaFileDoc], minioClient minio.IMin
 
 // ===
 //
-// SrtFile represents a single srt file in the filesystem
+// SrtFile represents a single SRT subtitle file in the filesystem.
 type SrtFile struct {
 	fs.Inode
 	orgMedia    *types.MediaFileDoc
@@ -122,13 +171,17 @@ func (mf *SrtFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint3
 	return fileHandle, fuse.FOPEN_KEEP_CACHE, 0
 }
 
+// Name returns the display name of the SRT file.
 func (mf *SrtFile) Name() string {
 	return mf.orgMedia.UName
 }
+
+// UID returns the unique identifier of the SRT file in the format "srt-{mediaFileID}".
 func (mf *SrtFile) UID() string {
 	return fmt.Sprintf("srt-%s", mf.orgMedia.ID.Hex())
 }
 
+// Size returns the size of the SRT file in bytes.
 func (mf *SrtFile) Size() uint64 {
 	info, err := mf.info(context.Background())
 	if err != nil {
@@ -136,9 +189,13 @@ func (mf *SrtFile) Size() uint64 {
 	}
 	return uint64(info.Size)
 }
+
+// Mtime returns the modification time of the SRT file as a Unix timestamp.
 func (mf *SrtFile) Mtime() uint64 {
 	return uint64(mf.orgMedia.CreatedAt.Unix())
 }
+
+// Atime returns the access time of the SRT file as a Unix timestamp.
 func (mf *SrtFile) Atime() uint64 {
 	info, err := mf.info(context.Background())
 	if err != nil {
@@ -146,12 +203,18 @@ func (mf *SrtFile) Atime() uint64 {
 	}
 	return uint64(info.LastModified.Unix())
 }
+
+// Ctime returns the creation time of the SRT file as a Unix timestamp.
 func (mf *SrtFile) Ctime() uint64 {
 	return uint64(mf.orgMedia.CreatedAt.Unix())
 }
+
+// Ext returns the file extension, which is always ".srt" for SRT files.
 func (mf *SrtFile) Ext() string {
 	return ".srt"
 }
+
+// info retrieves the object information from MinIO, caching it for subsequent calls.
 func (mf *SrtFile) info(ctx context.Context) (*mnio.ObjectInfo, error) {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
@@ -170,7 +233,7 @@ func (mf *SrtFile) getLogger(fn string) *logrus.Entry {
 
 // ===
 
-// MediaFileHandle handles read operations on a media file
+// SrtFileHandle handles read operations on an SRT file.
 type SrtFileHandle struct {
 	orgMedia *types.MediaFileDoc
 	obj      *mnio.Object

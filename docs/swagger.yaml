@@ -75,6 +75,10 @@ definitions:
         items:
           type: integer
         type: array
+      Transcription:
+        items:
+          type: integer
+        type: array
       UpdatedAt:
         type: string
       Vtt:
@@ -86,16 +90,22 @@ definitions:
     enum:
     - THUMBNAIL
     - SPRITE
+    - EMBEDDING
+    - TRANSCRIPTION
     type: string
     x-enum-varnames:
     - THUMBNAILJobType
     - SPRITEJobType
+    - EmbeddingJobType
+    - TranscriptionJobType
   types.MediaFileDoc:
     properties:
       CreatedAt:
         type: string
       DeletedAt:
         type: string
+      HasHash:
+        type: boolean
       ID:
         type: string
       MessageID:
