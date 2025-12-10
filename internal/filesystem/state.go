@@ -7,6 +7,7 @@ import (
 
 	"github.com/amirdaaee/TGMon/internal/db/mongo"
 	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 )
 
 type uidMapEntryType struct {
@@ -105,6 +106,21 @@ func (r *uidMapType) GetByName(name string) (*uidMapEntryType, bool) {
 		}
 	}
 	return nil, false
+}
+func (r *uidMapType) DeleteByName(ctx context.Context, name string) error {
+	entry, ok := r.GetByName(name)
+	if !ok {
+		return fmt.Errorf("entry not found: %s", name)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, err := r.dbColl.Deleter().Filter(bsonx.Id(entry.data.ID)).DeleteOne(ctx); err != nil {
+		return fmt.Errorf("failed to delete doc from db: %w", err)
+	}
+	key := r.getKey(entry.data.UID, entry.data.SrcID)
+	delete(r.mappedUID, key)
+	delete(r.seenNames, name)
+	return nil
 }
 
 // fetchs latest state from db. this is intended to be called at init

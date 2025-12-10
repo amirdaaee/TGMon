@@ -10,6 +10,7 @@ type ISrc interface {
 	UID() string
 	List(ctx context.Context) ([]IFile, error)
 	Lookup(ctx context.Context, uid string) (IFile, error)
+	Delete(ctx context.Context, uid string) error
 }
 
 type IFile interface {

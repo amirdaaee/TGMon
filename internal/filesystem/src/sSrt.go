@@ -12,6 +12,7 @@ import (
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -40,18 +41,35 @@ func (mfs *SrtFileSrc) List(ctx context.Context) ([]IFile, error) {
 	return files, nil
 }
 func (mfs *SrtFileSrc) Lookup(ctx context.Context, uid string) (IFile, error) {
-	oid, err := bson.ObjectIDFromHex(strings.TrimPrefix(uid, "srt-"))
+	qID, err := mfs.getIdQ(uid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert uid to object id: %w", err)
+		return nil, fmt.Errorf("failed to get id query: %w", err)
 	}
-	doc, err := mfs.facade.GetCollection().Finder().Filter(bson.D{{Key: "_id", Value: oid}}).FindOne(ctx)
+	doc, err := mfs.facade.GetCollection().Finder().Filter(qID).FindOne(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to lookup media file from db: %w", err)
+		return nil, fmt.Errorf("failed to find media file from db: %w", err)
 	}
 	return &SrtFile{orgMedia: doc, minioClient: mfs.minioClient}, nil
 }
 func (mfs *SrtFileSrc) UID() string {
 	return "SRT"
+}
+func (mfs *SrtFileSrc) Delete(ctx context.Context, uid string) error {
+	qID, err := mfs.getIdQ(uid)
+	if err != nil {
+		return fmt.Errorf("failed to get id query: %w", err)
+	}
+	if _, err := mfs.facade.GetCollection().Deleter().Filter(qID).DeleteOne(ctx); err != nil {
+		return fmt.Errorf("failed to delete srt file from db: %w", err)
+	}
+	return nil
+}
+func (mfs *SrtFileSrc) getIdQ(uid string) (bson.M, error) {
+	oid, err := bson.ObjectIDFromHex(strings.TrimPrefix(uid, "srt-"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert uid to object id: %w", err)
+	}
+	return bsonx.Id(oid), nil
 }
 func NewSrtSrc(facade ftypes.IFacade[types.MediaFileDoc], minioClient minio.IMinioClient) *SrtFileSrc {
 	return &SrtFileSrc{

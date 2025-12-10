@@ -26,9 +26,9 @@ var _ fs.NodeReaddirer = (*RootFS)(nil)
 var _ fs.NodeLookuper = (*RootFS)(nil)
 var _ fs.NodeGetattrer = (*RootFS)(nil)
 var _ fs.NodeOpendirer = (*RootFS)(nil)
-var _ fs.NodeRenamer = (*RootFS)(nil)
+var _ fs.NodeUnlinker = (*RootFS)(nil)
 
-// var _ fs.NodeUnlinker = (*RootFS)(nil)
+// var _ fs.NodeRenamer = (*RootFS)(nil)
 
 // OnAdd is called when the filesystem is mounted
 func (mfs *RootFS) OnAdd(ctx context.Context) {
@@ -128,6 +128,24 @@ func (mfs *RootFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 	return mfs.NewInode(ctx, file, stable), 0
 }
 
+func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
+	ll := mfs.getLogger("Unlink")
+	ll.Debugf("removing file: %s", name)
+	entry, ok := mfs.uidMap.GetByName(name)
+	if !ok {
+		return syscall.ENOENT // TODO
+	}
+	if err := mfs.uidMap.DeleteByName(ctx, name); err != nil {
+		ll.WithError(err).Error("failed to delete entry from uid map")
+		return syscall.EIO // TODO
+	}
+	if err := mfs.srcs[entry.data.SrcID].Delete(ctx, entry.data.UID); err != nil {
+		ll.WithError(err).Error("failed to delete file from src")
+		return syscall.EIO // TODO
+	}
+	return 0
+}
+
 // Lookup finds a file by name and returns a file node
 func (mfs *RootFS) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
 	ll := mfs.getLogger("Rename")
@@ -144,26 +162,6 @@ func (mfs *RootFS) Rename(ctx context.Context, name string, newParent fs.InodeEm
 
 	return 0
 }
-
-// func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
-// 	mfs.cacheMutex.Lock()
-// 	defer mfs.cacheMutex.Unlock()
-// 	ll := mfs.getLogger("Unlink")
-// 	uname := types.RemoveExtension(name)
-// 	ll.Infof("removing media file: %s", uname)
-// 	filter := bsonx.NewD().Add(types.MediaFileDoc__UnameField, uname).Build()
-// 	// ...
-// 	if _, err := mfs.mediaFacade.DeleteOne(ctx, filter); err != nil {
-// 		ll.WithError(err).Error("failed to delete media file")
-// 		return syscall.EIO
-// 	}
-// 	ll.Debugf("deleted media file: %s", uname)
-// 	// ...
-// 	delete(mfs.mediaCache, name)
-// 	// mfs.RmChild(name)
-// 	// ...
-// 	return 0
-// }
 
 // listFiles retrieves all files from all data sources
 func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
