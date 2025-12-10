@@ -1,11 +1,13 @@
 package filesystem
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"syscall"
 	"time"
 
+	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/amirdaaee/TGMon/internal/filesystem/src"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/hanwen/go-fuse/v2/fs"
@@ -22,7 +24,7 @@ type MountOptions struct {
 }
 
 // MountWithOptions mounts the filesystem with custom options
-func MountWithOptions(mountPoint string, srcs []src.ISrc, opts *MountOptions) (*fuse.Server, error) {
+func MountWithOptions(ctx context.Context, mountPoint string, srcs []src.ISrc, dbContainer db.IDbContainer, opts *MountOptions) (*fuse.Server, error) {
 	ll := log.GetLogger(log.FuseModule).WithField("func", "Mount")
 	ll.Infof("Mounting filesystem at: %s", mountPoint)
 
@@ -61,8 +63,10 @@ func MountWithOptions(mountPoint string, srcs []src.ISrc, opts *MountOptions) (*
 	}
 
 	// Create root filesystem
-	root := NewMediaFS(srcs)
-
+	root := NewMediaFS(srcs, dbContainer)
+	if err := root.uidMap.SyncDB(ctx); err != nil {
+		return nil, fmt.Errorf("failed to sync uid map with db: %w", err)
+	}
 	// Create FUSE server
 	fuseOpts := &fs.Options{}
 	fuseOpts.Debug = opts.Debug

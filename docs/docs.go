@@ -452,6 +452,12 @@ const docTemplate = `{
                         "type": "integer"
                     }
                 },
+                "Transcription": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "UpdatedAt": {
                     "type": "string"
                 },
@@ -467,11 +473,15 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "THUMBNAIL",
-                "SPRITE"
+                "SPRITE",
+                "EMBEDDING",
+                "TRANSCRIPTION"
             ],
             "x-enum-varnames": [
                 "THUMBNAILJobType",
-                "SPRITEJobType"
+                "SPRITEJobType",
+                "EmbeddingJobType",
+                "TranscriptionJobType"
             ]
         },
         "types.MediaFileDoc": {
@@ -482,6 +492,9 @@ const docTemplate = `{
                 },
                 "DeletedAt": {
                     "type": "string"
+                },
+                "HasHash": {
+                    "type": "boolean"
                 },
                 "ID": {
                     "type": "string"

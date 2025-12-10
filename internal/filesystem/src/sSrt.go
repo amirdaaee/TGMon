@@ -50,7 +50,9 @@ func (mfs *SrtFileSrc) Lookup(ctx context.Context, uid string) (IFile, error) {
 	}
 	return &SrtFile{orgMedia: doc, minioClient: mfs.minioClient}, nil
 }
-
+func (mfs *SrtFileSrc) UID() string {
+	return "SRT"
+}
 func NewSrtSrc(facade ftypes.IFacade[types.MediaFileDoc], minioClient minio.IMinioClient) *SrtFileSrc {
 	return &SrtFileSrc{
 		facade:      facade,
@@ -152,6 +154,7 @@ func (mf *SrtFile) Ctime() uint64 {
 func (mf *SrtFile) Ext() string {
 	return ".srt"
 }
+
 func (mf *SrtFile) info(ctx context.Context) (*mnio.ObjectInfo, error) {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()

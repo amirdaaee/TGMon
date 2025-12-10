@@ -12,9 +12,10 @@ import (
 type CollectionNameType string
 
 const (
-	FILE_COLLECTION_NAME   CollectionNameType = "files"
-	JOBREQ_COLLECTION_NAME CollectionNameType = "job"
-	JOBRES_COLLECTION_NAME CollectionNameType = "jobres"
+	FILE_COLLECTION_NAME        CollectionNameType = "files"
+	JOBREQ_COLLECTION_NAME      CollectionNameType = "job"
+	JOBRES_COLLECTION_NAME      CollectionNameType = "jobres"
+	FUSE_RENAME_COLLECTION_NAME CollectionNameType = "fuserename"
 )
 
 // ICollection defines the interface for MongoDB collection operations.

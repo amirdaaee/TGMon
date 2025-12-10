@@ -33,7 +33,9 @@ var serverCmd = &cobra.Command{
 		defer cancl()
 		eg, ctx := errgroup.WithContext(ctx)
 		//...
-		servers, err := app.InitializeServer(cfg)
+		ctxSrvInit, cancelSrvInit := context.WithTimeout(ctx, 10*time.Second)
+		defer cancelSrvInit()
+		servers, err := app.InitializeServer(ctxSrvInit, cfg)
 		if err != nil {
 			logrus.WithError(err).Fatal("can not initialize servers")
 		}

@@ -113,6 +113,17 @@ func (m JobResDoc) String() string {
 }
 
 // ...
+type FuseStateDoc struct {
+	mongox.Model `bson:",inline"`
+	SrcID        string `bson:"SrcID"`
+	UID          string `bson:"UID"`
+	Name         string `bson:"Name"`
+	NameSuffix   int    `bson:"NameSuffix"`
+	Ext          string `bson:"Ext"`
+	Rename       string `bson:"Rename"`
+}
+
+// ...
 func RemoveExtension(fileName string) string {
 	exts := []string{".mp4", ".webm", ".mkv", ".mov", ".mp3", ".ogg", ".weba", ".jpg", ".png", ".gif", ".bin"}
 	for _, ext := range exts {

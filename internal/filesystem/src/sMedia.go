@@ -45,7 +45,9 @@ func (mfs *MediaFileSrc) Lookup(ctx context.Context, uid string) (IFile, error) 
 	}
 	return &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool}, nil
 }
-
+func (mfs *MediaFileSrc) UID() string {
+	return "MEDIA"
+}
 func NewMediaFileSrc(facade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) *MediaFileSrc {
 	return &MediaFileSrc{
 		facade:           facade,
