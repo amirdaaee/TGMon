@@ -4,7 +4,6 @@
 package app
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/amirdaaee/TGMon/internal/config"
@@ -17,7 +16,7 @@ type ServerModules struct {
 	FuzeServer *fuse.Server
 }
 
-func InitializeServer(ctx context.Context, cfg *config.ConfigType) (*ServerModules, error) {
+func InitializeServer(cfg *config.ConfigType) (*ServerModules, error) {
 	wire.Build(WebHandlerProviderSet, NewStashQlClient, FuseProviderSet, NewDbContainer, TgProviderSet, FacadeProviderSet, wire.Struct(new(ServerModules), "*"))
 	return nil, nil
 }

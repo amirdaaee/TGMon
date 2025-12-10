@@ -27,12 +27,15 @@ var _ fs.NodeLookuper = (*RootFS)(nil)
 var _ fs.NodeGetattrer = (*RootFS)(nil)
 var _ fs.NodeOpendirer = (*RootFS)(nil)
 var _ fs.NodeUnlinker = (*RootFS)(nil)
-
-// var _ fs.NodeRenamer = (*RootFS)(nil)
+var _ fs.NodeRenamer = (*RootFS)(nil)
 
 // OnAdd is called when the filesystem is mounted
 func (mfs *RootFS) OnAdd(ctx context.Context) {
-	mfs.getLogger("OnAdd").Info("MediaFS mounted")
+	if err := mfs.uidMap.SyncDB(ctx); err != nil {
+		mfs.getLogger("OnAdd").WithError(err).Error("failed to sync uid map with db")
+		return
+	}
+	mfs.getLogger("OnAdd").Info("RootFS mounted")
 }
 
 // Opendir opens a directory for reading
@@ -130,7 +133,7 @@ func (mfs *RootFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 
 func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
 	ll := mfs.getLogger("Unlink")
-	ll.Debugf("removing file: %s", name)
+	ll.Debugf("Removing file: %s", name)
 	entry, ok := mfs.uidMap.GetByName(name)
 	if !ok {
 		return syscall.ENOENT // TODO
@@ -146,20 +149,22 @@ func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
 	return 0
 }
 
-// Lookup finds a file by name and returns a file node
 func (mfs *RootFS) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
 	ll := mfs.getLogger("Rename")
 	ll.Debugf("Renaming file: %s to %s", name, newName)
-
-	_, ok := mfs.uidMap.GetByName(name)
-	if !ok {
-		return syscall.ENOENT // TODO
-	}
 	// don't allow renaming to a different parent
 	if newParent.EmbeddedInode().Path(nil) != mfs.EmbeddedInode().Path(nil) {
 		return syscall.EPERM // TODO
 	}
 
+	_, ok := mfs.uidMap.GetByName(name)
+	if !ok {
+		return syscall.ENOENT // TODO
+	}
+	if err := mfs.uidMap.RenameByName(ctx, name, newName); err != nil {
+		ll.WithError(err).Error("failed to rename entry in uid map")
+		return syscall.EIO // TODO
+	}
 	return 0
 }
 
@@ -173,6 +178,7 @@ func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to list files from src %s: %w", src.UID(), err)
 		}
+		// append new entries to
 		for _, _f := range srcEntries {
 			llEntry := llSrc.WithField("file", _f.Name()).WithField("uid", _f.UID())
 			if !mfs.uidMap.Exists(_f.UID(), src.UID()) {
@@ -189,9 +195,43 @@ func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 			})
 		}
 	}
+	go func() {
+		if err := mfs.removeOrphanedEntries(context.TODO()); err != nil {
+			ll.WithError(err).Error("failed to remove orphaned entries")
+		}
+
+	}()
 	return entries, nil
 }
-
+func (mfs *RootFS) removeOrphanedEntries(ctx context.Context) error {
+	ll := mfs.getLogger("removeOrphanedEntries")
+	for _, entry := range mfs.uidMap.mappedUID {
+		ll2 := ll.WithFields(logrus.Fields{
+			"src":  entry.data.SrcID,
+			"uid":  entry.data.UID,
+			"name": entry.data.Name,
+		})
+		src, ok := mfs.srcs[entry.data.SrcID]
+		if !ok {
+			ll2.Warn("Removing orphaned entry (no valid src found)")
+			if err := mfs.uidMap.DeleteByName(ctx, entry.Name()); err != nil {
+				ll2.WithError(err).Error("failed to delete entry from uid map")
+			}
+			continue
+		}
+		if ok, err := src.Exists(ctx, entry.data.UID); err != nil {
+			ll2.WithError(err).Error("failed to check if src exists")
+			continue
+		} else if !ok {
+			ll2.Warn("Removing orphaned entry (src does not exist)")
+			if err := mfs.uidMap.DeleteByName(ctx, entry.Name()); err != nil {
+				ll2.WithError(err).Error("failed to delete entry from uid map")
+			}
+			continue
+		}
+	}
+	return nil
+}
 func (mfs *RootFS) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mfs, fn))
 }

@@ -6,8 +6,12 @@ import (
 	"sync"
 
 	"github.com/amirdaaee/TGMon/internal/db/mongo"
+	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
+	"github.com/chenmingyong0423/go-mongox/v2/builder/update"
+	"github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type uidMapEntryType struct {
@@ -19,14 +23,12 @@ type uidMapEntryType struct {
 func (e *uidMapEntryType) Name() string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	var v string
 	if e.data.Rename != "" {
-		v = e.data.Rename
-	} else {
-		v = e.data.Name
-		if e.data.NameSuffix > 0 {
-			v = fmt.Sprintf("%s-%d", v, e.data.NameSuffix)
-		}
+		return e.data.Rename
+	}
+	v := e.data.Name
+	if e.data.NameSuffix > 0 {
+		v = fmt.Sprintf("%s-%d", v, e.data.NameSuffix)
 	}
 	return sanitizeFilename(v) + e.data.Ext
 }
@@ -122,19 +124,33 @@ func (r *uidMapType) DeleteByName(ctx context.Context, name string) error {
 	delete(r.seenNames, name)
 	return nil
 }
+func (r *uidMapType) RenameByName(ctx context.Context, oldName string, newName string) error {
+	entry, ok := r.GetByName(oldName)
+	if !ok {
+		return fmt.Errorf("entry not found: %s", oldName)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry.data.Rename = newName
+	if _, err := r.dbColl.Updater().Filter(bsonx.Id(entry.data.ID)).Updates([]bson.D{update.Set(types.FuseStateDoc__RenameField, newName)}).UpdateOne(ctx); err != nil {
+		return fmt.Errorf("failed to update doc in db: %w", err)
+	}
+	return nil
+}
 
 // fetchs latest state from db. this is intended to be called at init
 func (r *uidMapType) SyncDB(ctx context.Context) error {
+	ll := r.getLogger("SyncDB")
 	allDocs, err := r.dbColl.Finder().Find(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch all docs from db: %w", err)
 	}
+	ll.Debugf("fetched %d docs from db", len(allDocs))
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.mappedUID = make(map[string]*uidMapEntryType)
 	r.inodeNumCounter = uint64(len(allDocs))
 	r.seenNames = make(map[string]bool)
-
 	for c, doc := range allDocs {
 		v := uidMapEntryType{
 			data:  doc,
@@ -154,4 +170,7 @@ func (r *uidMapType) getFreeInodeNum() uint64 {
 
 func (r *uidMapType) getKey(uid string, src string) string {
 	return fmt.Sprintf("%s-%s", uid, src)
+}
+func (r *uidMapType) getLogger(at string) *logrus.Entry {
+	return log.GetLogger(log.FuseModule).WithField("at", fmt.Sprintf("%T.%s", r, at))
 }

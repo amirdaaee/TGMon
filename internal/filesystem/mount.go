@@ -1,7 +1,6 @@
 package filesystem
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"syscall"
@@ -24,7 +23,7 @@ type MountOptions struct {
 }
 
 // MountWithOptions mounts the filesystem with custom options
-func MountWithOptions(ctx context.Context, mountPoint string, srcs []src.ISrc, dbContainer db.IDbContainer, opts *MountOptions) (*fuse.Server, error) {
+func MountWithOptions(mountPoint string, srcs []src.ISrc, dbContainer db.IDbContainer, opts *MountOptions) (*fuse.Server, error) {
 	ll := log.GetLogger(log.FuseModule).WithField("func", "Mount")
 	ll.Infof("Mounting filesystem at: %s", mountPoint)
 
@@ -64,9 +63,6 @@ func MountWithOptions(ctx context.Context, mountPoint string, srcs []src.ISrc, d
 
 	// Create root filesystem
 	root := NewMediaFS(srcs, dbContainer)
-	if err := root.uidMap.SyncDB(ctx); err != nil {
-		return nil, fmt.Errorf("failed to sync uid map with db: %w", err)
-	}
 	// Create FUSE server
 	fuseOpts := &fs.Options{}
 	fuseOpts.Debug = opts.Debug

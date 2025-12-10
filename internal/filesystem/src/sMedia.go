@@ -59,6 +59,17 @@ func (mfs *MediaFileSrc) Delete(ctx context.Context, uid string) error {
 	}
 	return nil
 }
+func (mfs *MediaFileSrc) Exists(ctx context.Context, uid string) (bool, error) {
+	qID, err := mfs.getIdQ(uid)
+	if err != nil {
+		return false, fmt.Errorf("failed to get id query: %w", err)
+	}
+	n, err := mfs.facade.GetCollection().Finder().Filter(qID).Count(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if media file exists: %w", err)
+	}
+	return n > 0, nil
+}
 func (mfs *MediaFileSrc) getIdQ(uid string) (bson.M, error) {
 	oid, err := bson.ObjectIDFromHex(uid)
 	if err != nil {

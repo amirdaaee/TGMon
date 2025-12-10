@@ -7,7 +7,6 @@
 package app
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/amirdaaee/TGMon/internal/bot"
@@ -39,7 +38,7 @@ func InitializeBot(cfg *config.ConfigType) (*bot.Bot, error) {
 
 // Injectors from server.go:
 
-func InitializeServer(ctx context.Context, cfg *config.ConfigType) (*ServerModules, error) {
+func InitializeServer(cfg *config.ConfigType) (*ServerModules, error) {
 	iDbContainer, err := NewDbContainer(cfg)
 	if err != nil {
 		return nil, err
@@ -57,7 +56,7 @@ func InitializeServer(ctx context.Context, cfg *config.ConfigType) (*ServerModul
 	engine := NewGinEngine(cfg, v)
 	server := NewWebServer(cfg, engine, v)
 	v2 := NewFuseSrcs(typesIFacade, iWorkerPool, iDbContainer)
-	fuseServer, err := NewFuzeServer(ctx, cfg, v2, iDbContainer)
+	fuseServer, err := NewFuzeServer(cfg, v2, iDbContainer)
 	if err != nil {
 		return nil, err
 	}

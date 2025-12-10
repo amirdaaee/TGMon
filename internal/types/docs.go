@@ -113,6 +113,10 @@ func (m JobResDoc) String() string {
 }
 
 // ...
+const (
+	FuseStateDoc__RenameField = "Rename"
+)
+
 type FuseStateDoc struct {
 	mongox.Model `bson:",inline"`
 	SrcID        string `bson:"SrcID"`

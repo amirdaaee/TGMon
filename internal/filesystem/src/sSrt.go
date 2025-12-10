@@ -14,6 +14,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
+	"github.com/chenmingyong0423/go-mongox/v2/builder/update"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	mnio "github.com/minio/minio-go/v7"
@@ -59,10 +60,21 @@ func (mfs *SrtFileSrc) Delete(ctx context.Context, uid string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get id query: %w", err)
 	}
-	if _, err := mfs.facade.GetCollection().Deleter().Filter(qID).DeleteOne(ctx); err != nil {
-		return fmt.Errorf("failed to delete srt file from db: %w", err)
+	if _, err := mfs.facade.GetCollection().Updater().Filter(qID).Updates([]bson.D{update.Set(types.MediaFileDoc__SrtField, "")}).UpdateOne(ctx); err != nil {
+		return fmt.Errorf("failed to delete srt file refference in db: %w", err)
 	}
 	return nil
+}
+func (mfs *SrtFileSrc) Exists(ctx context.Context, uid string) (bool, error) {
+	qID, err := mfs.getIdQ(uid)
+	if err != nil {
+		return false, fmt.Errorf("failed to get id query: %w", err)
+	}
+	n, err := mfs.facade.GetCollection().Finder().Filter(qID).Count(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if srt file exists: %w", err)
+	}
+	return n > 0, nil
 }
 func (mfs *SrtFileSrc) getIdQ(uid string) (bson.M, error) {
 	oid, err := bson.ObjectIDFromHex(strings.TrimPrefix(uid, "srt-"))
