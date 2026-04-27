@@ -1,6 +1,7 @@
 package crd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -209,6 +210,8 @@ func (p *ThumbnailResultProcessor) Process(ctx context.Context) (map[string][]by
 }
 
 // ---
+const VTT_SPRITE_NAME_PLACEHOLDER = "__NAME__"
+
 type SpriteResultProcessor struct {
 	baseResultProcessor
 }
@@ -232,7 +235,8 @@ func (p *SpriteResultProcessor) Process(ctx context.Context) (map[string][]byte,
 	fname := generateSuffixedFileName(p.jobReqDoc, "")
 	spriteFname := fmt.Sprintf("%s.jpeg", fname)
 	vttFname := fmt.Sprintf("%s.vtt", fname)
-	files := map[string][]byte{spriteFname: p.jobResDoc.Sprite, vttFname: p.jobResDoc.Vtt}
+	vtt := bytes.ReplaceAll(p.jobResDoc.Vtt, []byte(VTT_SPRITE_NAME_PLACEHOLDER), []byte(spriteFname))
+	files := map[string][]byte{spriteFname: p.jobResDoc.Sprite, vttFname: vtt}
 	MongoUpdates := []bson.D{update.Set(types.MediaFileDoc__SpriteField, spriteFname), update.Set(types.MediaFileDoc__VttField, vttFname)}
 	return files, MongoUpdates, nil
 }
