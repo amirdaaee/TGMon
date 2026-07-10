@@ -10,10 +10,10 @@ import (
 
 	"github.com/amirdaaee/TGMon/internal/db/minio"
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
+	"github.com/amirdaaee/TGMon/internal/filesystem/cache"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
-	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
 	"github.com/chenmingyong0423/go-mongox/v2/builder/update"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -27,19 +27,22 @@ import (
 type SrtFileSrc struct {
 	facade      ftypes.IFacade[types.MediaFileDoc]
 	minioClient minio.IMinioClient
+	cache       *cache.DBCache[string, *types.MediaFileDoc]
 }
 
 var _ ISrc = (*SrtFileSrc)(nil)
 
 // List returns all SRT files from the database that have an associated SRT file.
 func (mfs *SrtFileSrc) List(ctx context.Context) ([]IFile, error) {
-	q := query.NewBuilder().Nor(query.Eq(types.MediaFileDoc__SrtField, ""), query.Exists(types.MediaFileDoc__SrtField, false)).Build()
-	docs, err := mfs.facade.GetCollection().Finder().Filter(q).Sort(bson.D{{Key: "_id", Value: 1}}).Find(ctx)
+	docs, err := mfs.cache.List(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list media files from db: %w", err)
+		return nil, fmt.Errorf("failed to list media files from cache: %w", err)
 	}
 	files := make([]IFile, 0, len(docs))
 	for _, doc := range docs {
+		if doc.Srt == "" {
+			continue
+		}
 		files = append(files, &SrtFile{orgMedia: doc, minioClient: mfs.minioClient})
 	}
 	return files, nil
@@ -48,13 +51,12 @@ func (mfs *SrtFileSrc) List(ctx context.Context) ([]IFile, error) {
 // Lookup finds an SRT file by its UID.
 // The UID should be in the format "srt-{mediaFileID}".
 func (mfs *SrtFileSrc) Lookup(ctx context.Context, uid string) (IFile, error) {
-	qID, err := mfs.getIdQ(uid)
+	doc, err := mfs.cache.Find(ctx, strings.TrimPrefix(uid, "srt-"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get id query: %w", err)
+		return nil, fmt.Errorf("failed to find media file from cache: %w", err)
 	}
-	doc, err := mfs.facade.GetCollection().Finder().Filter(qID).FindOne(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find media file from db: %w", err)
+	if doc.Srt == "" {
+		return nil, fmt.Errorf("media doesn't have srt")
 	}
 	return &SrtFile{orgMedia: doc, minioClient: mfs.minioClient}, nil
 }
@@ -64,7 +66,7 @@ func (mfs *SrtFileSrc) UID() string {
 	return "SRT"
 }
 
-// Delete removes the SRT file reference from the database by clearing the SRT field.
+// Delete removes the SRT file reference from the database by clearing the SRT field. cache get invalidated in facade machinary
 func (mfs *SrtFileSrc) Delete(ctx context.Context, uid string) error {
 	qID, err := mfs.getIdQ(uid)
 	if err != nil {
@@ -73,20 +75,8 @@ func (mfs *SrtFileSrc) Delete(ctx context.Context, uid string) error {
 	if _, err := mfs.facade.GetCollection().Updater().Filter(qID).Updates([]bson.D{update.Set(types.MediaFileDoc__SrtField, "")}).UpdateOne(ctx); err != nil {
 		return fmt.Errorf("failed to delete srt file refference in db: %w", err)
 	}
+	mfs.cache.Invalidate(ctx)
 	return nil
-}
-
-// Exists checks if an SRT file exists in the database.
-func (mfs *SrtFileSrc) Exists(ctx context.Context, uid string) (bool, error) {
-	qID, err := mfs.getIdQ(uid)
-	if err != nil {
-		return false, fmt.Errorf("failed to get id query: %w", err)
-	}
-	n, err := mfs.facade.GetCollection().Finder().Filter(qID).Count(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to check if srt file exists: %w", err)
-	}
-	return n > 0, nil
 }
 
 // getIdQ converts a UID string to a MongoDB query filter.
@@ -100,10 +90,11 @@ func (mfs *SrtFileSrc) getIdQ(uid string) (bson.M, error) {
 }
 
 // NewSrtSrc creates a new SrtFileSrc instance.
-func NewSrtSrc(facade ftypes.IFacade[types.MediaFileDoc], minioClient minio.IMinioClient) *SrtFileSrc {
+func NewSrtSrc(facade ftypes.IFacade[types.MediaFileDoc], minioClient minio.IMinioClient, cache *cache.DBCache[string, *types.MediaFileDoc]) *SrtFileSrc {
 	return &SrtFileSrc{
 		facade:      facade,
 		minioClient: minioClient,
+		cache:       cache,
 	}
 }
 

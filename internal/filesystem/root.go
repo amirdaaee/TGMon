@@ -176,26 +176,32 @@ func (mfs *RootFS) Rename(ctx context.Context, name string, newParent fs.InodeEm
 	return 0
 }
 
-// listFiles retrieves all files from all data sources
+// listFiles retrieves all files from all data sources and prunes orphaned uid-map entries.
 func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 	ll := mfs.getLogger("listFiles")
+	seen := make(map[string]struct{})
 	entries := make([]fuse.DirEntry, 0)
+
 	for _, src := range mfs.srcs {
-		llSrc := ll.WithField("src", src.UID())
+		srcID := src.UID()
+		llSrc := ll.WithField("src", srcID)
 		srcEntries, err := src.List(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list files from src %s: %w", src.UID(), err)
+			return nil, fmt.Errorf("failed to list files from src %s: %w", srcID, err)
 		}
-		// append new entries to
-		for _, _f := range srcEntries {
-			llEntry := llSrc.WithField("file", _f.Name()).WithField("uid", _f.UID())
-			if !mfs.uidMap.Exists(_f.UID(), src.UID()) {
-				if err := mfs.uidMap.Add(ctx, _f.UID(), src.UID(), _f.Name(), _f.Ext()); err != nil {
-					llEntry.WithError(err).Error("failed to add entry to uid map. skipping file.")
+		for _, f := range srcEntries {
+			uid := f.UID()
+			seen[mfs.uidMap.getKey(uid, srcID)] = struct{}{}
+
+			entr, ok := mfs.uidMap.Get(uid, srcID)
+			if !ok {
+				entr, err = mfs.uidMap.Add(ctx, uid, srcID, f.Name(), f.Ext())
+				if err != nil {
+					llSrc.WithField("file", f.Name()).WithField("uid", uid).
+						WithError(err).Error("failed to add entry to uid map. skipping file.")
 					continue
 				}
 			}
-			entr, _ := mfs.uidMap.Get(_f.UID(), src.UID())
 			entries = append(entries, fuse.DirEntry{
 				Name: entr.Name(),
 				Mode: fuse.S_IFREG | 0444,
@@ -203,46 +209,28 @@ func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 			})
 		}
 	}
-	go func() {
-		if err := mfs.removeOrphanedEntries(context.TODO()); err != nil {
-			ll.WithError(err).Error("failed to remove orphaned entries")
-		}
 
-	}()
+	// Drop mapped entries that were not present in any source listing
+	for _, entry := range mfs.uidMap.Entries() {
+		key := mfs.uidMap.getKey(entry.data.UID, entry.data.SrcID)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		llOrphan := ll.WithFields(logrus.Fields{
+			"src":  entry.data.SrcID,
+			"uid":  entry.data.UID,
+			"name": entry.Name(),
+		})
+		llOrphan.Warn("Removing orphaned entry")
+		mfs.uidMap.mu.Lock()
+		mapK := mfs.uidMap.getKey(entry.data.UID, entry.data.SrcID)
+		delete(mfs.uidMap.mappedUID, mapK)
+		delete(mfs.uidMap.seenNames, entry.Name())
+		mfs.uidMap.mu.Unlock()
+	}
 	return entries, nil
 }
 
-// removeOrphanedEntries removes entries from the UID map that no longer
-// exist in their respective data sources.
-func (mfs *RootFS) removeOrphanedEntries(ctx context.Context) error {
-	ll := mfs.getLogger("removeOrphanedEntries")
-	for _, entry := range mfs.uidMap.mappedUID {
-		ll2 := ll.WithFields(logrus.Fields{
-			"src":  entry.data.SrcID,
-			"uid":  entry.data.UID,
-			"name": entry.data.Name,
-		})
-		src, ok := mfs.srcs[entry.data.SrcID]
-		if !ok {
-			ll2.Warn("Removing orphaned entry (no valid src found)")
-			if err := mfs.uidMap.DeleteByName(ctx, entry.Name()); err != nil {
-				ll2.WithError(err).Error("failed to delete entry from uid map")
-			}
-			continue
-		}
-		if ok, err := src.Exists(ctx, entry.data.UID); err != nil {
-			ll2.WithError(err).Error("failed to check if src exists")
-			continue
-		} else if !ok {
-			ll2.Warn("Removing orphaned entry (src does not exist)")
-			if err := mfs.uidMap.DeleteByName(ctx, entry.Name()); err != nil {
-				ll2.WithError(err).Error("failed to delete entry from uid map")
-			}
-			continue
-		}
-	}
-	return nil
-}
 func (mfs *RootFS) getLogger(fn string) *logrus.Entry {
 	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mfs, fn))
 }

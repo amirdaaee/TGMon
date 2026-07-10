@@ -61,10 +61,10 @@ type uidMapType struct {
 // Add adds a new entry to the UID map.
 // It automatically handles name conflicts by appending a numeric suffix
 // and persists the entry to the database.
-func (r *uidMapType) Add(ctx context.Context, uid string, src string, name, ext string) error {
+func (r *uidMapType) Add(ctx context.Context, uid string, src string, name, ext string) (*uidMapEntryType, error) {
 	key := r.getKey(uid, src)
 	if r.Exists(uid, src) {
-		return fmt.Errorf("uid %s already exists in src %s", uid, src)
+		return nil, fmt.Errorf("uid %s already exists in src %s", uid, src)
 	}
 	inode := r.getFreeInodeNum()
 	r.mu.Lock()
@@ -94,9 +94,20 @@ func (r *uidMapType) Add(ctx context.Context, uid string, src string, name, ext 
 		r.mu.Lock()
 		delete(r.mappedUID, key)
 		r.mu.Unlock()
-		return fmt.Errorf("failed to insert doc into db: %w", err)
+		return nil, fmt.Errorf("failed to insert doc into db: %w", err)
 	}
-	return nil
+	return &entry, nil
+}
+
+// Entries returns a snapshot of all mapped entries.
+func (r *uidMapType) Entries() []*uidMapEntryType {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]*uidMapEntryType, 0, len(r.mappedUID))
+	for _, e := range r.mappedUID {
+		out = append(out, e)
+	}
+	return out
 }
 
 // Get retrieves an entry from the UID map by UID and source ID.

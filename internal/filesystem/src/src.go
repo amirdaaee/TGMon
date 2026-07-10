@@ -13,7 +13,6 @@ type ISrc interface {
 	List(ctx context.Context) ([]IFile, error)
 	Lookup(ctx context.Context, uid string) (IFile, error)
 	Delete(ctx context.Context, uid string) error
-	Exists(ctx context.Context, uid string) (bool, error)
 }
 
 // IFile defines the interface for files in the filesystem.

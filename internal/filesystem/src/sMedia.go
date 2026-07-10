@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
+	"github.com/amirdaaee/TGMon/internal/filesystem/cache"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
@@ -23,16 +24,18 @@ import (
 type MediaFileSrc struct {
 	facade           ftypes.IFacade[types.MediaFileDoc]
 	streamWorkerPool stream.IWorkerPool
+	cache            *cache.DBCache[string, *types.MediaFileDoc]
 }
 
 var _ ISrc = (*MediaFileSrc)(nil)
 
 // List retrieves all media files from the database and returns them as IFile instances.
 func (mfs *MediaFileSrc) List(ctx context.Context) ([]IFile, error) {
-	docs, err := mfs.facade.GetCollection().Finder().Sort(bson.D{{Key: "_id", Value: 1}}).Find(ctx)
+	docs, err := mfs.cache.List(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list media files from db: %w", err)
+		return nil, fmt.Errorf("failed to list media files from cache: %w", err)
 	}
+	// docs, err := mfs.facade.GetCollection().Finder().Sort(bson.D{{Key: "_id", Value: 1}}).Find(ctx)
 	files := make([]IFile, 0, len(docs))
 	for _, doc := range docs {
 		files = append(files, &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool})
@@ -42,13 +45,9 @@ func (mfs *MediaFileSrc) List(ctx context.Context) ([]IFile, error) {
 
 // Lookup finds a media file by its UID.
 func (mfs *MediaFileSrc) Lookup(ctx context.Context, uid string) (IFile, error) {
-	qID, err := mfs.getIdQ(uid)
+	doc, err := mfs.cache.Find(ctx, uid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get id query: %w", err)
-	}
-	doc, err := mfs.facade.GetCollection().Finder().Filter(qID).FindOne(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find media file from db: %w", err)
+		return nil, fmt.Errorf("failed to find media file from cache: %w", err)
 	}
 	return &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool}, nil
 }
@@ -58,7 +57,7 @@ func (mfs *MediaFileSrc) UID() string {
 	return "MEDIA"
 }
 
-// Delete removes a media file from the database.
+// Delete removes a media file from the database. cache get invalidated in facade machinary
 func (mfs *MediaFileSrc) Delete(ctx context.Context, uid string) error {
 	qID, err := mfs.getIdQ(uid)
 	if err != nil {
@@ -74,19 +73,6 @@ func (mfs *MediaFileSrc) Delete(ctx context.Context, uid string) error {
 	return nil
 }
 
-// Exists checks if a media file exists in the database.
-func (mfs *MediaFileSrc) Exists(ctx context.Context, uid string) (bool, error) {
-	qID, err := mfs.getIdQ(uid)
-	if err != nil {
-		return false, fmt.Errorf("failed to get id query: %w", err)
-	}
-	n, err := mfs.facade.GetCollection().Finder().Filter(qID).Count(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to check if media file exists: %w", err)
-	}
-	return n > 0, nil
-}
-
 // getIdQ converts a UID string to a MongoDB query filter.
 func (mfs *MediaFileSrc) getIdQ(uid string) (bson.M, error) {
 	oid, err := bson.ObjectIDFromHex(uid)
@@ -97,10 +83,11 @@ func (mfs *MediaFileSrc) getIdQ(uid string) (bson.M, error) {
 }
 
 // NewMediaFileSrc creates a new MediaFileSrc instance.
-func NewMediaFileSrc(facade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool) *MediaFileSrc {
+func NewMediaFileSrc(facade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool, cache *cache.DBCache[string, *types.MediaFileDoc]) *MediaFileSrc {
 	return &MediaFileSrc{
 		facade:           facade,
 		streamWorkerPool: streamWorkerPool,
+		cache:            cache,
 	}
 }
 
