@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,8 +22,9 @@ import (
 // identifiers to file entries and manages multiple data sources.
 type RootFS struct {
 	fs.Inode
-	uidMap uidMapType
-	srcs   map[string]src.ISrc
+	uidMap   uidMapType
+	srcs     map[string]src.ISrc
+	listLock sync.Mutex
 }
 
 var _ fs.NodeOnAdder = (*RootFS)(nil)
@@ -178,10 +180,11 @@ func (mfs *RootFS) Rename(ctx context.Context, name string, newParent fs.InodeEm
 
 // listFiles retrieves all files from all data sources and prunes orphaned uid-map entries.
 func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
+	mfs.listLock.Lock() // prevent colision between src and uidMap
+	defer mfs.listLock.Unlock()
 	ll := mfs.getLogger("listFiles")
 	seen := make(map[string]struct{})
 	entries := make([]fuse.DirEntry, 0)
-
 	for _, src := range mfs.srcs {
 		srcID := src.UID()
 		llSrc := ll.WithField("src", srcID)
