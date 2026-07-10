@@ -1,8 +1,6 @@
 module github.com/amirdaaee/TGMon
 
-go 1.24.3
-
-toolchain go1.24.10
+go 1.26.0
 
 require (
 	github.com/caarlos0/env/v11 v11.1.0

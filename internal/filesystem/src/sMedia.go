@@ -64,7 +64,11 @@ func (mfs *MediaFileSrc) Delete(ctx context.Context, uid string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get id query: %w", err)
 	}
-	if _, err := mfs.facade.GetCollection().Deleter().Filter(qID).DeleteOne(ctx); err != nil {
+	filter := make(bson.D, 0, len(qID))
+	for k, v := range qID {
+		filter = append(filter, bson.E{Key: k, Value: v})
+	}
+	if _, err := mfs.facade.DeleteOne(ctx, filter); err != nil {
 		return fmt.Errorf("failed to delete media file from db: %w", err)
 	}
 	return nil
