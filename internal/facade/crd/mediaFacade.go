@@ -9,6 +9,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/db/minio"
 	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
+	"github.com/amirdaaee/TGMon/internal/filesystem/cache"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
@@ -25,6 +26,7 @@ type MediaCrud struct {
 	jReqFac         ftypes.IFacade[types.JobReqDoc]
 	workerContainer stream.IWorkerPool
 	keepDup         bool
+	fsCache         *cache.DBCache[string, *types.MediaFileDoc]
 }
 
 var _ ftypes.ICrud[types.MediaFileDoc] = (*MediaCrud)(nil)
@@ -53,15 +55,13 @@ func (crd *MediaCrud) PostCreate(ctx context.Context, doc *types.MediaFileDoc) e
 		return fmt.Errorf("MediaFileDoc is nil")
 	}
 	newCtx := context.TODO()
-	go setInitialJobs(newCtx, crd, doc, ll)
-	go setMediaThumbnail(newCtx, crd, doc, ll)
 	go func() {
-		if _, err := crd.GetCollection().Updater().Filter(query.Id(doc.ID)).Updates(update.Set(types.MediaFileDoc__UnameField, doc.Name())).UpdateOne(newCtx); err != nil {
-			ll.WithError(err).Error("failed to set uname")
-			return
-		}
-		ll.Info("uname set")
+		setInitialJobs(newCtx, crd, doc, ll)
+		setMediaThumbnail(newCtx, crd, doc, ll)
+		setUName(newCtx, crd, doc, ll)
+		crd.fsCache.Invalidate(newCtx)
 	}()
+	crd.fsCache.Invalidate(ctx)
 	return nil
 }
 
@@ -82,7 +82,7 @@ func (crd *MediaCrud) PostDelete(ctx context.Context, doc *types.MediaFileDoc) e
 	} else if dl.DeletedCount > 0 {
 		ll.Infof("deleted %d orphaned jobs", dl.DeletedCount)
 	}
-	for _, fn := range []string{doc.Vtt, doc.Thumbnail, doc.Srt} {
+	for _, fn := range []string{doc.Vtt, doc.Thumbnail, doc.Srt, doc.Sprite} {
 		if fn != "" {
 			var lastErr error
 			for i := 0; i < 3; i++ {
@@ -99,6 +99,7 @@ func (crd *MediaCrud) PostDelete(ctx context.Context, doc *types.MediaFileDoc) e
 			}
 		}
 	}
+	crd.fsCache.Invalidate(ctx)
 	return nil
 }
 
@@ -118,8 +119,8 @@ func (crd *MediaCrud) getLogger(fn string) *logrus.Entry {
 }
 
 // NewMediaCrud creates a new MediaCrud with the provided database container.
-func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool, keepDup bool, jobReqFacade ftypes.IFacade[types.JobReqDoc]) ftypes.ICrud[types.MediaFileDoc] {
-	return &MediaCrud{dbContainer: dbContainer, jReqFac: jobReqFacade, workerContainer: workerContainer, keepDup: keepDup}
+func NewMediaCrud(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool, keepDup bool, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.ICrud[types.MediaFileDoc] {
+	return &MediaCrud{dbContainer: dbContainer, jReqFac: jobReqFacade, workerContainer: workerContainer, keepDup: keepDup, fsCache: fsCache}
 }
 
 // ...
@@ -152,4 +153,12 @@ func setInitialJobs(ctx context.Context, crd *MediaCrud, doc *types.MediaFileDoc
 			ll.Infof("%s job created", jobType)
 		}
 	}
+}
+
+func setUName(ctx context.Context, crd *MediaCrud, doc *types.MediaFileDoc, ll *logrus.Entry) {
+	if _, err := crd.GetCollection().Updater().Filter(query.Id(doc.ID)).Updates(update.Set(types.MediaFileDoc__UnameField, doc.Name())).UpdateOne(ctx); err != nil {
+		ll.WithError(err).Error("failed to set uname")
+		return
+	}
+	ll.Info("uname set")
 }

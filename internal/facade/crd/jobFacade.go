@@ -8,6 +8,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/db"
 	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
+	"github.com/amirdaaee/TGMon/internal/filesystem/cache"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
@@ -64,6 +65,7 @@ func NewJobReqCrud(container db.IDbContainer) ftypes.ICrud[types.JobReqDoc] {
 type JobResCrud struct {
 	container db.IDbContainer
 	jReqFac   ftypes.IFacade[types.JobReqDoc]
+	fsCache   *cache.DBCache[string, *types.MediaFileDoc]
 }
 
 var _ ftypes.ICrud[types.JobResDoc] = (*JobResCrud)(nil)
@@ -92,6 +94,7 @@ func (crd *JobResCrud) PostCreate(ctx context.Context, doc *types.JobResDoc) err
 	if _, err := crd.jReqFac.DeleteOne(ctx, crd.getJobReqQ(doc)); err != nil {
 		ll.WithError(err).Error("failed to delete job req")
 	}
+	crd.fsCache.Invalidate(ctx)
 	return nil
 }
 
@@ -171,8 +174,8 @@ func (crd *JobResCrud) processJobResult(ctx context.Context, doc *types.JobResDo
 }
 
 // NewJobResCrud creates a new JobResCrud with the provided database container.
-func NewJobResCrud(container db.IDbContainer, jobReqFacade ftypes.IFacade[types.JobReqDoc]) ftypes.ICrud[types.JobResDoc] {
-	return &JobResCrud{container: container, jReqFac: jobReqFacade}
+func NewJobResCrud(container db.IDbContainer, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.ICrud[types.JobResDoc] {
+	return &JobResCrud{container: container, jReqFac: jobReqFacade, fsCache: fsCache}
 }
 
 // ===
