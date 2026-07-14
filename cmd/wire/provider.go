@@ -93,29 +93,29 @@ func ProvideWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacad
 		StreamTimeoutSec:  strmConfig.StreamTimeoutSec,
 	})
 	mediaHandler := wrCrd.NewMediaHandler(dbCnt)
-	jobReqHandler := wrCrd.JobReqHandler{}
-	jobResHandler := wrCrd.JobResHandler{}
-	infoHandler := waHndlr.MediaInfoApiHandler{
+	jobReqHandler := &wrCrd.JobReqHandler{}
+	jobResHandler := &wrCrd.JobResHandler{}
+	infoHandler := &waHndlr.MediaInfoApiHandler{
 		MediaFacade: mediafacade,
 	}
-	loginHandler := waHndlr.LoginApiHandler{
+	loginHandler := &waHndlr.LoginApiHandler{
 		UserName: hCfg.UserName,
 		UserPass: hCfg.UserPass,
 		Token:    hCfg.ApiToken,
 	}
-	sessionHandler := waHndlr.SessionApiHandler{
+	sessionHandler := &waHndlr.SessionApiHandler{
 		Token: hCfg.ApiToken,
 	}
 	randomMediaHandler := waHndlr.NewRandomMediaApiHandler(mediafacade)
 	result := []wtypes.Registereable{
 		streamHandler,
-		wRest.NewCRDApiHandler(&mediaHandler, mediafacade, "media"),
-		wRest.NewCRDApiHandler(&jobReqHandler, jobReqFacade, "jobReq"),
-		wRest.NewCRDApiHandler(&jobResHandler, jobResFacade, "jobRes"),
-		wApi.NewApiHandler(&infoHandler, "info"),
-		wApi.NewApiHandler(&loginHandler, "auth/login"),
-		wApi.NewApiHandler(&sessionHandler, "auth/session"),
-		wApi.NewApiHandler(&randomMediaHandler, "media/random"),
+		wRest.NewCRDApiHandler(mediaHandler, mediafacade, "media"),
+		wRest.NewCRDApiHandler(jobReqHandler, jobReqFacade, "jobReq"),
+		wRest.NewCRDApiHandler(jobResHandler, jobResFacade, "jobRes"),
+		wApi.NewApiHandler(infoHandler, "info"),
+		wApi.NewApiHandler(loginHandler, "auth/login"),
+		wApi.NewApiHandler(sessionHandler, "auth/session"),
+		wApi.NewApiHandler(randomMediaHandler, "media/random"),
 	}
 	if stshCfg.Enabled {
 		stashVTTRedirectorHandler := waHndlr.StashVTTRedirectorApiHandler{
