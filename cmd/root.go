@@ -4,7 +4,10 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/amirdaaee/TGMon/internal/config"
 	"github.com/amirdaaee/TGMon/internal/log"
@@ -17,6 +20,17 @@ var rootCmd = &cobra.Command{
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		cfg := config.Config()
 		log.Setup(cfg.RuntimeConfig.LogLevel)
+		ll := log.GetLogger(log.CmdModule)
+		// ...
+		ctx, cancel := context.WithCancel(cmd.Context())
+		shutdown := make(chan os.Signal, 1)
+		signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-shutdown
+			ll.Warn("Shutting down gracefully...")
+			cancel()
+		}()
+		cmd.SetContext(ctx)
 	},
 }
 

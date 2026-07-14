@@ -1,4 +1,4 @@
-package app
+package wire
 
 import (
 	"context"
@@ -13,12 +13,12 @@ import (
 	"github.com/amirdaaee/TGMon/internal/facade"
 	"github.com/amirdaaee/TGMon/internal/facade/crd"
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
-	"github.com/amirdaaee/TGMon/internal/filesystem"
+	"github.com/amirdaaee/TGMon/internal/filesystem/cache"
 	fsSrc "github.com/amirdaaee/TGMon/internal/filesystem/src"
 	"github.com/amirdaaee/TGMon/internal/stash"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/tlg"
-	tgmonTypes "github.com/amirdaaee/TGMon/internal/types"
+	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/amirdaaee/TGMon/internal/web"
 	wApi "github.com/amirdaaee/TGMon/internal/web/api"
 	waHndlr "github.com/amirdaaee/TGMon/internal/web/api/handler"
@@ -28,36 +28,33 @@ import (
 	wtypes "github.com/amirdaaee/TGMon/internal/web/types"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/google/wire"
-	"github.com/hanwen/go-fuse/v2/fuse"
 	realMinio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-func NewFuseSrcs(mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool, dbC db.IDbContainer) []fsSrc.ISrc {
-	return []fsSrc.ISrc{fsSrc.NewMediaFileSrc(mediafacade, wp), fsSrc.NewSrtSrc(mediafacade, dbC.GetMinioContainer().GetMinioClient())}
+func ProvideConfig() *config.ConfigType {
+	return config.Config()
 }
-func NewFuzeServer(cfg *config.ConfigType, srcs []fsSrc.ISrc, dbContainer db.IDbContainer) (*fuse.Server, error) {
-	fCfg := cfg.FuseConfig
-	mountDir := fCfg.MediaDir
-	opts := &filesystem.MountOptions{
-		AllowOther: fCfg.AllowOther,
-		Debug:      fCfg.Debug,
-	}
-	server, err := filesystem.MountWithOptions(mountDir, srcs, dbContainer, opts)
-	if err != nil {
-		return nil, fmt.Errorf("can not mount filesystem: %w", err)
-	}
-	return server, nil
+func ProvideFuzeCache(dbC db.IDbContainer) *cache.DBCache[string, *types.MediaFileDoc] {
+	return cache.NewDBCacher(func(ctx context.Context) (map[string]*types.MediaFileDoc, error) {
+		docs, err := dbC.GetMongoContainer().GetMediaFileCollection().Finder().Sort(bson.D{{Key: "_id", Value: 1}}).Find(ctx)
+		if err != nil {
+			return nil, err
+		}
+		docsMap := make(map[string]*types.MediaFileDoc)
+		for _, doc := range docs {
+			docsMap[doc.ID.Hex()] = doc
+		}
+		return docsMap, nil
+	})
 }
-
-var FuseProviderSet = wire.NewSet(
-	NewFuseSrcs,
-	NewFuzeServer,
-)
+func ProvideFuseSrcs(mediafacade ftypes.IFacade[types.MediaFileDoc], wp stream.IWorkerPool, dbC db.IDbContainer, fsCache *cache.DBCache[string, *types.MediaFileDoc]) []fsSrc.ISrc {
+	return []fsSrc.ISrc{fsSrc.NewMediaFileSrc(mediafacade, wp, fsCache), fsSrc.NewSrtSrc(mediafacade, dbC.GetMinioContainer().GetMinioClient(), fsCache)}
+}
 
 // ... Web
-func NewWebServer(cfg *config.ConfigType, g *gin.Engine, hndl []wtypes.Registereable) *http.Server {
+func ProvideWebServer(cfg *config.ConfigType, g *gin.Engine, hndl []wtypes.Registereable) *http.Server {
 	hCfg := cfg.HttpConfig
 	web.RegisterRoutes(g, hndl, cfg.HttpConfig.ApiToken, cfg.HttpConfig.Swagger)
 	return &http.Server{
@@ -65,7 +62,7 @@ func NewWebServer(cfg *config.ConfigType, g *gin.Engine, hndl []wtypes.Registere
 		Handler: g,
 	}
 }
-func NewGinEngine(cfg *config.ConfigType, hndlr []wtypes.Registereable) *gin.Engine {
+func ProvideGinEngine(cfg *config.ConfigType, hndlr []wtypes.Registereable) *gin.Engine {
 	hCfg := cfg.HttpConfig
 	g := gin.Default()
 	coresCfg := cors.DefaultConfig()
@@ -79,9 +76,9 @@ func NewGinEngine(cfg *config.ConfigType, hndlr []wtypes.Registereable) *gin.Eng
 	return g
 }
 
-func NewWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], jobReqFacade ftypes.IFacade[tgmonTypes.JobReqDoc], jobResFacade ftypes.IFacade[tgmonTypes.JobResDoc], wp stream.IWorkerPool, stshCl *stash.StashQlClient) []wtypes.Registereable {
+func ProvideWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade ftypes.IFacade[types.MediaFileDoc], jobReqFacade ftypes.IFacade[types.JobReqDoc], jobResFacade ftypes.IFacade[types.JobResDoc], wp stream.IWorkerPool, stshCl *stash.StashQlClient) []wtypes.Registereable {
 	hCfg := cfg.HttpConfig
-	sCfg := config.Config().StashRedirectorConfig
+	sCfg := cfg.StashRedirectorConfig
 
 	streamHandler := wStream.NewStreamHandler(dbCnt, mediafacade, wp)
 	mediaHandler := wrCrd.MediaHandler{DBContainer: dbCnt}
@@ -112,10 +109,9 @@ func NewWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade ft
 		wApi.NewApiHandler(&randomMediaHandler, "media/random"),
 	}
 	if sCfg.Enabled {
-		stachCl := stash.NewStashQlClient(sCfg.StashEndpoint, sCfg.StashApiKey)
 		stashVTTRedirectorHandler := waHndlr.StashVTTRedirectorApiHandler{
 			MinioUrl:    sCfg.MinioUrl,
-			StashCl:     stachCl,
+			StashCl:     stshCl,
 			MediaFacade: mediafacade,
 		}
 		stashCoverRedirectorHandler := waHndlr.StashCoverRedirectorApiHandler{
@@ -127,17 +123,13 @@ func NewWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade ft
 	return result
 }
 
-var WebHandlerProviderSet = wire.NewSet(
-	NewGinEngine, NewWebHandler, NewWebServer,
-)
-
 // ... Stash
-func NewStashQlClient(cfg *config.ConfigType) *stash.StashQlClient {
+func ProvideStashQlClient(cfg *config.ConfigType) *stash.StashQlClient {
 	return stash.NewStashQlClient(cfg.StashRedirectorConfig.StashEndpoint, cfg.StashRedirectorConfig.StashApiKey)
 }
 
 // ... Database
-func NewDbContainer(cfg *config.ConfigType) (db.IDbContainer, error) {
+func ProvideDbContainer(cfg *config.ConfigType) (db.IDbContainer, error) {
 	ctx := context.TODO()
 	mongoContainer, err := mongo.NewMongoContainer(ctx, mongo.MongoContainerConfig{Endpoint: cfg.MongoDBConfig.Uri, DbName: cfg.MongoDBConfig.DBName}, true)
 	if err != nil {
@@ -159,27 +151,21 @@ func NewDbContainer(cfg *config.ConfigType) (db.IDbContainer, error) {
 }
 
 // ... Facades
-func NewMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool, jobReqFacade ftypes.IFacade[tgmonTypes.JobReqDoc]) ftypes.IFacade[tgmonTypes.MediaFileDoc] {
+func ProvideMediaFacade(dbContainer db.IDbContainer, workerContainer stream.IWorkerPool, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.IFacade[types.MediaFileDoc] {
 	cfg := config.Config()
-	return facade.NewFacade(crd.NewMediaCrud(dbContainer, workerContainer, cfg.RuntimeConfig.KeepDupFiles, jobReqFacade))
+	return facade.NewFacade(crd.NewMediaCrud(dbContainer, workerContainer, cfg.RuntimeConfig.KeepDupFiles, jobReqFacade, fsCache))
 }
 
-func NewJobReqFacade(dbContainer db.IDbContainer) ftypes.IFacade[tgmonTypes.JobReqDoc] {
+func ProvideJobReqFacade(dbContainer db.IDbContainer) ftypes.IFacade[types.JobReqDoc] {
 	return facade.NewFacade(crd.NewJobReqCrud(dbContainer))
 }
 
-func NewJobResFacade(dbContainer db.IDbContainer, jobReqFacade ftypes.IFacade[tgmonTypes.JobReqDoc]) ftypes.IFacade[tgmonTypes.JobResDoc] {
-	return facade.NewFacade(crd.NewJobResCrud(dbContainer, jobReqFacade))
+func ProvideJobResFacade(dbContainer db.IDbContainer, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.IFacade[types.JobResDoc] {
+	return facade.NewFacade(crd.NewJobResCrud(dbContainer, jobReqFacade, fsCache))
 }
 
-var FacadeProviderSet = wire.NewSet(
-	NewMediaFacade,
-	NewJobReqFacade,
-	NewJobResFacade,
-)
-
 // ... Telegram
-func NewTgSessionConfig(cfg *config.ConfigType) *tlg.SessionConfig {
+func ProvideTgSessionConfig(cfg *config.ConfigType) *tlg.SessionConfig {
 	return &tlg.SessionConfig{
 		SocksProxy: cfg.TelegramConfig.TGSocksProxy,
 		SessionDir: cfg.TelegramConfig.SessionDir,
@@ -188,11 +174,11 @@ func NewTgSessionConfig(cfg *config.ConfigType) *tlg.SessionConfig {
 	}
 }
 
-func NewTgClient(cfg *config.ConfigType, sessCfg *tlg.SessionConfig) tlg.IClient {
+func ProvideTgClient(cfg *config.ConfigType, sessCfg *tlg.SessionConfig) tlg.IClient {
 	tgClient := tlg.NewTgClient(sessCfg, cfg.TelegramConfig.BotToken)
 	return tgClient
 }
-func NewTgWorkerPool(cfg *config.ConfigType, sessCfg *tlg.SessionConfig) (stream.IWorkerPool, error) {
+func ProvideTgWorkerPool(cfg *config.ConfigType, sessCfg *tlg.SessionConfig) (stream.IWorkerPool, error) {
 	wp, err := stream.NewWorkerPool(cfg.TelegramConfig.WorkerTokens, sessCfg, cfg.TelegramConfig.ChannelID, cfg.TelegramConfig.WorkerCacheRoot)
 	if err != nil {
 		return nil, fmt.Errorf("can not create worker pool: %w", err)
@@ -200,14 +186,8 @@ func NewTgWorkerPool(cfg *config.ConfigType, sessCfg *tlg.SessionConfig) (stream
 	return wp, nil
 }
 
-var TgProviderSet = wire.NewSet(
-	NewTgSessionConfig,
-	NewTgClient,
-	NewTgWorkerPool,
-)
-
 // ... Bot
-func NewBot(tgClient tlg.IClient, mediafacade ftypes.IFacade[tgmonTypes.MediaFileDoc], wp stream.IWorkerPool) (*bot.Bot, error) {
+func ProvideBot(tgClient tlg.IClient, mediafacade ftypes.IFacade[types.MediaFileDoc], wp stream.IWorkerPool) (*bot.Bot, error) {
 	tgBot, err := bot.NewBot(tgClient)
 	if err != nil {
 		return nil, fmt.Errorf("can not create bot: %w", err)

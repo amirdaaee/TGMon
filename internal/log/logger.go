@@ -14,6 +14,7 @@ const (
 	StreamModule LogModule = "stream"
 	WebModule    LogModule = "web"
 	FuseModule   LogModule = "fuse"
+	CmdModule    LogModule = "cmd"
 )
 
 func GetLogger(module LogModule) *logrus.Entry {

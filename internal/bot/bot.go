@@ -2,6 +2,7 @@
 package bot
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/amirdaaee/TGMon/internal/log"
@@ -16,9 +17,14 @@ type Bot struct {
 
 // Start starts the bot client and blocks until stopped.
 // It returns an error if the client fails to idle.
-func (b *Bot) Start() error {
+func (b *Bot) Start(ctx context.Context) error {
 	ll := b.getLogger("Start")
 	ll.Info("starting client")
+	go func() {
+		<-ctx.Done()
+		ll.Info("shutting down client")
+		b.cl.GetClient().Stop()
+	}()
 	return b.cl.GetClient().Idle()
 }
 

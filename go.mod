@@ -8,7 +8,6 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-faster/errors v0.7.1
 	github.com/google/uuid v1.6.0
-	github.com/google/wire v0.7.0
 	github.com/gotd/td v0.127.0
 	github.com/hanwen/go-fuse/v2 v2.9.0
 	github.com/hasura/go-graphql-client v0.13.1
@@ -20,6 +19,7 @@ require (
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
+	go.uber.org/dig v1.19.0
 	go.uber.org/mock v0.5.2
 	golang.org/x/net v0.42.0
 	golang.org/x/sync v0.16.0

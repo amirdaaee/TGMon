@@ -35,7 +35,6 @@ func (mfs *MediaFileSrc) List(ctx context.Context) ([]IFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list media files from cache: %w", err)
 	}
-	// docs, err := mfs.facade.GetCollection().Finder().Sort(bson.D{{Key: "_id", Value: 1}}).Find(ctx)
 	files := make([]IFile, 0, len(docs))
 	for _, doc := range docs {
 		files = append(files, &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool})

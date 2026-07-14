@@ -4,8 +4,8 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"github.com/amirdaaee/TGMon/internal/app"
-	"github.com/amirdaaee/TGMon/internal/config"
+	"github.com/amirdaaee/TGMon/cmd/wire"
+	"github.com/amirdaaee/TGMon/internal/bot"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -16,19 +16,20 @@ var botCmd = &cobra.Command{
 	Short: "Start TGmon bot",
 	Run: func(cmd *cobra.Command, args []string) {
 		ll := logrus.WithField("at", "bot")
-		ll.Info("starting bot")
 		// ...
-		cfg := config.Config()
-		myBot, err := app.InitializeBot(cfg)
-		if err != nil {
-			logrus.WithError(err).Fatal("can not build bot")
+		cntr := wire.GetProvider()
+
+		if err := cntr.Invoke(func(myBot *bot.Bot) error {
+			ll.Info("starting bot")
+			if err := myBot.Start(cmd.Context()); err != nil {
+				return err
+			}
+			ll.Info("bot stopped")
+			return nil
+		}); err != nil {
+			ll.WithError(err).Error("can not start bot")
 		}
-		ll.Info("bot built")
-		// ...
-		ll.Warn("starting listening for messages")
-		if err := myBot.Start(); err != nil {
-			logrus.WithError(err).Fatal("can not start bot")
-		}
+
 	},
 }
 
