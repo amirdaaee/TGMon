@@ -61,7 +61,7 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 		g.Error(wtypes.NewHttpError(errors.New("no available worker"), http.StatusInternalServerError)) //nolint:golint,errcheck
 		return
 	}
-	streamer, err := worker.Stream(g.Request.Context(), media.MessageID, &stream.StreamOpts{Start: meta.Start, End: meta.End}, s.streamConfig)
+	streamer, err := worker.Stream(g.Request.Context(), media.MessageID, &stream.StreamOpts{Start: meta.Start, End: meta.End})
 	if err != nil {
 		g.Error(wtypes.NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
 		return

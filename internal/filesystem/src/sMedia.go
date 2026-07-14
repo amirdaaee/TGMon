@@ -242,7 +242,7 @@ func (mfh *MediaFileHandle) Read(ctx context.Context, dest []byte, off int64) (f
 		ll.Error("no available worker")
 		return fuse.ReadResultData(nil), syscall.EIO
 	}
-	streamer, err := wrkr.Stream(streamCtx, mfh.media.MessageID, &stream.StreamOpts{Start: off, End: end}, mfh.streamConfig)
+	streamer, err := wrkr.Stream(streamCtx, mfh.media.MessageID, &stream.StreamOpts{Start: off, End: end})
 	if err != nil {
 		ll.With(zap.Error(err)).Error("Failed to create streamer")
 		return fuse.ReadResultData(nil), syscall.EIO

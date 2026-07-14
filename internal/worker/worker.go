@@ -17,7 +17,7 @@ import (
 type IWorker interface {
 	GetDoc(ctx context.Context, msgID int) (*tg.Document, error)
 	GetThumbnail(ctx context.Context, messageID int) ([]byte, error)
-	Stream(ctx context.Context, MessageID int, streamOpts *stream.StreamOpts, streamConfig *stream.StreamConfig) (io.ReadCloser, error)
+	Stream(ctx context.Context, MessageID int, streamOpts *stream.StreamOpts) (io.ReadCloser, error)
 }
 
 type worker struct {
@@ -27,6 +27,7 @@ type worker struct {
 	docCache      IFileCache[[]byte]
 	tgChannel     tg.InputChannelClass
 	tgChannelLock sync.Mutex
+	streamConfig  *stream.StreamConfig
 }
 
 var _ IWorker = (*worker)(nil)
@@ -112,14 +113,14 @@ func (w *worker) GetDoc(ctx context.Context, messageID int) (*tg.Document, error
 
 // Stream retrieves the next data block via the provided downloader.Reader.
 // It resolves the document location once and then pulls the next chunk.
-func (w *worker) Stream(ctx context.Context, MessageID int, streamOpts *stream.StreamOpts, streamConfig *stream.StreamConfig) (io.ReadCloser, error) {
+func (w *worker) Stream(ctx context.Context, MessageID int, streamOpts *stream.StreamOpts) (io.ReadCloser, error) {
 	doc, err := w.GetDoc(ctx, MessageID)
 	if err != nil {
 		return nil, fmt.Errorf("error getting document: %w", err)
 	}
 
 	location := doc.AsInputDocumentFileLocation()
-	return stream.NewStreamPipe(ctx, w.cl, location, streamOpts, streamConfig)
+	return stream.NewStreamPipe(ctx, w.cl, location, streamOpts, w.streamConfig)
 }
 func (w *worker) getChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	w.tgChannelLock.Lock()
@@ -238,12 +239,13 @@ func (w *worker) cacheNamePrefix(s int) string {
 //	func (w *worker) getLogger(fn string) *logrus.Entry {
 //		return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", w, fn))
 //	}
-func NewWorker(token string, sessCfg *tlg.SessionConfig, channelID int64, cacheRoot string) (IWorker, error) {
+func NewWorker(token string, sessCfg *tlg.SessionConfig, channelID int64, cacheRoot string, streamConfig *stream.StreamConfig) (IWorker, error) {
 	w := worker{
-		cl:        tlg.NewTgClient(sessCfg, token),
-		channelID: channelID,
-		cache:     NewAccessHashCache(cacheRoot),
-		docCache:  NewDocCache(cacheRoot),
+		cl:           tlg.NewTgClient(sessCfg, token),
+		channelID:    channelID,
+		cache:        NewAccessHashCache(cacheRoot),
+		docCache:     NewDocCache(cacheRoot),
+		streamConfig: streamConfig,
 	}
 
 	if err := w.cl.Connect(); err != nil {

@@ -188,7 +188,12 @@ func ProvideTgClient(cfg *config.ConfigType, sessCfg *tlg.SessionConfig) tlg.ICl
 	return tgClient
 }
 func ProvideTgWorkerPool(cfg *config.ConfigType, sessCfg *tlg.SessionConfig) (worker.IWorkerPool, error) {
-	wp, err := worker.NewWorkerPool(cfg.TelegramConfig.WorkerTokens, sessCfg, cfg.TelegramConfig.ChannelID, cfg.TelegramConfig.WorkerCacheRoot)
+	wp, err := worker.NewWorkerPool(cfg.TelegramConfig.WorkerTokens, sessCfg, cfg.TelegramConfig.ChannelID, cfg.TelegramConfig.WorkerCacheRoot, &stream.StreamConfig{
+		StreamBufferCount: cfg.StreamConfig.StreamBufferCount,
+		StreamConcurrency: cfg.StreamConfig.StreamConcurrency,
+		StreamMaxRetries:  cfg.StreamConfig.StreamMaxRetries,
+		StreamTimeoutSec:  cfg.StreamConfig.StreamTimeoutSec,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("can not create worker pool: %w", err)
 	}
