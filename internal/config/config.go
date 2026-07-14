@@ -4,9 +4,10 @@ import (
 	"os"
 	"sync"
 
+	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 var lock = &sync.Mutex{}
@@ -18,19 +19,20 @@ func Config() *ConfigType {
 	if configInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
+		ll := log.GetLogger(log.ConfigModule)
 		if _, error := os.Stat(".env"); !os.IsNotExist(error) {
-			logrus.Info("found .env file")
+			ll.Info("found .env file")
 			if err := godotenv.Load(); err != nil {
-				logrus.WithError(err).Fatal("can not load .env file")
+				ll.With(zap.Error(err)).Fatal("can not load .env file")
 			}
 		} else {
-			logrus.Info("no .env file found")
+			ll.Info("no .env file found")
 		}
 		configInstance = &ConfigType{}
 		if err := env.Parse(configInstance); err != nil {
 			panic(err)
 		}
-		logrus.Infof("config loaded: %+v", configInstance)
+		ll.Sugar().Infof("config loaded: %+v", configInstance)
 	}
 	return configInstance
 }

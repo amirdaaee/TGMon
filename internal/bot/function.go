@@ -13,11 +13,11 @@ import (
 // forward forwards a message from one chat to another and returns the new message.
 // It takes the context, update, and target chat ID, and returns the forwarded message or an error.
 func forward(ctx *ext.Context, u *ext.Update, targetID int64) (*tgTypes.Message, error) {
-	ll := log.GetLogger(log.BotModule).WithField("func", "forward")
+	ll := log.Named(log.BotModule, "forward")
 	fromChat := u.EffectiveChat().GetID()
 	toChat := targetID
 	msgID := u.EffectiveMessage.ID
-	ll.Debugf("forwarding message: %d -> %d : %d", fromChat, toChat, msgID)
+	ll.Sugar().Debugf("forwarding message: %d -> %d : %d", fromChat, toChat, msgID)
 	newUCls, err := ctx.ForwardMessages(fromChat, toChat, &tg.MessagesForwardMessagesRequest{
 		ID: []int{u.EffectiveMessage.ID},
 	})
@@ -33,7 +33,7 @@ func forward(ctx *ext.Context, u *ext.Update, targetID int64) (*tgTypes.Message,
 	}
 	var newMsg tg.MessageClass
 	for c, u := range upd.Updates {
-		ll.Debugf("update %d is %T", c, u)
+		ll.Sugar().Debugf("update %d is %T", c, u)
 		fwMsg, ok := u.(*tg.UpdateNewChannelMessage)
 		if !ok {
 			continue
@@ -45,6 +45,6 @@ func forward(ctx *ext.Context, u *ext.Update, targetID int64) (*tgTypes.Message,
 		return nil, NewBotError("no message in update found", nil)
 	}
 	m := tgTypes.ConstructMessage(newMsg)
-	ll.Debugf("got forwarded message: %+v", m)
+	ll.Sugar().Debugf("got forwarded message: %+v", m)
 	return m, nil
 }

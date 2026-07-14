@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"math/rand"
 	"net/http"
 
@@ -10,7 +9,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/types"
 	wtypes "github.com/amirdaaee/TGMon/internal/web/types"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 type MediaInfoApiHandler struct {
@@ -41,7 +40,8 @@ func (h *MediaInfoApiHandler) RelativePathGet() string {
 
 // ===
 type RandomMediaApiHandler struct {
-	MediaFacade ftypes.IFacade[types.MediaFileDoc]
+	mediaFacade ftypes.IFacade[types.MediaFileDoc]
+	ll          *zap.Logger
 }
 
 var _ IGetApiHandler = (*RandomMediaApiHandler)(nil)
@@ -52,8 +52,8 @@ var _ IGetApiHandler = (*RandomMediaApiHandler)(nil)
 // @Router		/api/media/random/ [get]
 // @Security	ApiKeyAuth
 func (h *RandomMediaApiHandler) Get(g *gin.Context) {
-	ll := h.getLogger("Get")
-	fnd := h.MediaFacade.GetCollection().Finder()
+	ll := h.ll.Named("Get")
+	fnd := h.mediaFacade.GetCollection().Finder()
 	total, err := fnd.Count(g.Request.Context())
 	if err != nil {
 		g.Error(wtypes.NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
@@ -65,7 +65,7 @@ func (h *RandomMediaApiHandler) Get(g *gin.Context) {
 		g.Error(wtypes.NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
 		return
 	}
-	ll.Infof("random media: %d. media ID: %s", n, media[0].ID.Hex())
+	ll.Sugar().Debugf("random media: %d. media ID: %s", n, media[0].ID.Hex())
 	g.JSON(http.StatusOK, RandomMediaGetResType{MediaID: &media[0].ID})
 }
 func (h *RandomMediaApiHandler) AuthGet() bool {
@@ -75,7 +75,9 @@ func (h *RandomMediaApiHandler) RelativePathGet() string {
 	return "/"
 }
 
-// getLogger returns a logger entry with function context for the Bot.
-func (h *RandomMediaApiHandler) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", h, fn))
+func NewRandomMediaApiHandler(mediaFacade ftypes.IFacade[types.MediaFileDoc]) *RandomMediaApiHandler {
+	return &RandomMediaApiHandler{
+		mediaFacade: mediaFacade,
+		ll:          log.Named(log.WebModule, "RandomMediaApiHandler"),
+	}
 }

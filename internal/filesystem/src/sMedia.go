@@ -11,11 +11,12 @@ import (
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/amirdaaee/TGMon/internal/worker"
 	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.uber.org/zap"
 )
 
 // MediaFileSrc is a data source implementation that provides media files
@@ -23,8 +24,9 @@ import (
 // a stream worker pool for reading file data.
 type MediaFileSrc struct {
 	facade           ftypes.IFacade[types.MediaFileDoc]
-	streamWorkerPool stream.IWorkerPool
+	streamWorkerPool worker.IWorkerPool
 	cache            *cache.DBCache[string, *types.MediaFileDoc]
+	streamConfig     *stream.StreamConfig
 }
 
 var _ ISrc = (*MediaFileSrc)(nil)
@@ -37,7 +39,7 @@ func (mfs *MediaFileSrc) List(ctx context.Context) ([]IFile, error) {
 	}
 	files := make([]IFile, 0, len(docs))
 	for _, doc := range docs {
-		files = append(files, &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool})
+		files = append(files, &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool, streamConfig: mfs.streamConfig})
 	}
 	return files, nil
 }
@@ -48,7 +50,7 @@ func (mfs *MediaFileSrc) Lookup(ctx context.Context, uid string) (IFile, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to find media file from cache: %w", err)
 	}
-	return &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool}, nil
+	return &MediaFile{media: doc, streamWorkerPool: mfs.streamWorkerPool, streamConfig: mfs.streamConfig}, nil
 }
 
 // UID returns the unique identifier for this source type.
@@ -82,11 +84,12 @@ func (mfs *MediaFileSrc) getIdQ(uid string) (bson.M, error) {
 }
 
 // NewMediaFileSrc creates a new MediaFileSrc instance.
-func NewMediaFileSrc(facade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool stream.IWorkerPool, cache *cache.DBCache[string, *types.MediaFileDoc]) *MediaFileSrc {
+func NewMediaFileSrc(facade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool worker.IWorkerPool, cache *cache.DBCache[string, *types.MediaFileDoc], streamConfig *stream.StreamConfig) *MediaFileSrc {
 	return &MediaFileSrc{
 		facade:           facade,
 		streamWorkerPool: streamWorkerPool,
 		cache:            cache,
+		streamConfig:     streamConfig,
 	}
 }
 
@@ -96,7 +99,8 @@ func NewMediaFileSrc(facade ftypes.IFacade[types.MediaFileDoc], streamWorkerPool
 type MediaFile struct {
 	fs.Inode
 	media            *types.MediaFileDoc
-	streamWorkerPool stream.IWorkerPool
+	streamWorkerPool worker.IWorkerPool
+	streamConfig     *stream.StreamConfig
 }
 
 var _ IFile = (*MediaFile)(nil)
@@ -114,7 +118,7 @@ func (mf *MediaFile) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.Att
 // Open opens the file for reading
 func (mf *MediaFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
 	ll := mf.getLogger("Open")
-	ll.Debugf("Opening file: %s (flags: %d)", mf.media.ID.Hex(), flags)
+	ll.Sugar().Debugf("Opening file: %s (flags: %d)", mf.media.ID.Hex(), flags)
 
 	// Only allow read operations
 	if flags&fuse.O_ANYWRITE != 0 {
@@ -130,6 +134,7 @@ func (mf *MediaFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uin
 		streamWorkerPool: mf.streamWorkerPool,
 		ctx:              fileCtx,
 		cancel:           cancel,
+		streamConfig:     mf.streamConfig,
 	}
 
 	return fileHandle, fuse.FOPEN_KEEP_CACHE, 0
@@ -169,8 +174,8 @@ func (mf *MediaFile) Ctime() uint64 {
 func (mf *MediaFile) Ext() string {
 	return types.GetExtensionFromMimeType(mf.media.Meta.MimeType)
 }
-func (mf *MediaFile) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mf, fn))
+func (mf *MediaFile) getLogger(fn string) *zap.Logger {
+	return log.Named(log.FuseModule, fmt.Sprintf("%T.%s", mf, fn))
 }
 
 // ===
@@ -178,9 +183,10 @@ func (mf *MediaFile) getLogger(fn string) *logrus.Entry {
 // MediaFileHandle handles read operations on a media file.
 type MediaFileHandle struct {
 	media            *types.MediaFileDoc
-	streamWorkerPool stream.IWorkerPool
+	streamWorkerPool worker.IWorkerPool
 	ctx              context.Context
 	cancel           context.CancelFunc
+	streamConfig     *stream.StreamConfig
 }
 
 var _ fs.FileReader = (*MediaFileHandle)(nil)
@@ -189,7 +195,7 @@ var _ fs.FileReleaser = (*MediaFileHandle)(nil)
 // Read reads data from the file at the specified offset
 func (mfh *MediaFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
 	ll := mfh.getLogger("Read")
-	ll.Debugf("Read request: offset=%d, size=%d, fileSize=%d", off, len(dest), mfh.media.Meta.FileSize)
+	ll.Sugar().Debugf("Read request: offset=%d, size=%d, fileSize=%d", off, len(dest), mfh.media.Meta.FileSize)
 
 	// Check if offset is beyond file size
 	if off >= mfh.media.Meta.FileSize {
@@ -231,19 +237,24 @@ func (mfh *MediaFileHandle) Read(ctx context.Context, dest []byte, off int64) (f
 	defer streamCancel() // Ensure stream context is canceled when Read returns
 
 	// Use the combined context for stream operations
-	streamer, err := stream.NewStreamer(streamCtx, mfh.streamWorkerPool, mfh.media.MessageID, off, end)
-	if err != nil {
-		ll.WithError(err).Error("Failed to create streamer")
+	wrkr := mfh.streamWorkerPool.GetNextWorker()
+	if wrkr == nil {
+		ll.Error("no available worker")
 		return fuse.ReadResultData(nil), syscall.EIO
 	}
-
+	streamer, err := wrkr.Stream(streamCtx, mfh.media.MessageID, &stream.StreamOpts{Start: off, End: end}, mfh.streamConfig)
+	if err != nil {
+		ll.With(zap.Error(err)).Error("Failed to create streamer")
+		return fuse.ReadResultData(nil), syscall.EIO
+	}
+	defer streamer.Close()
 	// Read the data
 	data := make([]byte, toRead)
 	totalRead := int64(0)
 	for totalRead < toRead {
 		n, err := streamer.Read(data[totalRead:])
 		if err != nil && err != io.EOF {
-			ll.WithError(err).Error("Failed to read from streamer")
+			ll.With(zap.Error(err)).Error("Failed to read from streamer")
 			return nil, syscall.EIO
 		}
 		if n == 0 {
@@ -259,7 +270,7 @@ func (mfh *MediaFileHandle) Read(ctx context.Context, dest []byte, off int64) (f
 	if totalRead < toRead {
 		data = data[:totalRead]
 	}
-	ll.Debugf("Read %d bytes", totalRead)
+	ll.Sugar().Debugf("Read %d bytes", totalRead)
 
 	return fuse.ReadResultData(data), 0
 }
@@ -274,6 +285,6 @@ func (mfh *MediaFileHandle) Release(ctx context.Context) syscall.Errno {
 	return 0
 }
 
-func (mfh *MediaFileHandle) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mfh, fn))
+func (mfh *MediaFileHandle) getLogger(fn string) *zap.Logger {
+	return log.Named(log.FuseModule, fmt.Sprintf("%T.%s", mfh, fn))
 }

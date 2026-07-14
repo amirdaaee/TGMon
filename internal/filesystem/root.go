@@ -13,7 +13,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // RootFS represents the root filesystem node in the FUSE filesystem.
@@ -38,7 +38,7 @@ var _ fs.NodeRenamer = (*RootFS)(nil)
 // OnAdd is called when the filesystem is mounted
 func (mfs *RootFS) OnAdd(ctx context.Context) {
 	if err := mfs.uidMap.SyncDB(ctx); err != nil {
-		mfs.getLogger("OnAdd").WithError(err).Error("failed to sync uid map with db")
+		mfs.getLogger("OnAdd").With(zap.Error(err)).Error("failed to sync uid map with db")
 		return
 	}
 	mfs.getLogger("OnAdd").Info("RootFS mounted")
@@ -80,9 +80,9 @@ func (mfs *RootFS) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 	if err != nil {
 		// Check if error is due to context cancellation or timeout
 		if ctx.Err() != nil || queryCtx.Err() != nil {
-			ll.WithError(err).Debug("Context canceled or timed out during getMediaFiles")
+			ll.With(zap.Error(err)).Debug("Context canceled or timed out during getMediaFiles")
 		} else {
-			ll.WithError(err).Error("Failed to get media files, returning empty directory")
+			ll.With(zap.Error(err)).Error("Failed to get media files, returning empty directory")
 		}
 		// Return empty directory instead of error to prevent I/O errors
 		// This is safer for container access - they can retry later
@@ -96,14 +96,14 @@ func (mfs *RootFS) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 		return entries[i].Name < entries[j].Name
 	})
 
-	ll.Debugf("Returning %d entries", len(entries))
+	ll.Sugar().Debugf("Returning %d entries", len(entries))
 	return fs.NewListDirStream(entries), 0
 }
 
 // Lookup finds a file by name and returns a file node
 func (mfs *RootFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	ll := mfs.getLogger("Lookup")
-	ll.Debugf("Looking up file: %s", name)
+	ll.Sugar().Debugf("Looking up file: %s", name)
 
 	entry, ok := mfs.uidMap.GetByName(name)
 	if !ok {
@@ -118,7 +118,7 @@ func (mfs *RootFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 			ll.Warn("Context canceled or timed out during src Lookup")
 			return nil, syscall.EINTR // TODO
 		}
-		ll.WithError(err).Error("failed to lookup file")
+		ll.With(zap.Error(err)).Error("failed to lookup file")
 		return nil, syscall.EIO // TODO
 	}
 
@@ -133,7 +133,7 @@ func (mfs *RootFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 		Mode: fuse.S_IFREG,
 		Ino:  entry.inode,
 	}
-	ll.Debugf("Found file: %s (size: %d)", name, file.Size())
+	ll.Sugar().Debugf("Found file: %s (size: %d)", name, file.Size())
 	return mfs.NewInode(ctx, file, stable), 0
 }
 
@@ -141,17 +141,17 @@ func (mfs *RootFS) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 // It deletes the file from both the UID map and the underlying data source.
 func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
 	ll := mfs.getLogger("Unlink")
-	ll.Debugf("Removing file: %s", name)
+	ll.Sugar().Debugf("Removing file: %s", name)
 	entry, ok := mfs.uidMap.GetByName(name)
 	if !ok {
 		return syscall.ENOENT // TODO
 	}
 	if err := mfs.uidMap.DeleteByName(ctx, name); err != nil {
-		ll.WithError(err).Error("failed to delete entry from uid map")
+		ll.With(zap.Error(err)).Error("failed to delete entry from uid map")
 		return syscall.EIO // TODO
 	}
 	if err := mfs.srcs[entry.data.SrcID].Delete(ctx, entry.data.UID); err != nil {
-		ll.WithError(err).Error("failed to delete file from src")
+		ll.With(zap.Error(err)).Error("failed to delete file from src")
 		return syscall.EIO // TODO
 	}
 	return 0
@@ -161,7 +161,7 @@ func (mfs *RootFS) Unlink(ctx context.Context, name string) syscall.Errno {
 // It does not allow renaming to a different parent directory.
 func (mfs *RootFS) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
 	ll := mfs.getLogger("Rename")
-	ll.Debugf("Renaming file: %s to %s", name, newName)
+	ll.Sugar().Debugf("Renaming file: %s to %s", name, newName)
 	// don't allow renaming to a different parent
 	if newParent.EmbeddedInode().Path(nil) != mfs.EmbeddedInode().Path(nil) {
 		return syscall.EPERM // TODO
@@ -172,7 +172,7 @@ func (mfs *RootFS) Rename(ctx context.Context, name string, newParent fs.InodeEm
 		return syscall.ENOENT // TODO
 	}
 	if err := mfs.uidMap.RenameByName(ctx, name, newName); err != nil {
-		ll.WithError(err).Error("failed to rename entry in uid map")
+		ll.With(zap.Error(err)).Error("failed to rename entry in uid map")
 		return syscall.EIO // TODO
 	}
 	return 0
@@ -187,7 +187,7 @@ func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 	entries := make([]fuse.DirEntry, 0)
 	for _, src := range mfs.srcs {
 		srcID := src.UID()
-		llSrc := ll.WithField("src", srcID)
+		llSrc := ll.With(zap.String("src", srcID))
 		srcEntries, err := src.List(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list files from src %s: %w", srcID, err)
@@ -200,8 +200,8 @@ func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 			if !ok {
 				entr, err = mfs.uidMap.Add(ctx, uid, srcID, f.Name(), f.Ext())
 				if err != nil {
-					llSrc.WithField("file", f.Name()).WithField("uid", uid).
-						WithError(err).Error("failed to add entry to uid map. skipping file.")
+					llSrc.With(zap.String("file", f.Name()), zap.String("uid", uid)).
+						With(zap.Error(err)).Error("failed to add entry to uid map. skipping file.")
 					continue
 				}
 			}
@@ -219,11 +219,7 @@ func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 		if _, ok := seen[key]; ok {
 			continue
 		}
-		llOrphan := ll.WithFields(logrus.Fields{
-			"src":  entry.data.SrcID,
-			"uid":  entry.data.UID,
-			"name": entry.Name(),
-		})
+		llOrphan := ll.With(zap.String("src", entry.data.SrcID), zap.String("uid", entry.data.UID), zap.String("name", entry.Name()))
 		llOrphan.Warn("Removing orphaned entry")
 		mfs.uidMap.mu.Lock()
 		mapK := mfs.uidMap.getKey(entry.data.UID, entry.data.SrcID)
@@ -234,8 +230,8 @@ func (mfs *RootFS) listFiles(ctx context.Context) ([]fuse.DirEntry, error) {
 	return entries, nil
 }
 
-func (mfs *RootFS) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mfs, fn))
+func (mfs *RootFS) getLogger(fn string) *zap.Logger {
+	return log.Named(log.FuseModule, fmt.Sprintf("%T.%s", mfs, fn))
 }
 
 // ...

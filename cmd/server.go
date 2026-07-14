@@ -12,11 +12,12 @@ import (
 
 	"github.com/amirdaaee/TGMon/internal/db"
 	fsSrc "github.com/amirdaaee/TGMon/internal/filesystem/src"
+	"github.com/amirdaaee/TGMon/internal/log"
+	"go.uber.org/zap"
 
 	"github.com/amirdaaee/TGMon/cmd/wire"
 	"github.com/amirdaaee/TGMon/internal/config"
 	"github.com/amirdaaee/TGMon/internal/filesystem"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -26,7 +27,7 @@ var serverCmd = &cobra.Command{
 	Use:   "server",
 	Short: "Start TGmon web and fuse server",
 	Run: func(cmd *cobra.Command, args []string) {
-		ll := logrus.WithField("at", "web")
+		ll := log.Named(log.CmdModule, "web")
 		ll.Info("starting web server")
 		cntr := wire.GetProvider()
 		//...
@@ -51,7 +52,7 @@ var serverCmd = &cobra.Command{
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				if err := webServer.Shutdown(ctx); err != nil {
-					ll.WithError(err).Error("error shutting down web server")
+					ll.With(zap.Error(err)).Error("error shutting down web server")
 				}
 				ll.Info("web server shutdown")
 				return nil
@@ -72,9 +73,9 @@ var serverCmd = &cobra.Command{
 					<-ctx.Done()
 					ll.Info("shutting down fuse server")
 					if err := fuseServer.Unmount(); err != nil {
-						ll.WithError(err).Error("error unmounting fuse server (method 1)")
+						ll.With(zap.Error(err)).Error("error unmounting fuse server (method 1)")
 						if err := filesystem.Unmount(cfg.FuseConfig.MediaDir); err != nil {
-							ll.WithError(err).Error("error unmounting fuse server (method 2)")
+							ll.With(zap.Error(err)).Error("error unmounting fuse server (method 2)")
 						} else {
 							ll.Info("fuse server unmounted")
 						}
@@ -91,7 +92,7 @@ var serverCmd = &cobra.Command{
 			ll.Info("web server stopped")
 			return nil
 		}); err != nil {
-			ll.WithError(err).Error("error in server")
+			ll.With(zap.Error(err)).Fatal("error in server")
 		}
 	},
 }

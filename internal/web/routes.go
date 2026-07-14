@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.uber.org/zap"
 )
 
 func RegisterRoutes(r *gin.Engine, hndlrs []wtypes.Registereable, apiToken string, swag bool) {
@@ -25,7 +26,7 @@ func RegisterRoutes(r *gin.Engine, hndlrs []wtypes.Registereable, apiToken strin
 			r = webRoot
 		}
 		if err := hndlr.RegisterRoutes(r, authMiddleware); err != nil {
-			ll.WithError(err).Errorf("error registering routes for %+T", hndlr)
+			ll.With(zap.Error(err), zap.Any("handler", hndlr)).Error("error registering routes")
 			continue
 		}
 	}

@@ -10,7 +10,7 @@ import (
 // This interface provides methods for managing MongoDB client connections
 // and creating database instances. It is designed to be mockable for testing purposes.
 //
-//go:generate mockgen -source=mongo.go -destination=../../../mocks/db/mongo/mongo.go -package=mocks
+//go:generate mockgen -source=mongo.go -destination=../../../mocks/db/mongo/mongo.go -package=mocks_db_mongo
 type IMongoClient interface {
 	// Disconnect gracefully closes the MongoDB client connection.
 	// The context parameter controls the timeout and cancellation behavior.
@@ -55,7 +55,7 @@ var _ IMongoClient = (*MongoClient)(nil)
 // This interface provides access to database-level functionality and is designed
 // to be extensible for future database operations.
 //
-//go:generate mockgen -source=mongo.go -destination=../../../mocks/db/mongo/mongo.go -package=mocks
+//go:generate mockgen -source=mongo.go -destination=../../../mocks/db/mongo/mongo.go -package=mocks_db_mongo
 type IDatabase interface {
 	// Future database-level operations can be added here
 }

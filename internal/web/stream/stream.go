@@ -13,17 +13,20 @@ import (
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
 	wtypes "github.com/amirdaaee/TGMon/internal/web/types"
+	"github.com/amirdaaee/TGMon/internal/worker"
 	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
 	"github.com/gin-gonic/gin"
 	range_parser "github.com/quantumsheep/range-parser"
-	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.uber.org/zap"
 )
 
 type Streamhandler struct {
-	dbContainer db.IDbContainer
-	mediaFacade ftypes.IFacade[types.MediaFileDoc]
-	streamPool  stream.IWorkerPool
+	dbContainer  db.IDbContainer
+	mediaFacade  ftypes.IFacade[types.MediaFileDoc]
+	workerPool   worker.IWorkerPool
+	streamConfig *stream.StreamConfig
+	ll           *zap.Logger
 }
 
 var _ wtypes.Registereable = (*Streamhandler)(nil)
@@ -53,16 +56,22 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 		}
 		return
 	}
-	streamer, err := stream.NewStreamer(g.Request.Context(), s.streamPool, media.MessageID, meta.Start, meta.End)
+	worker := s.workerPool.GetNextWorker()
+	if worker == nil {
+		g.Error(wtypes.NewHttpError(errors.New("no available worker"), http.StatusInternalServerError)) //nolint:golint,errcheck
+		return
+	}
+	streamer, err := worker.Stream(g.Request.Context(), media.MessageID, &stream.StreamOpts{Start: meta.Start, End: meta.End}, s.streamConfig)
 	if err != nil {
 		g.Error(wtypes.NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
 		return
 	}
 	defer runtime.GC()
+	defer streamer.Close()
 	// remove content-length from header map
 	delete(headers, "Content-Length")
 	delete(headers, "Content-Type")
-	g.DataFromReader(status, meta.ContentLength, meta.MimeType, streamer.ReadBuffered(), headers)
+	g.DataFromReader(status, meta.ContentLength, meta.MimeType, streamer, headers)
 }
 func (s *Streamhandler) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.HandlerFunc) error {
 	r.Match([]string{"HEAD", "GET"}, "/stream/:mediaID", s.Stream)
@@ -89,7 +98,7 @@ func (s *Streamhandler) getMedia(g *gin.Context, id string) (*types.MediaFileDoc
 	return media[0], nil
 }
 func (s *Streamhandler) getStreamMetaData(req *http.Request, media types.MediaFileDoc) (*StreamMetaData, error) {
-	ll := s.getLogger("getStreamMetaData")
+	ll := s.ll.Named("getStreamMetaData")
 	var start, end int64
 	rangeHeader := req.Header.Get("Range")
 	fileSize := media.Meta.FileSize
@@ -98,7 +107,7 @@ func (s *Streamhandler) getStreamMetaData(req *http.Request, media types.MediaFi
 		start = 0
 		end = fileSize - 1
 	} else {
-		ll.Debugf("range header %s", rangeHeader)
+		ll.Sugar().Debugf("range header %s", rangeHeader)
 		ranges, err := range_parser.Parse(fileSize, rangeHeader)
 		if err != nil {
 			return nil, err
@@ -118,11 +127,11 @@ func (s *Streamhandler) getStreamMetaData(req *http.Request, media types.MediaFi
 	if metaData.MimeType == "" {
 		metaData.MimeType = "application/octet-stream"
 	}
-	ll.Debugf("meta data: %+v", metaData)
+	ll.Sugar().Debugf("meta data: %+v", metaData)
 	return &metaData, nil
 }
 func (s *Streamhandler) getStreamHeaders(req *http.Request, meta *StreamMetaData, download bool) (int, map[string]string) {
-	ll := s.getLogger("getStreamHeaders")
+	ll := s.ll.Named("getStreamHeaders")
 	rangeHeader := req.Header.Get("Range")
 	head := map[string]string{}
 	var status int
@@ -141,16 +150,15 @@ func (s *Streamhandler) getStreamHeaders(req *http.Request, meta *StreamMetaData
 	head["Content-Disposition"] = fmt.Sprintf("%s; filename=\"%s\"", disposition, meta.Filename)
 	head["Content-Type"] = meta.MimeType
 	head["Content-Length"] = strconv.FormatInt(meta.ContentLength, 10)
-	ll.Debugf("stream response headers: %+v", head)
+	ll.Sugar().Debugf("stream response headers: %+v", head)
 	return status, head
 }
-func (s *Streamhandler) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.WebModule).WithField("func", fmt.Sprintf("%T.%s", s, fn))
-}
-func NewStreamHandler(dbContainer db.IDbContainer, mediaFacade ftypes.IFacade[types.MediaFileDoc], wp stream.IWorkerPool) *Streamhandler {
+func NewStreamHandler(dbContainer db.IDbContainer, mediaFacade ftypes.IFacade[types.MediaFileDoc], wp worker.IWorkerPool, streamConfig *stream.StreamConfig) *Streamhandler {
 	return &Streamhandler{
-		dbContainer: dbContainer,
-		mediaFacade: mediaFacade,
-		streamPool:  wp,
+		dbContainer:  dbContainer,
+		mediaFacade:  mediaFacade,
+		workerPool:   wp,
+		streamConfig: streamConfig,
+		ll:           log.Named(log.WebModule, "StreamHandler"),
 	}
 }

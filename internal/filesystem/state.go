@@ -10,8 +10,8 @@ import (
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 	"github.com/chenmingyong0423/go-mongox/v2/builder/update"
-	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.uber.org/zap"
 )
 
 // uidMapEntryType represents a single entry in the UID map.
@@ -184,7 +184,7 @@ func (r *uidMapType) SyncDB(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch all docs from db: %w", err)
 	}
-	ll.Debugf("fetched %d docs from db", len(allDocs))
+	ll.Sugar().Debugf("fetched %d docs from db", len(allDocs))
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.mappedUID = make(map[string]*uidMapEntryType)
@@ -213,6 +213,6 @@ func (r *uidMapType) getFreeInodeNum() uint64 {
 func (r *uidMapType) getKey(uid string, src string) string {
 	return fmt.Sprintf("%s-%s", uid, src)
 }
-func (r *uidMapType) getLogger(at string) *logrus.Entry {
-	return log.GetLogger(log.FuseModule).WithField("at", fmt.Sprintf("%T.%s", r, at))
+func (r *uidMapType) getLogger(at string) *zap.Logger {
+	return log.Named(log.FuseModule, fmt.Sprintf("%T.%s", r, at))
 }

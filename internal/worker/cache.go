@@ -1,35 +1,34 @@
-// Package stream contains a lightweight file-backed cache used by the
-// streaming workers to persist document access hashes and encoded docs.
-package stream
+package worker
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/amirdaaee/TGMon/internal/log"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // IFileCache defines a minimal disk-backed cache API with a convenience
 // GetOrSet helper.
 //
-//go:generate mockgen -source=cache.go -destination=../../mocks/stream/cache.go -package=mocks
+//go:generate mockgen -source=cache.go -destination=../../mocks/worker/cache.go -package=mocks_worker
 type IFileCache[T any] interface {
-	Get(string) (T, error)
-	Set(string, T) error
 	GetOrSet(string, func() (T, error)) (T, error)
 }
 type fileCache[T any] struct {
 	root           string
 	filenameSuffix string
+	lock           sync.RWMutex
+	ll             *zap.Logger
 }
 
 var _ IFileCache[any] = (*fileCache[any])(nil)
 
-// Get returns the value stored for the key or an error if not present.
-func (c *fileCache[T]) Get(key string) (T, error) {
+// getLocked returns the value stored for the key or an error if not present.
+func (c *fileCache[T]) getLocked(key string) (T, error) {
 	fp := c.getFilename(key)
 	var zeroT T
 
@@ -49,8 +48,8 @@ func (c *fileCache[T]) Get(key string) (T, error) {
 	return c.unmarshallType(data)
 }
 
-// Set stores the provided value for the key, overwriting existing content.
-func (c *fileCache[T]) Set(key string, value T) error {
+// setLocked stores the provided value for the key, overwriting existing content.
+func (c *fileCache[T]) setLocked(key string, value T) error {
 	fp := c.getFilename(key)
 	valMarshal, err := c.marshallType(value)
 	if err != nil {
@@ -65,14 +64,20 @@ func (c *fileCache[T]) Set(key string, value T) error {
 // GetOrSet tries to load the key, and on miss computes the value via fn,
 // stores it, and returns it. Cache write failures are logged but not fatal.
 func (c *fileCache[T]) GetOrSet(key string, fn func() (T, error)) (T, error) {
-	ll := c.getLogger("GetOrSet").WithField("key", c.getCacheKey(key))
-
+	ll := c.ll.Named("GetOrSet").With(zap.String("key", c.getCacheKey(key)))
+	c.lock.RLock()
 	// Try to get from cache first
-	if value, err := c.Get(key); err == nil {
+	if value, err := c.getLocked(key); err == nil {
+		c.lock.RUnlock()
 		ll.Debug("cache hit")
 		return value, nil
 	}
-
+	c.lock.RUnlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if value, err := c.getLocked(key); err == nil {
+		return value, nil
+	}
 	ll.Debug("cache miss")
 
 	// Cache miss: compute value
@@ -82,8 +87,8 @@ func (c *fileCache[T]) GetOrSet(key string, fn func() (T, error)) (T, error) {
 	}
 
 	// Store in cache (log error but don't fail)
-	if err := c.Set(key, value); err != nil {
-		ll.WithError(err).Error("error setting cache")
+	if err := c.setLocked(key, value); err != nil {
+		ll.With(zap.Error(err)).Error("error setting cache")
 	}
 
 	return value, nil
@@ -121,16 +126,13 @@ func (c *fileCache[T]) getCacheKey(key string) string {
 func (c *fileCache[T]) getFilename(key string) string {
 	return filepath.Join(c.root, c.getCacheKey(key))
 }
-func (c *fileCache[T]) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", c, fn))
-}
 
 // NewAccessHashCache returns a cache specialized for int64 access hashes.
 func NewAccessHashCache(root string) IFileCache[int64] {
-	return &fileCache[int64]{root: root, filenameSuffix: "accHash"}
+	return &fileCache[int64]{root: root, filenameSuffix: "accHash", ll: log.Named(log.WorkerModule, "AccessHashCache")}
 }
 
 // NewDocCache returns a cache specialized for raw document bytes.
 func NewDocCache(root string) IFileCache[[]byte] {
-	return &fileCache[[]byte]{root: root, filenameSuffix: "doc"}
+	return &fileCache[[]byte]{root: root, filenameSuffix: "doc", ll: log.Named(log.WorkerModule, "DocCache")}
 }

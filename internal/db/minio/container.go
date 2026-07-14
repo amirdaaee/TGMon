@@ -7,7 +7,7 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
-//go:generate mockgen -source=container.go -destination=../../../mocks/db/minio/container.go -package=mocks
+//go:generate mockgen -source=container.go -destination=../../../mocks/db/minio/container.go -package=mocks_db_minio
 
 // IMinioContainer defines the interface for MinIO container operations.
 // This interface provides a way to access configured MinIO clients through dependency injection.

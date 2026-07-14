@@ -23,7 +23,7 @@ const (
 // from the go-mongox library, along with additional utility methods.
 // The interface is generic and works with any type that implements IMongoDoc.
 //
-//go:generate mockgen -source=collection.go -destination=../../../mocks/db/mongo/collection.go -package=mocks
+//go:generate mockgen -source=collection.go -destination=../../../mocks/db/mongo/collection.go -package=mocks_db_mongo
 type ICollection[T any] interface {
 	// Aggregator returns an aggregator for building and executing aggregation pipelines.
 	Aggregator() aggregator.IAggregator[T]

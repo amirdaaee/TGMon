@@ -18,8 +18,8 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	mnio "github.com/minio/minio-go/v7"
-	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.uber.org/zap"
 )
 
 // SrtFileSrc is a source implementation that provides access to SRT subtitle files
@@ -116,7 +116,7 @@ func (mf *SrtFile) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrO
 	ll := mf.getLogger("Getattr")
 	info, err := mf.info(ctx)
 	if err != nil {
-		ll.WithError(err).Error("failed to get file info")
+		ll.With(zap.Error(err)).Error("failed to get file info")
 		return syscall.EIO
 	}
 	out.Mode = fuse.S_IFREG | 0444
@@ -130,7 +130,7 @@ func (mf *SrtFile) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrO
 // Open opens the file for reading
 func (mf *SrtFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
 	ll := mf.getLogger("Open")
-	ll.Debugf("Opening srt file: %s (flags: %d)", mf.orgMedia.ID.Hex(), flags)
+	ll.Sugar().Debugf("Opening srt file: %s (flags: %d)", mf.orgMedia.ID.Hex(), flags)
 	// Only allow read operations
 	if flags&fuse.O_ANYWRITE != 0 {
 		return nil, 0, syscall.EACCES
@@ -138,12 +138,12 @@ func (mf *SrtFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint3
 
 	obj, err := mf.minioClient.FileGet(ctx, mf.orgMedia.Srt)
 	if err != nil {
-		ll.WithError(err).Error("failed to get file object")
+		ll.With(zap.Error(err)).Error("failed to get file object")
 		return nil, 0, syscall.EIO
 	}
 	info, err := mf.info(ctx)
 	if err != nil {
-		ll.WithError(err).Error("failed to get file info")
+		ll.With(zap.Error(err)).Error("failed to get file info")
 		return nil, 0, syscall.EIO
 	}
 
@@ -218,8 +218,8 @@ func (mf *SrtFile) info(ctx context.Context) (*mnio.ObjectInfo, error) {
 	}
 	return mf._info, nil
 }
-func (mf *SrtFile) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mf, fn))
+func (mf *SrtFile) getLogger(fn string) *zap.Logger {
+	return log.Named(log.FuseModule, fmt.Sprintf("%T.%s", mf, fn))
 }
 
 // ===
@@ -239,7 +239,7 @@ var _ fs.FileReleaser = (*SrtFileHandle)(nil)
 // Read reads data from the file at the specified offset
 func (mfh *SrtFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
 	ll := mfh.getLogger("Read")
-	ll.Debugf("Read request: offset=%d, size=%d, fileSize=%d", off, len(dest), mfh.info.Size)
+	ll.Sugar().Debugf("Read request: offset=%d, size=%d, fileSize=%d", off, len(dest), mfh.info.Size)
 	// Check if offset is beyond file size
 	if off >= mfh.info.Size {
 		ll.Debug("EOF: offset beyond file size")
@@ -247,12 +247,12 @@ func (mfh *SrtFileHandle) Read(ctx context.Context, dest []byte, off int64) (fus
 	}
 
 	if _, err := mfh.obj.Seek(off, io.SeekStart); err != nil {
-		ll.WithError(err).Error("failed to seek file data")
+		ll.With(zap.Error(err)).Error("failed to seek file data")
 		return nil, syscall.EIO
 	}
 
 	if _, err := mfh.obj.Read(dest); err != nil && err != io.EOF {
-		ll.WithError(err).Error("failed to read file data")
+		ll.With(zap.Error(err)).Error("failed to read file data")
 		return nil, syscall.EIO
 	}
 	return fuse.ReadResultData(dest), 0
@@ -268,6 +268,6 @@ func (mfh *SrtFileHandle) Release(ctx context.Context) syscall.Errno {
 	return 0
 }
 
-func (mfh *SrtFileHandle) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.FuseModule).WithField("func", fmt.Sprintf("%T.%s", mfh, fn))
+func (mfh *SrtFileHandle) getLogger(fn string) *zap.Logger {
+	return log.Named(log.FuseModule, fmt.Sprintf("%T.%s", mfh, fn))
 }

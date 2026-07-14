@@ -13,11 +13,11 @@ import (
 	"github.com/gotd/contrib/middleware/floodwait"
 	"github.com/gotd/contrib/middleware/ratelimit"
 	"github.com/gotd/td/telegram"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 )
 
-//go:generate mockgen -source=client.go -destination=../../mocks/tlg/client.go -package=mocks
+//go:generate mockgen -source=client.go -destination=../../mocks/tlg/client.go -package=mocks_tlg
 type IClient interface {
 	Connect() error
 	GetClient() *gotgproto.Client
@@ -52,9 +52,9 @@ func (tc *client) getTgClient() (*gotgproto.Client, error) {
 	if err := os.Mkdir(sessCfg.SessionDir, os.ModePerm); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("can not create session dir: %s", err)
 	}
-	ll.Infof("session dir: %s", sessCfg.SessionDir)
+	ll.Sugar().Debugf("session dir: %s", sessCfg.SessionDir)
 	sessionDBPath := fmt.Sprintf("%s/worker-%s.sqlite3", sessCfg.SessionDir, strings.Split(tc.token, ":")[0])
-	ll.Infof("session db path: %s", sessionDBPath)
+	ll.Sugar().Debugf("session db path: %s", sessionDBPath)
 	sessionType := sessionMaker.SqlSession(sqlite.Open(sessionDBPath))
 	clOpts := gotgproto.ClientOpts{
 		Session:          sessionType,
@@ -62,9 +62,9 @@ func (tc *client) getTgClient() (*gotgproto.Client, error) {
 		Middlewares:      tc.getMiddlewares(),
 	}
 	if resolver, err := sessCfg.getSocksDialer(); err != nil {
-		ll.WithError(err).Error("can not get socks dialer. using default")
+		ll.With(zap.Error(err)).Error("can not get socks dialer. using default")
 	} else if resolver != nil {
-		ll.Infof("using socks dialer")
+		ll.Sugar().Debugf("using socks dialer")
 		clOpts.Resolver = *resolver
 	}
 	client, err := gotgproto.NewClient(
@@ -85,8 +85,8 @@ func (tc *client) getMiddlewares() []telegram.Middleware {
 		ratelimit.New(rate.Every(time.Millisecond*100), 5),
 	}
 }
-func (tc *client) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.TlgModule).WithField("func", fmt.Sprintf("%T.%s", tc, fn))
+func (tc *client) getLogger(fn string) *zap.Logger {
+	return log.Named(log.TlgModule, fmt.Sprintf("%T.%s", tc, fn))
 }
 func NewTgClient(sessCfg *SessionConfig, token string) IClient {
 	return &client{

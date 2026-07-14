@@ -5,11 +5,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 func TestFacade(t *testing.T) {
-	logrus.SetLevel(logrus.FatalLevel)
+	zap.ReplaceGlobals(zap.NewNop())
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Facade Suite")
 }

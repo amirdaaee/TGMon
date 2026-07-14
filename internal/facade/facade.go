@@ -7,8 +7,8 @@ import (
 	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
-	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.uber.org/zap"
 )
 
 // BaseFacade provides a generic implementation of IFacade for type T.
@@ -35,7 +35,7 @@ func (f *BaseFacade[T]) CreateOne(ctx context.Context, doc *T) (*T, error) {
 	postCtx := context.Background()
 	go func() {
 		if err := f.crd.PostCreate(postCtx, doc); err != nil {
-			ll.WithError(err).Error("error in post-creating hook")
+			ll.With(zap.Error(err)).Error("error in post-creating hook")
 		} else {
 			ll.Info("document post-creating hook completed")
 		}
@@ -71,7 +71,7 @@ func (f *BaseFacade[T]) DeleteOne(ctx context.Context, filter bson.D) (*T, error
 	postCtx := context.Background()
 	go func() {
 		if err := f.crd.PostDelete(postCtx, doc); err != nil {
-			ll.WithError(err).Error("error in post-deleting hook")
+			ll.With(zap.Error(err)).Error("error in post-deleting hook")
 		} else {
 			ll.Info("document post-deleting hook completed")
 		}
@@ -90,8 +90,8 @@ func (f *BaseFacade[T]) GetCollection() mngo.ICollection[T] {
 }
 
 // getLogger returns a logrus.Entry for the given function name, tagged with the struct type.
-func (f *BaseFacade[T]) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.FacadeModule).WithField("func", fmt.Sprintf("%T.%s", f, fn))
+func (f *BaseFacade[T]) getLogger(fn string) *zap.Logger {
+	return log.Named(log.FacadeModule, fmt.Sprintf("%T.%s", f, fn))
 }
 
 // NewFacade returns a new BaseFacade for the given CRD implementation.

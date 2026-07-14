@@ -4,18 +4,19 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/chenmingyong0423/go-mongox/v2"
-	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
+	"go.uber.org/zap"
 )
 
 // IMongoContainer defines the interface for accessing MongoDB client, database, and collections.
 // It provides methods to retrieve the MongoDB client, database, and specific collections used in the application.
 //
-//go:generate mockgen -source=container.go -destination=../../../mocks/db/mongo/container.go -package=mocks
+//go:generate mockgen -source=container.go -destination=../../../mocks/db/mongo/container.go -package=mocks_db_mongo
 type IMongoContainer interface {
 	GetMongoClient() IMongoClient
 	GetMongoDb() IDatabase
@@ -106,7 +107,8 @@ func NewMongoContainer(ctx context.Context, config MongoContainerConfig, ping bo
 		if err := cl.Ping(ctx, readpref.Primary()); err != nil {
 			// Ensure client is disconnected if ping fails to prevent resource leak
 			if disconnectErr := cl.Disconnect(ctx); disconnectErr != nil {
-				logrus.Warnf("Failed to disconnect client after ping failure: %v", disconnectErr)
+
+				log.GetLogger(log.DBModule).With(zap.Error(err)).Warn("Failed to disconnect client after ping failure")
 			}
 			return nil, fmt.Errorf("error pinging mongo: %w", err)
 		}

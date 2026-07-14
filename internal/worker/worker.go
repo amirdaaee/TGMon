@@ -1,35 +1,25 @@
-// Package stream provides Telegram file streaming utilities built around a pool
-// of workers. Each worker talks to Telegram APIs to fetch documents, thumbnails
-// and file chunks, applying caching and resiliency to rate limits.
-package stream
+package worker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"sync"
 
-	"github.com/amirdaaee/TGMon/internal/stream/downloader"
+	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	"github.com/celestix/gotgproto"
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/tg"
 )
 
-// IWorker encapsulates Telegram document operations for a single bot/account.
-// Implementations fetch document metadata, thumbnails, and stream file blocks.
-//
-//go:generate mockgen -source=worker.go -destination=../../mocks/stream/worker.go -package=mocks
+//go:generate mockgen -source=worker.go -destination=../../mocks/worker/worker.go -package=mocks_worker
 type IWorker interface {
-	// GetThumbnail returns the first available thumbnail bytes for a document
-	// in the specified message.
+	GetDoc(ctx context.Context, msgID int) (*tg.Document, error)
 	GetThumbnail(ctx context.Context, messageID int) ([]byte, error)
-	// GetDoc returns the Telegram document of a message, possibly using cache.
-	GetDoc(ctx context.Context, messageID int) (*tg.Document, error)
-	// Stream fetches the next block using the provided downloader.Reader.
-	Stream(ctx context.Context, reader *downloader.Reader) ([]byte, error)
+	Stream(ctx context.Context, MessageID int, streamOpts *stream.StreamOpts, streamConfig *stream.StreamConfig) (io.ReadCloser, error)
 }
+
 type worker struct {
 	cl            tlg.IClient
 	channelID     int64
@@ -41,9 +31,9 @@ type worker struct {
 
 var _ IWorker = (*worker)(nil)
 
-// thumbnailLimit caps thumbnail downloads to 1MB which is sufficient for
+// THUMBNAIL_LIMIT caps thumbnail downloads to 1MB which is sufficient for
 // Telegram thumbnails and keeps network usage bounded.
-const thumbnailLimit = 1024 * 1024 // 1 MB
+const THUMBNAIL_LIMIT = 1024 * 1024 // 1 MB
 
 // GetThumbnail downloads the first available thumbnail for the document inside
 // the given channel message. It ensures the access hash is up-to-date before
@@ -77,7 +67,7 @@ func (w *worker) GetThumbnail(ctx context.Context, messageID int) ([]byte, error
 
 	req := &tg.UploadGetFileRequest{
 		Location: &location,
-		Limit:    thumbnailLimit,
+		Limit:    THUMBNAIL_LIMIT,
 		Precise:  false,
 	}
 
@@ -122,26 +112,14 @@ func (w *worker) GetDoc(ctx context.Context, messageID int) (*tg.Document, error
 
 // Stream retrieves the next data block via the provided downloader.Reader.
 // It resolves the document location once and then pulls the next chunk.
-func (w *worker) Stream(ctx context.Context, reader *downloader.Reader) ([]byte, error) {
-	doc, err := w.GetDoc(ctx, reader.MsgId)
+func (w *worker) Stream(ctx context.Context, MessageID int, streamOpts *stream.StreamOpts, streamConfig *stream.StreamConfig) (io.ReadCloser, error) {
+	doc, err := w.GetDoc(ctx, MessageID)
 	if err != nil {
 		return nil, fmt.Errorf("error getting document: %w", err)
 	}
 
 	location := doc.AsInputDocumentFileLocation()
-	block, err := reader.Next(ctx, w.getTgApi(), location)
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil, io.EOF
-		}
-		return nil, fmt.Errorf("error getting block: %w", err)
-	}
-
-	if block == nil {
-		return nil, io.EOF
-	}
-
-	return block.Data(), nil
+	return stream.NewStreamPipe(ctx, w.cl, location, streamOpts, streamConfig)
 }
 func (w *worker) getChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	w.tgChannelLock.Lock()

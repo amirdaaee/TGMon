@@ -16,7 +16,7 @@ import (
 // This interface wraps the essential MinIO operations needed for object storage management.
 // It is designed to be mockable for testing purposes.
 //
-//go:generate mockgen -source=minio.go -destination=../../../mocks/db/minio/minio.go -package=mocks
+//go:generate mockgen -source=minio.go -destination=../../../mocks/db/minio/minio.go -package=mocks_db_minio
 type IMinioCl interface {
 	// BucketExists checks if a bucket with the given name exists.
 	// Returns true if the bucket exists, false otherwise, and any error encountered.
@@ -45,7 +45,7 @@ var _ IMinioCl = (*minio.Client)(nil)
 // This interface provides simplified methods for common file operations on a specific bucket.
 // It abstracts away the underlying MinIO complexity and provides a more user-friendly API.
 //
-//go:generate mockgen -source=minio.go -destination=../../../mocks/db/minio/minio.go -package=mocks
+//go:generate mockgen -source=minio.go -destination=../../../mocks/db/minio/minio.go -package=mocks_db_minio
 type IMinioClient interface {
 	// CreateBucket creates the configured bucket if it doesn't already exist.
 	// This is typically called during initialization to ensure the bucket is available.

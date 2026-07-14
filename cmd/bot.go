@@ -6,8 +6,9 @@ package cmd
 import (
 	"github.com/amirdaaee/TGMon/cmd/wire"
 	"github.com/amirdaaee/TGMon/internal/bot"
-	"github.com/sirupsen/logrus"
+	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 // botCmd represents the bot command
@@ -15,7 +16,7 @@ var botCmd = &cobra.Command{
 	Use:   "bot",
 	Short: "Start TGmon bot",
 	Run: func(cmd *cobra.Command, args []string) {
-		ll := logrus.WithField("at", "bot")
+		ll := log.Named(log.CmdModule, "bot")
 		// ...
 		cntr := wire.GetProvider()
 
@@ -27,9 +28,8 @@ var botCmd = &cobra.Command{
 			ll.Info("bot stopped")
 			return nil
 		}); err != nil {
-			ll.WithError(err).Error("can not start bot")
+			ll.With(zap.Error(err)).Fatal("can not start bot")
 		}
-
 	},
 }
 

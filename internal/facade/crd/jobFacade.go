@@ -13,8 +13,8 @@ import (
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
 	"github.com/chenmingyong0423/go-mongox/v2/builder/update"
-	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.uber.org/zap"
 )
 
 // JobReqCrud implements ICrud for JobReqDoc, providing CRUD hooks and collection access.
@@ -92,7 +92,7 @@ func (crd *JobResCrud) PostCreate(ctx context.Context, doc *types.JobResDoc) err
 		return fmt.Errorf("JobResDoc is nil")
 	}
 	if _, err := crd.jReqFac.DeleteOne(ctx, crd.getJobReqQ(doc)); err != nil {
-		ll.WithError(err).Error("failed to delete job req")
+		ll.With(zap.Error(err)).Error("failed to delete job req")
 	}
 	crd.fsCache.Invalidate(ctx)
 	return nil
@@ -114,8 +114,8 @@ func (crd *JobResCrud) GetCollection() mngo.ICollection[types.JobResDoc] {
 }
 
 // getLogger returns a logrus.Entry for the given function name, tagged with the struct type.
-func (crd *JobResCrud) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.FacadeModule).WithField("func", fmt.Sprintf("%T.%s", crd, fn))
+func (crd *JobResCrud) getLogger(fn string) *zap.Logger {
+	return log.Named(log.FacadeModule, fmt.Sprintf("%T.%s", crd, fn))
 }
 
 // getJobReqQ constructs a BSON query for the JobReqID in the given JobResDoc.
@@ -142,7 +142,7 @@ func (crd *JobResCrud) getJobRequest(ctx context.Context, doc *types.JobResDoc) 
 
 // processJobResult processes the job result, stores the result in Minio, and returns the update field for the media document.
 func (crd *JobResCrud) processJobResult(ctx context.Context, doc *types.JobResDoc, jobReq *types.JobReqDoc) error {
-	ll := crd.getLogger("processJobResult").WithField("mediaID", jobReq.MediaID.Hex()).WithField("jobType", jobReq.Type)
+	ll := crd.getLogger("processJobResult").With(zap.String("mediaID", jobReq.MediaID.Hex()), zap.String("jobType", string(jobReq.Type)))
 	jp, err := NewResultProcessor(jobReq, doc, crd.container)
 	if err != nil {
 		return fmt.Errorf("failed to create result processor: %w", err)

@@ -19,7 +19,7 @@ var rootCmd = &cobra.Command{
 	Short: "Telegram media manager",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		cfg := config.Config()
-		log.Setup(cfg.RuntimeConfig.LogLevel)
+		log.Setup(cfg.RuntimeConfig.LogLevel, cfg.RuntimeConfig.Dev)
 		ll := log.GetLogger(log.CmdModule)
 		// ...
 		ctx, cancel := context.WithCancel(cmd.Context())

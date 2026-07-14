@@ -8,7 +8,7 @@ import (
 
 // ICrud defines hooks and collection access for CRUD operations on type T.
 //
-//go:generate mockgen -source=crd.go -destination=../../../mocks/facade/types/crd.go -package=mocks
+//go:generate mockgen -source=crd.go -destination=../../../mocks/facade/types/crd.go -package=mocks_facade_types
 type ICrud[T any] interface {
 	PreCreate(ctx context.Context, doc *T) error
 	PostCreate(ctx context.Context, doc *T) error // errors in post handlers won't affect main transaction (see docs)

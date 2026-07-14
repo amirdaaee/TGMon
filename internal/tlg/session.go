@@ -6,7 +6,7 @@ import (
 
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/gotd/td/telegram/dcs"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"golang.org/x/net/proxy"
 )
 
@@ -44,6 +44,6 @@ func (sessCfg *SessionConfig) getSocksDialer() (*dcs.Resolver, error) {
 	return &dialler, nil
 }
 
-func (sessCfg *SessionConfig) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.TlgModule).WithField("func", fmt.Sprintf("%T.%s", sessCfg, fn))
+func (sessCfg *SessionConfig) getLogger(fn string) *zap.Logger {
+	return log.Named(log.TlgModule, fmt.Sprintf("%T.%s", sessCfg, fn))
 }

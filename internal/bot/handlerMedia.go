@@ -5,21 +5,21 @@ import (
 
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
-	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/amirdaaee/TGMon/internal/worker"
 	"github.com/celestix/gotgproto/dispatcher"
 	"github.com/celestix/gotgproto/dispatcher/handlers"
 	"github.com/celestix/gotgproto/dispatcher/handlers/filters"
 	"github.com/celestix/gotgproto/ext"
 	"github.com/gotd/td/tg"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // mediaHandler implements IHandler for processing media messages.
 type mediaHandler struct {
 	channelID       int64
 	mediaFacade     ftypes.IFacade[types.MediaFileDoc]
-	workerContainer stream.IWorkerPool
+	workerContainer worker.IWorkerPool
 }
 
 var _ IHandler = (*mediaHandler)(nil)
@@ -66,9 +66,9 @@ func (h *mediaHandler) handleDoc(ctx *ext.Context, u *ext.Update) error {
 	if err != nil {
 		return NewBotError("can not create media file doc", err)
 	}
-	ll.Infof("media file doc created: %v", docDoc)
+	ll.Sugar().Infof("media file doc created: %v", docDoc)
 	if err := h.sendSuccessMsg(ctx, u, d); err != nil {
-		ll.WithError(err).Error("can not send success message")
+		ll.With(zap.Error(err)).Error("can not send success message")
 	}
 	return nil
 }
@@ -92,7 +92,7 @@ func (h *mediaHandler) buildMediaFileDoc(newDoc any, msgID int) (types.MediaFile
 // sendSuccessMsg sends a confirmation message to the user after successful processing.
 func (h *mediaHandler) sendSuccessMsg(ctx *ext.Context, u *ext.Update, doc *types.MediaFileDoc) error {
 	ll := h.getLogger("sendSuccessMsg")
-	ll.Debugf("sending success message")
+	ll.Sugar().Debugf("sending success message")
 	m := fmt.Sprintf("ok: %s (%d)", doc.NameExt(), doc.Meta.FileID)
 	if _, err := ctx.Reply(u, ext.ReplyTextString(m), &ext.ReplyOpts{ReplyToMessageId: u.EffectiveMessage.ID}); err != nil {
 		return NewBotError("failed to send success message", err)
@@ -106,13 +106,13 @@ func (h *mediaHandler) getDispatcher(b *Bot) dispatcher.Dispatcher {
 }
 
 // getLogger returns a logger entry with function context for the handler.
-func (h *mediaHandler) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.BotModule).WithField("func", fmt.Sprintf("%T.%s", h, fn))
+func (h *mediaHandler) getLogger(fn string) *zap.Logger {
+	return log.Named(log.BotModule, fmt.Sprintf("%T.%s", h, fn))
 }
 
 // NewMediaHandler creates a new handler instance with the given dependencies.
 // Returns an error if any dependency is nil.
-func NewMediaHandler(mediaFacade ftypes.IFacade[types.MediaFileDoc], channelID int64, wp stream.IWorkerPool) (IHandler, error) {
+func NewMediaHandler(mediaFacade ftypes.IFacade[types.MediaFileDoc], channelID int64, wp worker.IWorkerPool) (IHandler, error) {
 	if mediaFacade == nil {
 		return nil, NewBotError("mediaFacade cannot be nil", nil)
 	}

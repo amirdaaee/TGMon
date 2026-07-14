@@ -5,11 +5,12 @@ import (
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/celestix/gotgproto/dispatcher/handlers"
 	"github.com/celestix/gotgproto/ext"
+	"go.uber.org/zap"
 )
 
 // IHandler defines the interface for bot handlers.
 //
-//go:generate mockgen -source=handler.go -destination=../../mocks/bot/handler.go -package=mocks
+//go:generate mockgen -source=handler.go -destination=../../mocks/bot/handler.go -package=mocks_bot
 type IHandler interface {
 	// Register registers the handler with the given bot instance.
 	Register(b *Bot)
@@ -21,7 +22,7 @@ func HandlerWithErrorMessage(fn handlers.CallbackResponse) handlers.CallbackResp
 		err := fn(c, u)
 		if err != nil {
 			if _, err := c.Reply(u, ext.ReplyTextString(err.Error()), &ext.ReplyOpts{ReplyToMessageId: u.EffectiveMessage.ID}); err != nil {
-				ll.WithError(err).Error("error writing err message")
+				ll.With(zap.Error(err)).Error("error writing err message")
 			}
 			return err
 		}

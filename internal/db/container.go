@@ -8,7 +8,7 @@ import (
 // IDbContainer defines the interface for accessing MongoDB and MinIO containers.
 // It provides methods to retrieve the MongoDB and MinIO container interfaces used in the application.
 //
-//go:generate mockgen -source=container.go -destination=../../mocks/db/container.go -package=mocks
+//go:generate mockgen -source=container.go -destination=../../mocks/db/container.go -package=mocks_db
 type IDbContainer interface {
 	GetMongoContainer() mongo.IMongoContainer
 	GetMinioContainer() minio.IMinioContainer

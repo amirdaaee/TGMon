@@ -11,6 +11,7 @@ import (
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"go.uber.org/zap"
 )
 
 // MountOptions configures the filesystem mount behavior.
@@ -26,8 +27,8 @@ type MountOptions struct {
 
 // MountWithOptions mounts the filesystem with custom options
 func MountWithOptions(mountPoint string, srcs []src.ISrc, dbContainer db.IDbContainer, opts *MountOptions) (*fuse.Server, error) {
-	ll := log.GetLogger(log.FuseModule).WithField("func", "Mount")
-	ll.Infof("Mounting filesystem at: %s", mountPoint)
+	ll := log.Named(log.FuseModule, "MountWithOptions")
+	ll.Sugar().Debugf("Mounting filesystem at: %s", mountPoint)
 
 	if opts == nil {
 		opts = &MountOptions{}
@@ -39,7 +40,7 @@ func MountWithOptions(mountPoint string, srcs []src.ISrc, dbContainer db.IDbCont
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("FUSE device /dev/fuse not found - container may need --device /dev/fuse or --privileged flag")
 		}
-		ll.WithError(err).Warn("Could not stat /dev/fuse - mount may fail")
+		ll.With(zap.Error(err)).Warn("Could not stat /dev/fuse - mount may fail")
 	}
 
 	// ensure mount point exists with proper permissions
@@ -59,7 +60,7 @@ func MountWithOptions(mountPoint string, srcs []src.ISrc, dbContainer db.IDbCont
 		// If the mount point is on a different device than root, it might already be mounted
 		var rootStat syscall.Stat_t
 		if err := syscall.Stat("/", &rootStat); err == nil && stat.Dev != rootStat.Dev {
-			ll.Warnf("Mount point %s appears to be on a different filesystem - ensure it's not already mounted", mountPoint)
+			ll.Sugar().Warnf("Mount point %s appears to be on a different filesystem - ensure it's not already mounted", mountPoint)
 		}
 	}
 
@@ -97,7 +98,7 @@ func MountWithOptions(mountPoint string, srcs []src.ISrc, dbContainer db.IDbCont
 	// After successful mount, try to set permissions for allow-other access
 	if opts.AllowOther {
 		if err := os.Chmod(mountPoint, 0777); err != nil {
-			ll.WithError(err).Warn("Failed to set mount point permissions to 0777 (this may be normal)")
+			ll.With(zap.Error(err)).Warn("Failed to set mount point permissions to 0777 (this may be normal)")
 		}
 	}
 
@@ -107,13 +108,13 @@ func MountWithOptions(mountPoint string, srcs []src.ISrc, dbContainer db.IDbCont
 
 // Unmount unmounts the filesystem
 func Unmount(mountPoint string) error {
-	ll := log.GetLogger(log.FuseModule).WithField("func", "Unmount")
-	ll.Infof("Unmounting filesystem at: %s", mountPoint)
+	ll := log.Named(log.FuseModule, "Unmount")
+	ll.Sugar().Debugf("Unmounting filesystem at: %s", mountPoint)
 
 	// Try to unmount using fusermount
 	if err := syscall.Unmount(mountPoint, 0); err != nil {
 		// If that fails, try with MNT_FORCE
-		ll.WithError(err).Error("failed to unmount filesystem using fusermount. trying with MNT_FORCE")
+		ll.With(zap.Error(err)).Error("failed to unmount filesystem using fusermount. trying with MNT_FORCE")
 		if err := syscall.Unmount(mountPoint, syscall.MNT_FORCE); err != nil {
 			return fmt.Errorf("failed to unmount: %w", err)
 		}

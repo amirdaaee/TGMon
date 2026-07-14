@@ -3,11 +3,12 @@ package wire
 import (
 	"github.com/amirdaaee/TGMon/internal/log"
 	"go.uber.org/dig"
+	"go.uber.org/zap"
 )
 
 func mustProvide(c *dig.Container, name string, ctor any) {
 	if err := c.Provide(ctor); err != nil {
-		log.GetLogger(log.CmdModule).WithError(err).WithField("provider", name).Fatal("wire: register provider")
+		log.GetLogger(log.CmdModule).With(zap.Error(err), zap.String("provider", name)).Fatal("wire: register provider")
 	}
 }
 func GetProvider() *dig.Container {

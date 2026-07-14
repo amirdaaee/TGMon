@@ -7,7 +7,7 @@ import (
 
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/tlg"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // Bot represents the core bot instance that manages the Telegram client.
@@ -29,8 +29,8 @@ func (b *Bot) Start(ctx context.Context) error {
 }
 
 // getLogger returns a logger entry with function context for the Bot.
-func (b *Bot) getLogger(fn string) *logrus.Entry {
-	return log.GetLogger(log.BotModule).WithField("func", fmt.Sprintf("%T.%s", b, fn))
+func (b *Bot) getLogger(fn string) *zap.Logger {
+	return log.Named(log.BotModule, fmt.Sprintf("%T.%s", b, fn))
 }
 
 // NewBot creates and connects a new Bot instance with the given Telegram client.

@@ -6,7 +6,6 @@ require (
 	github.com/caarlos0/env/v11 v11.1.0
 	github.com/gin-contrib/cors v1.7.6
 	github.com/glebarez/sqlite v1.11.0
-	github.com/go-faster/errors v0.7.1
 	github.com/google/uuid v1.6.0
 	github.com/gotd/td v0.127.0
 	github.com/hanwen/go-fuse/v2 v2.9.0
@@ -21,6 +20,7 @@ require (
 	github.com/swaggo/swag v1.16.4
 	go.uber.org/dig v1.19.0
 	go.uber.org/mock v0.5.2
+	go.uber.org/zap v1.27.0
 	golang.org/x/net v0.42.0
 	golang.org/x/sync v0.16.0
 )
@@ -43,6 +43,7 @@ require (
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/glebarez/go-sqlite v1.22.0 // indirect
+	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/go-faster/jx v1.1.0 // indirect
 	github.com/go-faster/xor v1.0.0 // indirect
 	github.com/go-faster/yaml v0.4.6 // indirect
@@ -96,7 +97,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/arch v0.18.0 // indirect
 	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
@@ -121,7 +121,6 @@ require (
 	github.com/gotd/contrib v0.20.0
 	github.com/minio/minio-go/v7 v7.0.75
 	github.com/quantumsheep/range-parser v1.1.0
-	github.com/sirupsen/logrus v1.9.3
 	go.mongodb.org/mongo-driver/v2 v2.2.2
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/time v0.12.0
