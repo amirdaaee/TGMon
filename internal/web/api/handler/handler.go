@@ -12,3 +12,13 @@ type IGetApiHandler interface {
 	AuthGet() bool
 	RelativePathGet() string
 }
+type IPutApiHandler interface {
+	Put(g *gin.Context)
+	AuthPut() bool
+	RelativePathPut() string
+}
+type IPatchApiHandler interface {
+	Patch(g *gin.Context)
+	AuthPatch() bool
+	RelativePathPatch() string
+}

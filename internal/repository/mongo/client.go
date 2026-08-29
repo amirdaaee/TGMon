@@ -18,6 +18,7 @@ const (
 	jobResCollectionName      = "jobres"
 	fuseStateCollectionName   = "fuserename"
 	workerMediaCollectionName = "workermedia"
+	mediaExtCollectionName    = "mediaext"
 	createdAtField            = "created_at"
 )
 

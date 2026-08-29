@@ -26,6 +26,7 @@ func GetProvider() *dig.Container {
 	mustProvide(c, "JobResRepo", ProvideJobResRepo)
 	mustProvide(c, "FuseStateRepo", ProvideFuseStateRepo)
 	mustProvide(c, "WorkerRepo", ProvideWorkerRepo)
+	mustProvide(c, "MediaExtendedMetaRepo", ProvideMediaExtendedMetaRepo)
 	mustProvide(c, "MediaFacade", ProvideMediaFacade)
 	mustProvide(c, "JobReqFacade", ProvideJobReqFacade)
 	mustProvide(c, "JobResFacade", ProvideJobResFacade)

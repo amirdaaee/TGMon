@@ -24,6 +24,7 @@ type MediaCrud struct {
 	workerContainer worker.IWorkerPool
 	keepDup         bool
 	fsCache         *cache.DBCache[string, *types.MediaFileDoc]
+	mediaMeta       repository.MediaExtendedMetaRepository
 }
 
 var _ ftypes.ICrud[types.MediaFileDoc] = (*MediaCrud)(nil)
@@ -79,6 +80,9 @@ func (crd *MediaCrud) PostDelete(ctx context.Context, doc *types.MediaFileDoc) e
 	} else if deleted > 0 {
 		ll.Sugar().Debugf("deleted %d orphaned jobs", deleted)
 	}
+	if err := crd.mediaMeta.DeleteByMediaFileID(ctx, doc.ID); err != nil {
+		ll.With(zap.Error(err)).Error("failed to delete orphaned media meta")
+	}
 	for _, fn := range []string{doc.Vtt, doc.Thumbnail, doc.Srt, doc.Sprite} {
 		if fn != "" {
 			var lastErr error
@@ -105,7 +109,7 @@ func (crd *MediaCrud) getLogger(fn string) *zap.Logger {
 }
 
 // NewMediaCrud creates a new MediaCrud with the provided repositories.
-func NewMediaCrud(media repository.MediaFileRepository, objects repository.ObjectStore, jobReqs repository.JobReqRepository, workerContainer worker.IWorkerPool, keepDup bool, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.ICrud[types.MediaFileDoc] {
+func NewMediaCrud(media repository.MediaFileRepository, objects repository.ObjectStore, jobReqs repository.JobReqRepository, workerContainer worker.IWorkerPool, keepDup bool, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc], mediaMeta repository.MediaExtendedMetaRepository) ftypes.ICrud[types.MediaFileDoc] {
 	return &MediaCrud{
 		media:           media,
 		objects:         objects,
@@ -114,6 +118,7 @@ func NewMediaCrud(media repository.MediaFileRepository, objects repository.Objec
 		workerContainer: workerContainer,
 		keepDup:         keepDup,
 		fsCache:         fsCache,
+		mediaMeta:       mediaMeta,
 	}
 }
 

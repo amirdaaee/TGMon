@@ -81,7 +81,7 @@ func ProvideGinEngine(cfg *config.ConfigType, hndlr []wtypes.Registereable) *gin
 	return g
 }
 
-func ProvideWebHandler(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.MediaFileDoc], jobReqFacade ftypes.IFacade[types.JobReqDoc], jobResFacade ftypes.IFacade[types.JobResDoc], media repository.MediaFileRepository, jobReqs repository.JobReqRepository, wp worker.IWorkerPool, stshCl *stash.StashQlClient) []wtypes.Registereable {
+func ProvideWebHandler(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.MediaFileDoc], jobReqFacade ftypes.IFacade[types.JobReqDoc], jobResFacade ftypes.IFacade[types.JobResDoc], media repository.MediaFileRepository, jobReqs repository.JobReqRepository, wp worker.IWorkerPool, stshCl *stash.StashQlClient, mediaMeta repository.MediaExtendedMetaRepository) []wtypes.Registereable {
 	hCfg := cfg.HttpConfig
 	stshCfg := cfg.StashRedirectorConfig
 	strmConfig := cfg.StreamConfig
@@ -106,6 +106,7 @@ func ProvideWebHandler(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.
 		Token: hCfg.ApiToken,
 	}
 	randomMediaHandler := waHndlr.NewRandomMediaApiHandler(media)
+	mediaMetaHandler := waHndlr.NewMediaMetaApiHandler(media, mediaMeta)
 	result := []wtypes.Registereable{
 		streamHandler,
 		wRest.NewCRDApiHandler(mediaHandler, mediafacade, "media"),
@@ -115,6 +116,7 @@ func ProvideWebHandler(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.
 		wApi.NewApiHandler(loginHandler, "auth/login"),
 		wApi.NewApiHandler(sessionHandler, "auth/session"),
 		wApi.NewApiHandler(randomMediaHandler, "media/random"),
+		wApi.NewApiHandler(mediaMetaHandler, "media/:id/meta"),
 	}
 	if stshCfg.Enabled {
 		stashVTTRedirectorHandler := waHndlr.StashVTTRedirectorApiHandler{
@@ -179,10 +181,14 @@ func ProvideWorkerRepo(cl *repomongo.Client) repository.WorkerMediaRepository {
 	return repomongo.NewWorkerRepo(cl)
 }
 
+func ProvideMediaExtendedMetaRepo(cl *repomongo.Client) repository.MediaExtendedMetaRepository {
+	return repomongo.NewMediaExtendedMetaRepo(cl)
+}
+
 // ... Facades
-func ProvideMediaFacade(media repository.MediaFileRepository, objects repository.ObjectStore, jobReqs repository.JobReqRepository, workerContainer worker.IWorkerPool, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.IFacade[types.MediaFileDoc] {
+func ProvideMediaFacade(media repository.MediaFileRepository, objects repository.ObjectStore, jobReqs repository.JobReqRepository, workerContainer worker.IWorkerPool, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc], mediaMeta repository.MediaExtendedMetaRepository) ftypes.IFacade[types.MediaFileDoc] {
 	cfg := config.Config()
-	return facade.NewFacade(media, crd.NewMediaCrud(media, objects, jobReqs, workerContainer, cfg.RuntimeConfig.KeepDupFiles, jobReqFacade, fsCache))
+	return facade.NewFacade(media, crd.NewMediaCrud(media, objects, jobReqs, workerContainer, cfg.RuntimeConfig.KeepDupFiles, jobReqFacade, fsCache, mediaMeta))
 }
 
 func ProvideJobReqFacade(jobReqs repository.JobReqRepository) ftypes.IFacade[types.JobReqDoc] {

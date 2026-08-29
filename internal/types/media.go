@@ -3,9 +3,11 @@ package types
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/chenmingyong0423/go-mongox/v2"
 	"github.com/gotd/td/tg"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // ...
@@ -17,6 +19,15 @@ const (
 	MediaFileDoc__FileIDField    = "Meta.FileID"
 	MediaFileDoc__UnameField     = "UName"
 	MediaFileDoc__HasHashField   = "HasHash"
+)
+
+const (
+	MediaExtendedMeta__MediaFileIDField  = "MediaFileID"
+	MediaExtendedMeta__LastPlayedAtField = "LastPlayedAt"
+	MediaExtendedMeta__CheckpointField   = "Checkpoint"
+	MediaExtendedMeta__ScoreField        = "Score"
+	MediaExtendedMeta__LikesField        = "Likes"
+	MediaExtendedMeta__IsFavoriteField   = "IsFavorite"
 )
 
 type MediaFileMeta struct {
@@ -73,6 +84,25 @@ func (m *MediaFileMeta) FillFromDocument(doc *tg.Document) error {
 	m.MimeType = doc.MimeType
 	m.FileID = doc.ID
 	return nil
+}
+
+type MediaExtendedMeta struct {
+	mongox.Model `bson:",inline"`
+	MediaFileID  bson.ObjectID `bson:"MediaFileID"`
+	LastPlayedAt time.Time     `bson:"LastPlayedAt"`
+	Checkpoint   uint64        `bson:"Checkpoint"`
+	Score        int           `bson:"Score"`
+	Likes        int           `bson:"Likes"`
+	IsFavorite   bool          `bson:"IsFavorite"`
+}
+
+// MediaExtendedMetaPatch holds optional fields for a partial update. Nil means leave unchanged.
+type MediaExtendedMetaPatch struct {
+	LastPlayedAt *time.Time
+	Checkpoint   *uint64
+	Score        *int
+	Likes        *int
+	IsFavorite   *bool
 }
 
 func RemoveExtension(fileName string) string {

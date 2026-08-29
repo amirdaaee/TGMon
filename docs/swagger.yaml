@@ -37,6 +37,32 @@ definitions:
       Token:
         type: string
     type: object
+  handler.MediaMetaPatchReqType:
+    properties:
+      Checkpoint:
+        type: integer
+      IsFavorite:
+        type: boolean
+      LastPlayedAt:
+        type: string
+      Likes:
+        type: integer
+      Score:
+        type: integer
+    type: object
+  handler.MediaMetaPutReqType:
+    properties:
+      Checkpoint:
+        type: integer
+      IsFavorite:
+        type: boolean
+      LastPlayedAt:
+        type: string
+      Likes:
+        type: integer
+      Score:
+        type: integer
+    type: object
   handler.RandomMediaGetResType:
     properties:
       MediaID:
@@ -98,6 +124,29 @@ definitions:
     - SPRITEJobType
     - EmbeddingJobType
     - TranscriptionJobType
+  types.MediaExtendedMeta:
+    properties:
+      Checkpoint:
+        type: integer
+      CreatedAt:
+        type: string
+      DeletedAt:
+        type: string
+      ID:
+        type: string
+      IsFavorite:
+        type: boolean
+      LastPlayedAt:
+        type: string
+      Likes:
+        type: integer
+      MediaFileID:
+        type: string
+      Score:
+        type: integer
+      UpdatedAt:
+        type: string
+    type: object
   types.MediaFileDoc:
     properties:
       CreatedAt:
@@ -322,6 +371,80 @@ paths:
       summary: Read media
       tags:
       - media
+  /api/media/{id}/meta/:
+    get:
+      parameters:
+      - description: Media ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.MediaExtendedMeta'
+      security:
+      - ApiKeyAuth: []
+      summary: Get media extended meta
+      tags:
+      - mediaMeta
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Media ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Media meta patch
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/handler.MediaMetaPatchReqType'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.MediaExtendedMeta'
+      security:
+      - ApiKeyAuth: []
+      summary: Patch media extended meta
+      tags:
+      - mediaMeta
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Media ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Media meta
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/handler.MediaMetaPutReqType'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.MediaExtendedMeta'
+      security:
+      - ApiKeyAuth: []
+      summary: Replace media extended meta
+      tags:
+      - mediaMeta
   /api/media/random/:
     get:
       produces:

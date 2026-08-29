@@ -323,6 +323,125 @@
                     }
                 }
             }
+        },
+        "/api/media/{id}/meta/": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mediaMeta"
+                ],
+                "summary": "Get media extended meta",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Media ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/types.MediaExtendedMeta"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mediaMeta"
+                ],
+                "summary": "Replace media extended meta",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Media ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Media meta",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.MediaMetaPutReqType"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/types.MediaExtendedMeta"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mediaMeta"
+                ],
+                "summary": "Patch media extended meta",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Media ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Media meta patch",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.MediaMetaPatchReqType"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/types.MediaExtendedMeta"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -382,6 +501,46 @@
             "properties": {
                 "Token": {
                     "type": "string"
+                }
+            }
+        },
+        "handler.MediaMetaPatchReqType": {
+            "type": "object",
+            "properties": {
+                "Checkpoint": {
+                    "type": "integer"
+                },
+                "IsFavorite": {
+                    "type": "boolean"
+                },
+                "LastPlayedAt": {
+                    "type": "string"
+                },
+                "Likes": {
+                    "type": "integer"
+                },
+                "Score": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.MediaMetaPutReqType": {
+            "type": "object",
+            "properties": {
+                "Checkpoint": {
+                    "type": "integer"
+                },
+                "IsFavorite": {
+                    "type": "boolean"
+                },
+                "LastPlayedAt": {
+                    "type": "string"
+                },
+                "Likes": {
+                    "type": "integer"
+                },
+                "Score": {
+                    "type": "integer"
                 }
             }
         },
@@ -474,6 +633,41 @@
                 "EmbeddingJobType",
                 "TranscriptionJobType"
             ]
+        },
+        "types.MediaExtendedMeta": {
+            "type": "object",
+            "properties": {
+                "Checkpoint": {
+                    "type": "integer"
+                },
+                "CreatedAt": {
+                    "type": "string"
+                },
+                "DeletedAt": {
+                    "type": "string"
+                },
+                "ID": {
+                    "type": "string"
+                },
+                "IsFavorite": {
+                    "type": "boolean"
+                },
+                "LastPlayedAt": {
+                    "type": "string"
+                },
+                "Likes": {
+                    "type": "integer"
+                },
+                "MediaFileID": {
+                    "type": "string"
+                },
+                "Score": {
+                    "type": "integer"
+                },
+                "UpdatedAt": {
+                    "type": "string"
+                }
+            }
         },
         "types.MediaFileDoc": {
             "type": "object",

@@ -36,6 +36,24 @@ func (a *ApiHandler) RegisterRoutes(r *gin.RouterGroup, authMiddleware gin.Handl
 		apiG.GET(v.RelativePathGet(), mid...)
 		registered = true
 	}
+	if v, ok := a.hndler.(handler.IPutApiHandler); ok {
+		mid := []gin.HandlerFunc{}
+		if v.AuthPut() {
+			mid = append(mid, authMiddleware)
+		}
+		mid = append(mid, v.Put)
+		apiG.PUT(v.RelativePathPut(), mid...)
+		registered = true
+	}
+	if v, ok := a.hndler.(handler.IPatchApiHandler); ok {
+		mid := []gin.HandlerFunc{}
+		if v.AuthPatch() {
+			mid = append(mid, authMiddleware)
+		}
+		mid = append(mid, v.Patch)
+		apiG.PATCH(v.RelativePathPatch(), mid...)
+		registered = true
+	}
 	if !registered {
 		return fmt.Errorf("no routes registered for %s", a.name)
 	}
