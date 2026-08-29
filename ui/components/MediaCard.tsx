@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { assetUrl } from "@/lib/config";
-import { formatDuration, isResumable, mediaTitle } from "@/lib/format";
+import {
+  formatDuration,
+  formatFileSize,
+  isResumable,
+  mediaTitle,
+} from "@/lib/format";
 import type { MediaWithMeta } from "@/lib/types";
 import { PlaceholderThumb } from "./PlaceholderThumb";
 
@@ -16,6 +21,9 @@ export function MediaCard({
   const id = String(media.ID);
   const title = mediaTitle(media);
   const duration = media.Meta?.Duration ?? 0;
+  const fileSize = formatFileSize(media.Meta?.FileSize ?? 0);
+  const score = meta?.Score ?? 0;
+  const isFavorite = Boolean(meta?.IsFavorite);
   const checkpoint = meta?.Checkpoint ?? 0;
   const thumb = assetUrl(media.Thumbnail);
   const resumable = isResumable(checkpoint, duration);
@@ -43,6 +51,15 @@ export function MediaCard({
             <PlayIcon />
           </span>
         </div>
+        {isFavorite ? (
+          <span
+            className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-accent"
+            title="Favorite"
+            aria-label="Favorite"
+          >
+            <HeartIcon filled />
+          </span>
+        ) : null}
         {duration > 0 ? (
           <span className="absolute right-2 bottom-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] text-zinc-100">
             {formatDuration(duration)}
@@ -61,6 +78,20 @@ export function MediaCard({
         <h2 className="line-clamp-2 text-sm font-medium leading-snug text-zinc-100">
           {title}
         </h2>
+        <div className="mt-1.5 flex items-center gap-2 text-xs text-muted">
+          {fileSize ? <span>{fileSize}</span> : null}
+          {fileSize && score > 0 ? (
+            <span className="text-zinc-600" aria-hidden>
+              ·
+            </span>
+          ) : null}
+          {score > 0 ? (
+            <span className="inline-flex items-center gap-0.5 text-accent">
+              <StarIcon />
+              <span className="font-mono tabular-nums">{score}</span>
+            </span>
+          ) : null}
+        </div>
         {resumable ? (
           <p className="mt-1 text-xs text-accent">Continue watching</p>
         ) : null}
@@ -73,6 +104,29 @@ function PlayIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden>
       <path d="M8 5.14v13.72L19 12 8 5.14Z" />
+    </svg>
+  );
+}
+
+function HeartIcon({ filled }: { filled?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden
+    >
+      <path d="M12 21s-7.2-4.6-9.4-9.1C1.2 8.7 3.1 5.5 6.6 5.2c1.8-.2 3.4.7 4.4 2.1 1-1.4 2.6-2.3 4.4-2.1 3.5.3 5.4 3.5 4 6.7C19.2 16.4 12 21 12 21Z" />
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3 w-3 fill-current" aria-hidden>
+      <path d="m12 2.5 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 16.4 6.6 19.3l1-6.1-4.4-4.3 6.1-.9L12 2.5Z" />
     </svg>
   );
 }
