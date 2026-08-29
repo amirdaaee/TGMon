@@ -3,7 +3,7 @@ definitions:
     properties:
       Media:
         items:
-          $ref: '#/definitions/types.MediaFileDoc'
+          $ref: '#/definitions/crd.MediaWithMetaType'
         type: array
       Total:
         type: integer
@@ -12,10 +12,19 @@ definitions:
     properties:
       Media:
         $ref: '#/definitions/types.MediaFileDoc'
+      Meta:
+        $ref: '#/definitions/types.MediaExtendedMeta'
       nextID:
         type: string
       pervID:
         type: string
+    type: object
+  crd.MediaWithMetaType:
+    properties:
+      Media:
+        $ref: '#/definitions/types.MediaFileDoc'
+      Meta:
+        $ref: '#/definitions/types.MediaExtendedMeta'
     type: object
   handler.InfoGetResType:
     properties:

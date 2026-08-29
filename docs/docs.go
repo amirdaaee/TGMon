@@ -460,7 +460,7 @@ const docTemplate = `{
                 "Media": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/types.MediaFileDoc"
+                        "$ref": "#/definitions/crd.MediaWithMetaType"
                     }
                 },
                 "Total": {
@@ -474,11 +474,25 @@ const docTemplate = `{
                 "Media": {
                     "$ref": "#/definitions/types.MediaFileDoc"
                 },
+                "Meta": {
+                    "$ref": "#/definitions/types.MediaExtendedMeta"
+                },
                 "nextID": {
                     "type": "string"
                 },
                 "pervID": {
                     "type": "string"
+                }
+            }
+        },
+        "crd.MediaWithMetaType": {
+            "type": "object",
+            "properties": {
+                "Media": {
+                    "$ref": "#/definitions/types.MediaFileDoc"
+                },
+                "Meta": {
+                    "$ref": "#/definitions/types.MediaExtendedMeta"
                 }
             }
         },

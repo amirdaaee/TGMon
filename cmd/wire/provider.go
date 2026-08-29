@@ -91,7 +91,7 @@ func ProvideWebHandler(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.
 		StreamMaxRetries:  strmConfig.StreamMaxRetries,
 		StreamTimeoutSec:  strmConfig.StreamTimeoutSec,
 	})
-	mediaHandler := wrCrd.NewMediaHandler(media)
+	mediaHandler := wrCrd.NewMediaHandler(media, mediaMeta)
 	jobReqHandler := wrCrd.NewJobReqHandler(jobReqs)
 	jobResHandler := &wrCrd.JobResHandler{}
 	infoHandler := &waHndlr.MediaInfoApiHandler{

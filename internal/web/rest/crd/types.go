@@ -8,8 +8,12 @@ import (
 type MediaReadReqType struct {
 	ID string `uri:"id" binding:"required"`
 }
+type MediaWithMetaType struct {
+	Media *types.MediaFileDoc
+	Meta  *types.MediaExtendedMeta
+}
 type MediaReadResType struct {
-	Media  *types.MediaFileDoc
+	MediaWithMetaType
 	PervID *bson.ObjectID `json:"pervID"`
 	NextID *bson.ObjectID `json:"nextID"`
 }
@@ -20,7 +24,7 @@ type MediaDelReqType struct {
 	ID string `uri:"id" binding:"required"`
 }
 type MediaListResType struct {
-	Media []*types.MediaFileDoc
+	Media []*MediaWithMetaType
 	Total int64
 }
 

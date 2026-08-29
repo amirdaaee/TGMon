@@ -1,6 +1,7 @@
 package crd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/amirdaaee/TGMon/internal/log"
@@ -14,6 +15,7 @@ import (
 // MediaHandler implements IHandler for media resources.
 type MediaHandler struct {
 	media repository.MediaFileRepository
+	meta  repository.MediaExtendedMetaRepository
 	ll    *zap.Logger
 }
 
@@ -46,8 +48,15 @@ func (h *MediaHandler) MarshalReadResponse(g *gin.Context, v *types.MediaFileDoc
 	if err != nil {
 		ll.With(zap.Error(err)).Error("error finding neighbor documents")
 	}
+	meta, err := h.metaFor(g.Request.Context(), v.ID)
+	if err != nil {
+		return nil, err
+	}
 	return MediaReadResType{
-		Media:  v,
+		MediaWithMetaType: MediaWithMetaType{
+			Media: v,
+			Meta:  meta,
+		},
 		PervID: prevDocID,
 		NextID: nextDocID,
 	}, nil
@@ -70,10 +79,17 @@ func (h *MediaHandler) HandleList(g *gin.Context) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error listing media: %w", err)
 	}
-	res := make([]*types.MediaFileDoc, len(docs))
+	res := make([]*MediaWithMetaType, len(docs))
 	for i, doc := range docs {
 		_v := types.MediaFileDoc(*doc)
-		res[i] = &_v
+		meta, err := h.metaFor(g.Request.Context(), _v.ID)
+		if err != nil {
+			return nil, err
+		}
+		res[i] = &MediaWithMetaType{
+			Media: &_v,
+			Meta:  meta,
+		}
 	}
 	total, err := h.media.Count(g.Request.Context())
 	if err != nil {
@@ -104,9 +120,18 @@ func (h *MediaHandler) BindDeleteRequest(g *gin.Context) (bson.ObjectID, error) 
 	return idObj, nil
 }
 
-func NewMediaHandler(media repository.MediaFileRepository) *MediaHandler {
+func (h *MediaHandler) metaFor(ctx context.Context, mediaFileID bson.ObjectID) (*types.MediaExtendedMeta, error) {
+	doc, err := h.meta.GetOrCreateByMediaFileID(ctx, mediaFileID)
+	if err != nil {
+		return nil, fmt.Errorf("error getting media meta: %w", err)
+	}
+	return doc, nil
+}
+
+func NewMediaHandler(media repository.MediaFileRepository, meta repository.MediaExtendedMetaRepository) *MediaHandler {
 	return &MediaHandler{
 		media: media,
+		meta:  meta,
 		ll:    log.Named(log.WebModule, "MediaHandler"),
 	}
 }
