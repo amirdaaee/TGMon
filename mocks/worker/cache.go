@@ -10,75 +10,48 @@
 package mocks_worker
 
 import (
+	context "context"
 	reflect "reflect"
 
+	tg "github.com/gotd/td/tg"
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockIFileCache is a mock of IFileCache interface.
-type MockIFileCache[T any] struct {
+// MockITGDocCache is a mock of ITGDocCache interface.
+type MockITGDocCache struct {
 	ctrl     *gomock.Controller
-	recorder *MockIFileCacheMockRecorder[T]
+	recorder *MockITGDocCacheMockRecorder
 	isgomock struct{}
 }
 
-// MockIFileCacheMockRecorder is the mock recorder for MockIFileCache.
-type MockIFileCacheMockRecorder[T any] struct {
-	mock *MockIFileCache[T]
+// MockITGDocCacheMockRecorder is the mock recorder for MockITGDocCache.
+type MockITGDocCacheMockRecorder struct {
+	mock *MockITGDocCache
 }
 
-// NewMockIFileCache creates a new mock instance.
-func NewMockIFileCache[T any](ctrl *gomock.Controller) *MockIFileCache[T] {
-	mock := &MockIFileCache[T]{ctrl: ctrl}
-	mock.recorder = &MockIFileCacheMockRecorder[T]{mock}
+// NewMockITGDocCache creates a new mock instance.
+func NewMockITGDocCache(ctrl *gomock.Controller) *MockITGDocCache {
+	mock := &MockITGDocCache{ctrl: ctrl}
+	mock.recorder = &MockITGDocCacheMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockIFileCache[T]) EXPECT() *MockIFileCacheMockRecorder[T] {
+func (m *MockITGDocCache) EXPECT() *MockITGDocCacheMockRecorder {
 	return m.recorder
 }
 
-// Get mocks base method.
-func (m *MockIFileCache[T]) Get(arg0 string) (T, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", arg0)
-	ret0, _ := ret[0].(T)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Get indicates an expected call of Get.
-func (mr *MockIFileCacheMockRecorder[T]) Get(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockIFileCache[T])(nil).Get), arg0)
-}
-
 // GetOrSet mocks base method.
-func (m *MockIFileCache[T]) GetOrSet(arg0 string, arg1 func() (T, error)) (T, error) {
+func (m *MockITGDocCache) GetOrSet(ctx context.Context, WorkerID int64, messageID int, fn func() (*tg.Document, error)) (*tg.Document, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOrSet", arg0, arg1)
-	ret0, _ := ret[0].(T)
+	ret := m.ctrl.Call(m, "GetOrSet", ctx, WorkerID, messageID, fn)
+	ret0, _ := ret[0].(*tg.Document)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetOrSet indicates an expected call of GetOrSet.
-func (mr *MockIFileCacheMockRecorder[T]) GetOrSet(arg0, arg1 any) *gomock.Call {
+func (mr *MockITGDocCacheMockRecorder) GetOrSet(ctx, WorkerID, messageID, fn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrSet", reflect.TypeOf((*MockIFileCache[T])(nil).GetOrSet), arg0, arg1)
-}
-
-// Set mocks base method.
-func (m *MockIFileCache[T]) Set(arg0 string, arg1 T) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Set", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Set indicates an expected call of Set.
-func (mr *MockIFileCacheMockRecorder[T]) Set(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockIFileCache[T])(nil).Set), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrSet", reflect.TypeOf((*MockITGDocCache)(nil).GetOrSet), ctx, WorkerID, messageID, fn)
 }

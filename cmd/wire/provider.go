@@ -175,6 +175,9 @@ func ProvideJobResRepo(cl *repomongo.Client) repository.JobResRepository {
 func ProvideFuseStateRepo(cl *repomongo.Client) repository.FuseStateRepository {
 	return repomongo.NewFuseStateRepo(cl)
 }
+func ProvideWorkerRepo(cl *repomongo.Client) repository.WorkerMediaRepository {
+	return repomongo.NewWorkerRepo(cl)
+}
 
 // ... Facades
 func ProvideMediaFacade(media repository.MediaFileRepository, objects repository.ObjectStore, jobReqs repository.JobReqRepository, workerContainer worker.IWorkerPool, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.IFacade[types.MediaFileDoc] {
@@ -204,8 +207,8 @@ func ProvideTgClient(cfg *config.ConfigType, sessCfg *tlg.SessionConfig) tlg.ICl
 	tgClient := tlg.NewTgClient(sessCfg, cfg.TelegramConfig.BotToken)
 	return tgClient
 }
-func ProvideTgWorkerPool(cfg *config.ConfigType, sessCfg *tlg.SessionConfig) (worker.IWorkerPool, error) {
-	wp, err := worker.NewWorkerPool(cfg.TelegramConfig.WorkerTokens, sessCfg, cfg.TelegramConfig.ChannelID, cfg.TelegramConfig.WorkerCacheRoot, &stream.StreamConfig{
+func ProvideTgWorkerPool(cfg *config.ConfigType, sessCfg *tlg.SessionConfig, workerRepo repository.WorkerMediaRepository) (worker.IWorkerPool, error) {
+	wp, err := worker.NewWorkerPool(cfg.TelegramConfig.WorkerTokens, sessCfg, cfg.TelegramConfig.ChannelID, workerRepo, &stream.StreamConfig{
 		StreamBufferCount: cfg.StreamConfig.StreamBufferCount,
 		StreamConcurrency: cfg.StreamConfig.StreamConcurrency,
 		StreamMaxRetries:  cfg.StreamConfig.StreamMaxRetries,

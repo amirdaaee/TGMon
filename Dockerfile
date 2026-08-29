@@ -11,10 +11,8 @@ RUN apk add --no-cache fuse fuse3
 RUN echo "user_allow_other" >> /etc/fuse.conf
 ENV GIN_MODE=release
 ENV TELEGRAM__SESSION_DIR="/TGMon/session"
-ENV TELEGRAM__WORKER_CACHE_ROOT="/TGMon/worker-cache"
 ENV RUNTIME__LOG_LEVEL=WARNING
-RUN mkdir -p $TELEGRAM__SESSION_DIR &&\
-    mkdir -p $TELEGRAM__WORKER_CACHE_ROOT
+RUN mkdir -p $TELEGRAM__SESSION_DIR
 COPY --from=build /app/tgmon /bin/tgmon
 VOLUME /TGMon
 CMD ["/bin/tgmon"]

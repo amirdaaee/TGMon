@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/repository"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	"go.uber.org/zap"
@@ -43,7 +44,7 @@ func (wp *workerPool) GetNextWorker() IWorker {
 
 // NewWorkerPool initializes workers concurrently from the provided bot tokens
 // and aggregates them into a pool. Returns error if no worker could be started.
-func NewWorkerPool(tokens []string, sessCfg *tlg.SessionConfig, channelID int64, cacheRoot string, streamConfig *stream.StreamConfig) (IWorkerPool, error) {
+func NewWorkerPool(tokens []string, sessCfg *tlg.SessionConfig, channelID int64, workerRepo repository.WorkerMediaRepository, streamConfig *stream.StreamConfig) (IWorkerPool, error) {
 	ll := log.GetLogger(log.WorkerModule)
 	wp := workerPool{
 		ll: ll,
@@ -58,7 +59,7 @@ func NewWorkerPool(tokens []string, sessCfg *tlg.SessionConfig, channelID int64,
 			workerLog := ll.With(zap.String("worker", token[:4]))
 			workerLog.Info("initiating worker")
 
-			worker, err := NewWorker(token, sessCfg, channelID, cacheRoot, streamConfig)
+			worker, err := NewWorker(token, sessCfg, channelID, streamConfig, workerRepo)
 			if err != nil {
 				workerLog.With(zap.Error(err)).Error("cannot create worker, skipping")
 				return

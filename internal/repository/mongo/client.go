@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	filesCollectionName     = "files"
-	jobReqCollectionName    = "job"
-	jobResCollectionName    = "jobres"
-	fuseStateCollectionName = "fuserename"
-	createdAtField          = "created_at"
+	filesCollectionName       = "files"
+	jobReqCollectionName      = "job"
+	jobResCollectionName      = "jobres"
+	fuseStateCollectionName   = "fuserename"
+	workerMediaCollectionName = "workermedia"
+	createdAtField            = "created_at"
 )
 
 // Config holds MongoDB connection settings.

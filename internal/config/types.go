@@ -9,14 +9,13 @@ type HttpConfigType struct {
 	ListenAddr   string   `env:"LISTEN_ADDR" envDefault:":8080"`
 }
 type TelegramConfigType struct {
-	AppID           int      `env:"APP_ID,required"`
-	AppHash         string   `env:"APP_HASH,required"`
-	TGSocksProxy    string   `env:"TG_SOCKS_PROXY"`
-	BotToken        string   `env:"BOT_TOKEN,required"`
-	WorkerTokens    []string `env:"WORKER_TOKENS,notEmpty"`
-	WorkerCacheRoot string   `env:"WORKER_CACHE_ROOT,required"`
-	SessionDir      string   `env:"SESSION_DIR" envDefault:"sessions"`
-	ChannelID       int64    `env:"CHANNEL_ID,required"`
+	AppID        int      `env:"APP_ID,required"`
+	AppHash      string   `env:"APP_HASH,required"`
+	TGSocksProxy string   `env:"TG_SOCKS_PROXY"`
+	BotToken     string   `env:"BOT_TOKEN,required"`
+	WorkerTokens []string `env:"WORKER_TOKENS,notEmpty"`
+	SessionDir   string   `env:"SESSION_DIR" envDefault:"sessions"`
+	ChannelID    int64    `env:"CHANNEL_ID,required"`
 }
 type MinioConfigType struct {
 	Endpoint  string `env:"ENDPOINT,required"`

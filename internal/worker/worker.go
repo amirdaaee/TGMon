@@ -6,10 +6,11 @@ import (
 	"io"
 	"sync"
 
+	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/repository"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	"github.com/celestix/gotgproto"
-	"github.com/gotd/td/bin"
 	"github.com/gotd/td/tg"
 )
 
@@ -23,8 +24,7 @@ type IWorker interface {
 type worker struct {
 	cl            tlg.IClient
 	channelID     int64
-	cache         IFileCache[int64]
-	docCache      IFileCache[[]byte]
+	docCache      ITGDocCache
 	tgChannel     tg.InputChannelClass
 	tgChannelLock sync.Mutex
 	streamConfig  *stream.StreamConfig
@@ -56,11 +56,6 @@ func (w *worker) GetThumbnail(ctx context.Context, messageID int) ([]byte, error
 		return nil, &tlg.UnexpectedTypeErrType{ExpectedType: &tg.PhotoSize{}, GotType: thumbs[0]}
 	}
 
-	// Ensure access hash is cached
-	if _, err := w.getDocAccHash(ctx, messageID); err != nil {
-		return nil, fmt.Errorf("error updating access hash: %w", err)
-	}
-
 	// Create file location request
 	location := tg.InputDocumentFileLocation{}
 	location.FillFrom(doc.AsInputDocumentFileLocation())
@@ -86,29 +81,20 @@ func (w *worker) GetThumbnail(ctx context.Context, messageID int) ([]byte, error
 	return thumbFile.GetBytes(), nil
 }
 
-// GetDoc fetches the message document and caches its encoded bytes on disk.
+// GetDoc fetches the message document and caches its encoded bytes on db.
 // Subsequent calls return the cached value to reduce API calls.
 func (w *worker) GetDoc(ctx context.Context, messageID int) (*tg.Document, error) {
-	cacheName := w.cacheNamePrefix(messageID)
-	dataRaw, err := w.docCache.GetOrSet(cacheName, func() ([]byte, error) {
+	doc, err := w.docCache.GetOrSet(ctx, w.getTg().Self.GetID(), messageID, func() (*tg.Document, error) {
 		doc, err := w.retrieveChannelMessageDoc(ctx, messageID)
 		if err != nil {
 			return nil, fmt.Errorf("error getting document of message: %w", err)
 		}
-		resBuf := bin.Buffer{Buf: []byte{}}
-		if err := doc.Encode(&resBuf); err != nil {
-			return nil, fmt.Errorf("error encoding document: %w", err)
-		}
-		return resBuf.Buf, nil
+		return doc, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error getting document from cache: %w", err)
 	}
-	doc := tg.Document{}
-	if err := doc.Decode(&bin.Buffer{Buf: dataRaw}); err != nil {
-		return nil, fmt.Errorf("error decoding document: %w", err)
-	}
-	return &doc, nil
+	return doc, nil
 }
 
 // Stream retrieves the next data block via the provided downloader.Reader.
@@ -135,10 +121,17 @@ func (w *worker) getChannel(ctx context.Context) (tg.InputChannelClass, error) {
 	return w.tgChannel, nil
 }
 func (w *worker) getDocAccHash(ctx context.Context, messageID int) (int64, error) {
-	cacheName := w.cacheNamePrefix(messageID)
-	return w.cache.GetOrSet(cacheName, func() (int64, error) {
-		return w.retrieveAccHash(ctx, messageID)
+	doc, err := w.docCache.GetOrSet(ctx, w.getTg().Self.GetID(), messageID, func() (*tg.Document, error) {
+		doc, err := w.retrieveChannelMessageDoc(ctx, messageID)
+		if err != nil {
+			return nil, fmt.Errorf("error getting document of message: %w", err)
+		}
+		return doc, nil
 	})
+	if err != nil {
+		return 0, fmt.Errorf("error getting document from cache: %w", err)
+	}
+	return doc.GetAccessHash(), nil
 }
 
 func (w *worker) retrieveAccHash(ctx context.Context, messageID int) (int64, error) {
@@ -239,12 +232,14 @@ func (w *worker) cacheNamePrefix(s int) string {
 //	func (w *worker) getLogger(fn string) *logrus.Entry {
 //		return log.GetLogger(log.StreamModule).WithField("func", fmt.Sprintf("%T.%s", w, fn))
 //	}
-func NewWorker(token string, sessCfg *tlg.SessionConfig, channelID int64, cacheRoot string, streamConfig *stream.StreamConfig) (IWorker, error) {
+func NewWorker(token string, sessCfg *tlg.SessionConfig, channelID int64, streamConfig *stream.StreamConfig, workerRepo repository.WorkerMediaRepository) (IWorker, error) {
 	w := worker{
-		cl:           tlg.NewTgClient(sessCfg, token),
-		channelID:    channelID,
-		cache:        NewAccessHashCache(cacheRoot),
-		docCache:     NewDocCache(cacheRoot),
+		cl:        tlg.NewTgClient(sessCfg, token),
+		channelID: channelID,
+		docCache: &tgDocCache{
+			workerRepo: workerRepo,
+			ll:         log.Named(log.WorkerModule, "doc cache"),
+		},
 		streamConfig: streamConfig,
 	}
 
