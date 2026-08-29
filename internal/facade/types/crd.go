@@ -2,11 +2,9 @@ package types
 
 import (
 	"context"
-
-	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
 )
 
-// ICrud defines hooks and collection access for CRUD operations on type T.
+// ICrud defines hooks for CRUD operations on type T.
 //
 //go:generate mockgen -source=crd.go -destination=../../../mocks/facade/types/crd.go -package=mocks_facade_types
 type ICrud[T any] interface {
@@ -14,5 +12,4 @@ type ICrud[T any] interface {
 	PostCreate(ctx context.Context, doc *T) error // errors in post handlers won't affect main transaction (see docs)
 	PreDelete(ctx context.Context, doc *T) error
 	PostDelete(ctx context.Context, doc *T) error // errors in post handlers won't affect main transaction (see docs)
-	GetCollection() mngo.ICollection[T]
 }

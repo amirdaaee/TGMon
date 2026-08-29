@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/amirdaaee/TGMon/internal/filesystem/src"
 	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/repository"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"go.uber.org/zap"
@@ -237,12 +237,12 @@ func (mfs *RootFS) getLogger(fn string) *zap.Logger {
 // ...
 
 // NewMediaFS creates a new MediaFS filesystem
-func NewMediaFS(srcs []src.ISrc, dbContainer db.IDbContainer) *RootFS {
+func NewMediaFS(srcs []src.ISrc, fuseState repository.FuseStateRepository) *RootFS {
 	v := RootFS{
 		uidMap: uidMapType{
 			mappedUID: make(map[string]*uidMapEntryType),
 			seenNames: make(map[string]bool),
-			dbColl:    dbContainer.GetMongoContainer().GetFuseRenameCollection(),
+			fuseState: fuseState,
 		},
 		srcs: make(map[string]src.ISrc),
 	}

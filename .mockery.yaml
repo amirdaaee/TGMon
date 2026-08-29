@@ -1,6 +1,6 @@
 with-expecter: true
 packages:
-  github.com/amirdaaee/TGMon/internal/db:
+  github.com/amirdaaee/TGMon/internal/repository:
     config:
       all: true
       dir: mocks/{{ .PackageName }}

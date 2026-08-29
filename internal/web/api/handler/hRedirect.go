@@ -7,18 +7,17 @@ import (
 	"net/http"
 	"strings"
 
-	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
+	"github.com/amirdaaee/TGMon/internal/repository"
 	"github.com/amirdaaee/TGMon/internal/stash"
 	"github.com/amirdaaee/TGMon/internal/types"
 	wtypes "github.com/amirdaaee/TGMon/internal/web/types"
-	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
 	"github.com/gin-gonic/gin"
 )
 
 type StashVTTRedirectorApiHandler struct {
-	MinioUrl    string
-	StashCl     *stash.StashQlClient
-	MediaFacade ftypes.IFacade[types.MediaFileDoc]
+	MinioUrl string
+	StashCl  *stash.StashQlClient
+	Media    repository.MediaFileRepository
 }
 type StashCoverRedirectorApiHandler struct {
 	StashVTTRedirectorApiHandler
@@ -75,7 +74,7 @@ func (h *StashVTTRedirectorApiHandler) getMediaByScene(ctx context.Context, scen
 	if idx := strings.LastIndex(fname, "."); idx != -1 {
 		fname = fname[:idx]
 	}
-	media, err := h.MediaFacade.GetCollection().Finder().Filter(query.Eq(types.MediaFileDoc__UnameField, fname)).FindOne(ctx)
+	media, err := h.Media.FindByUName(ctx, fname)
 	if err != nil {
 		return nil, fmt.Errorf("can not query media by uname (%s): %w", fname, err)
 	}

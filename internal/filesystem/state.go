@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/amirdaaee/TGMon/internal/db/mongo"
 	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/repository"
 	"github.com/amirdaaee/TGMon/internal/types"
-	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
-	"github.com/chenmingyong0423/go-mongox/v2/builder/update"
-	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.uber.org/zap"
 )
 
@@ -54,7 +51,7 @@ type uidMapType struct {
 	mappedUID       map[string]*uidMapEntryType // uid -> entry
 	inodeNumCounter uint64
 	seenNames       map[string]bool
-	dbColl          mongo.ICollection[types.FuseStateDoc]
+	fuseState       repository.FuseStateRepository
 	mu              sync.RWMutex
 }
 
@@ -90,7 +87,7 @@ func (r *uidMapType) Add(ctx context.Context, uid string, src string, name, ext 
 		entry.IncrementNameSuffix()
 	}
 	r.mu.Unlock()
-	if _, err := r.dbColl.Creator().InsertOne(ctx, entry.data); err != nil {
+	if err := r.fuseState.Insert(ctx, entry.data); err != nil {
 		r.mu.Lock()
 		delete(r.mappedUID, key)
 		r.mu.Unlock()
@@ -151,7 +148,7 @@ func (r *uidMapType) DeleteByName(ctx context.Context, name string) error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, err := r.dbColl.Deleter().Filter(bsonx.Id(entry.data.ID)).DeleteOne(ctx); err != nil {
+	if err := r.fuseState.DeleteByID(ctx, entry.data.ID); err != nil {
 		return fmt.Errorf("failed to delete doc from db: %w", err)
 	}
 	key := r.getKey(entry.data.UID, entry.data.SrcID)
@@ -170,7 +167,7 @@ func (r *uidMapType) RenameByName(ctx context.Context, oldName string, newName s
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	entry.data.Rename = newName
-	if _, err := r.dbColl.Updater().Filter(bsonx.Id(entry.data.ID)).Updates([]bson.D{update.Set(types.FuseStateDoc__RenameField, newName)}).UpdateOne(ctx); err != nil {
+	if err := r.fuseState.SetRename(ctx, entry.data.ID, newName); err != nil {
 		return fmt.Errorf("failed to update doc in db: %w", err)
 	}
 	return nil
@@ -180,7 +177,7 @@ func (r *uidMapType) RenameByName(ctx context.Context, oldName string, newName s
 // This is intended to be called at initialization to restore the filesystem state.
 func (r *uidMapType) SyncDB(ctx context.Context) error {
 	ll := r.getLogger("SyncDB")
-	allDocs, err := r.dbColl.Finder().Find(ctx)
+	allDocs, err := r.fuseState.List(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch all docs from db: %w", err)
 	}

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amirdaaee/TGMon/internal/db"
 	fsSrc "github.com/amirdaaee/TGMon/internal/filesystem/src"
 	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/repository"
 	"go.uber.org/zap"
 
 	"github.com/amirdaaee/TGMon/cmd/wire"
@@ -35,7 +35,7 @@ var serverCmd = &cobra.Command{
 		defer cancl()
 		eg, ctx := errgroup.WithContext(ctx)
 		//...
-		if err := cntr.Invoke(func(webServer *http.Server, cfg *config.ConfigType, dbC db.IDbContainer, srcs []fsSrc.ISrc) error {
+		if err := cntr.Invoke(func(webServer *http.Server, cfg *config.ConfigType, fuseState repository.FuseStateRepository, srcs []fsSrc.ISrc) error {
 			eg.Go(func() error {
 				if err := webServer.ListenAndServe(); err != nil {
 					if err == http.ErrServerClosed {
@@ -66,7 +66,7 @@ var serverCmd = &cobra.Command{
 						AllowOther: fCfg.AllowOther,
 						Debug:      fCfg.Debug,
 					}
-					fuseServer, err := filesystem.MountWithOptions(mountDir, srcs, dbC, opts)
+					fuseServer, err := filesystem.MountWithOptions(mountDir, srcs, fuseState, opts)
 					if err != nil {
 						return fmt.Errorf("can not mount filesystem: %w", err)
 					}

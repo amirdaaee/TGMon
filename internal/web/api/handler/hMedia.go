@@ -1,19 +1,18 @@
 package handler
 
 import (
-	"math/rand"
+	"errors"
 	"net/http"
 
-	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
-	"github.com/amirdaaee/TGMon/internal/types"
+	"github.com/amirdaaee/TGMon/internal/repository"
 	wtypes "github.com/amirdaaee/TGMon/internal/web/types"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type MediaInfoApiHandler struct {
-	MediaFacade ftypes.IFacade[types.MediaFileDoc]
+	Media repository.MediaFileRepository
 }
 
 var _ IGetApiHandler = (*MediaInfoApiHandler)(nil)
@@ -24,7 +23,7 @@ var _ IGetApiHandler = (*MediaInfoApiHandler)(nil)
 // @Router		/api/info/ [get]
 // @Security	ApiKeyAuth
 func (h *MediaInfoApiHandler) Get(g *gin.Context) {
-	media, err := h.MediaFacade.GetCollection().Finder().Count(g.Request.Context())
+	media, err := h.Media.Count(g.Request.Context())
 	if err != nil {
 		g.Error(wtypes.NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
 		return
@@ -40,8 +39,8 @@ func (h *MediaInfoApiHandler) RelativePathGet() string {
 
 // ===
 type RandomMediaApiHandler struct {
-	mediaFacade ftypes.IFacade[types.MediaFileDoc]
-	ll          *zap.Logger
+	media repository.MediaFileRepository
+	ll    *zap.Logger
 }
 
 var _ IGetApiHandler = (*RandomMediaApiHandler)(nil)
@@ -53,20 +52,17 @@ var _ IGetApiHandler = (*RandomMediaApiHandler)(nil)
 // @Security	ApiKeyAuth
 func (h *RandomMediaApiHandler) Get(g *gin.Context) {
 	ll := h.ll.Named("Get")
-	fnd := h.mediaFacade.GetCollection().Finder()
-	total, err := fnd.Count(g.Request.Context())
+	media, err := h.media.FindRandom(g.Request.Context())
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			g.Error(wtypes.NewHttpError(err, http.StatusNotFound)) //nolint:golint,errcheck
+			return
+		}
 		g.Error(wtypes.NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
 		return
 	}
-	n := rand.Int63n(total)
-	media, err := fnd.Skip(n).Limit(1).Find(g.Request.Context())
-	if err != nil {
-		g.Error(wtypes.NewHttpError(err, http.StatusInternalServerError)) //nolint:golint,errcheck
-		return
-	}
-	ll.Sugar().Debugf("random media: %d. media ID: %s", n, media[0].ID.Hex())
-	g.JSON(http.StatusOK, RandomMediaGetResType{MediaID: &media[0].ID})
+	ll.Sugar().Debugf("random media ID: %s", media.ID.Hex())
+	g.JSON(http.StatusOK, RandomMediaGetResType{MediaID: &media.ID})
 }
 func (h *RandomMediaApiHandler) AuthGet() bool {
 	return true
@@ -75,9 +71,9 @@ func (h *RandomMediaApiHandler) RelativePathGet() string {
 	return "/"
 }
 
-func NewRandomMediaApiHandler(mediaFacade ftypes.IFacade[types.MediaFileDoc]) *RandomMediaApiHandler {
+func NewRandomMediaApiHandler(media repository.MediaFileRepository) *RandomMediaApiHandler {
 	return &RandomMediaApiHandler{
-		mediaFacade: mediaFacade,
-		ll:          log.Named(log.WebModule, "RandomMediaApiHandler"),
+		media: media,
+		ll:    log.Named(log.WebModule, "RandomMediaApiHandler"),
 	}
 }

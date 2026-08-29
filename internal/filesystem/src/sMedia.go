@@ -12,7 +12,6 @@ import (
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
 	"github.com/amirdaaee/TGMon/internal/worker"
-	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -60,27 +59,14 @@ func (mfs *MediaFileSrc) UID() string {
 
 // Delete removes a media file from the database. cache get invalidated in facade machinary
 func (mfs *MediaFileSrc) Delete(ctx context.Context, uid string) error {
-	qID, err := mfs.getIdQ(uid)
+	oid, err := bson.ObjectIDFromHex(uid)
 	if err != nil {
-		return fmt.Errorf("failed to get id query: %w", err)
+		return fmt.Errorf("failed to convert uid to object id: %w", err)
 	}
-	filter := make(bson.D, 0, len(qID))
-	for k, v := range qID {
-		filter = append(filter, bson.E{Key: k, Value: v})
-	}
-	if _, err := mfs.facade.DeleteOne(ctx, filter); err != nil {
+	if _, err := mfs.facade.DeleteByID(ctx, oid); err != nil {
 		return fmt.Errorf("failed to delete media file from db: %w", err)
 	}
 	return nil
-}
-
-// getIdQ converts a UID string to a MongoDB query filter.
-func (mfs *MediaFileSrc) getIdQ(uid string) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(uid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert uid to object id: %w", err)
-	}
-	return bsonx.Id(oid), nil
 }
 
 // NewMediaFileSrc creates a new MediaFileSrc instance.

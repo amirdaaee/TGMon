@@ -7,14 +7,12 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/amirdaaee/TGMon/internal/db"
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/types"
 	wtypes "github.com/amirdaaee/TGMon/internal/web/types"
 	"github.com/amirdaaee/TGMon/internal/worker"
-	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
 	"github.com/gin-gonic/gin"
 	range_parser "github.com/quantumsheep/range-parser"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -22,7 +20,6 @@ import (
 )
 
 type Streamhandler struct {
-	dbContainer  db.IDbContainer
 	mediaFacade  ftypes.IFacade[types.MediaFileDoc]
 	workerPool   worker.IWorkerPool
 	streamConfig *stream.StreamConfig
@@ -68,7 +65,6 @@ func (s *Streamhandler) Stream(g *gin.Context) {
 	}
 	defer runtime.GC()
 	defer streamer.Close()
-	// remove content-length from header map
 	delete(headers, "Content-Length")
 	delete(headers, "Content-Type")
 	g.DataFromReader(status, meta.ContentLength, meta.MimeType, streamer, headers)
@@ -88,14 +84,14 @@ func (s *Streamhandler) getMedia(g *gin.Context, id string) (*types.MediaFileDoc
 	if err != nil {
 		return nil, wtypes.NewHttpError(fmt.Errorf("error parsing mediaID: %w", err), http.StatusBadRequest)
 	}
-	media, err := s.mediaFacade.GetCollection().Finder().Filter(query.Id(idObj)).Find(g.Request.Context())
+	media, err := s.mediaFacade.FindByID(g.Request.Context(), idObj)
 	if err != nil {
+		if errors.Is(err, ftypes.ErrNoDocumentsFound) {
+			return nil, wtypes.NewHttpError(fmt.Errorf("media (%s) not found", id), http.StatusNotFound)
+		}
 		return nil, wtypes.NewHttpError(err, http.StatusInternalServerError)
 	}
-	if len(media) == 0 {
-		return nil, wtypes.NewHttpError(fmt.Errorf("media (%s) not found", id), http.StatusNotFound)
-	}
-	return media[0], nil
+	return media, nil
 }
 func (s *Streamhandler) getStreamMetaData(req *http.Request, media types.MediaFileDoc) (*StreamMetaData, error) {
 	ll := s.ll.Named("getStreamMetaData")
@@ -153,9 +149,8 @@ func (s *Streamhandler) getStreamHeaders(req *http.Request, meta *StreamMetaData
 	ll.Sugar().Debugf("stream response headers: %+v", head)
 	return status, head
 }
-func NewStreamHandler(dbContainer db.IDbContainer, mediaFacade ftypes.IFacade[types.MediaFileDoc], wp worker.IWorkerPool, streamConfig *stream.StreamConfig) *Streamhandler {
+func NewStreamHandler(mediaFacade ftypes.IFacade[types.MediaFileDoc], wp worker.IWorkerPool, streamConfig *stream.StreamConfig) *Streamhandler {
 	return &Streamhandler{
-		dbContainer:  dbContainer,
 		mediaFacade:  mediaFacade,
 		workerPool:   wp,
 		streamConfig: streamConfig,

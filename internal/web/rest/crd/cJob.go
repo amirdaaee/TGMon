@@ -3,24 +3,29 @@ package crd
 import (
 	"fmt"
 
+	"github.com/amirdaaee/TGMon/internal/repository"
 	"github.com/amirdaaee/TGMon/internal/types"
-	"github.com/chenmingyong0423/go-mongox/v2/builder/query"
-	"github.com/chenmingyong0423/go-mongox/v2/finder"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// JobReqHandler implements IHandler for media resources.
-type JobReqHandler struct{}
+// JobReqHandler implements IHandler for job request resources.
+type JobReqHandler struct {
+	jobs repository.JobReqRepository
+}
 
-// JobResHandler implements IHandler for media resources.
+// JobResHandler implements IHandler for job result resources.
 type JobResHandler struct{}
 
 var _ ICreateHandler[types.JobReqDoc] = (*JobReqHandler)(nil)
-var _ IListHandler[types.JobReqDoc] = (*JobReqHandler)(nil)
-var _ IDeleteHandler[types.JobReqDoc] = (*JobReqHandler)(nil)
+var _ IListHandler = (*JobReqHandler)(nil)
+var _ IDeleteHandler = (*JobReqHandler)(nil)
 
 var _ ICreateHandler[types.JobResDoc] = (*JobResHandler)(nil)
+
+func NewJobReqHandler(jobs repository.JobReqRepository) *JobReqHandler {
+	return &JobReqHandler{jobs: jobs}
+}
 
 // =====
 // @Summary	Create job request
@@ -47,8 +52,17 @@ func (h *JobReqHandler) MarshalCreateResponse(g *gin.Context, v *types.JobReqDoc
 // @Success	200	{array}	types.JobReqDoc
 // @Router		/api/jobReq/ [get]
 // @Security	ApiKeyAuth
-func (h *JobReqHandler) BindListRequest(g *gin.Context, fnd finder.IFinder[types.JobReqDoc]) (finder.IFinder[types.JobReqDoc], error) {
-	return fnd, nil
+func (h *JobReqHandler) HandleList(g *gin.Context) (any, error) {
+	docs, err := h.jobs.List(g.Request.Context())
+	if err != nil {
+		return nil, fmt.Errorf("error listing job requests: %w", err)
+	}
+	res := make([]*types.JobReqDoc, len(docs))
+	for i, doc := range docs {
+		_v := types.JobReqDoc(*doc)
+		res[i] = &_v
+	}
+	return JobReqListResType(res), nil
 }
 
 // @Summary	Delete job request
@@ -58,25 +72,16 @@ func (h *JobReqHandler) BindListRequest(g *gin.Context, fnd finder.IFinder[types
 // @Success	200	{string}	string	"OK"
 // @Router		/api/jobReq/{id}/ [delete]
 // @Security	ApiKeyAuth
-func (h *JobReqHandler) BindDeleteRequest(g *gin.Context) (bson.D, error) {
+func (h *JobReqHandler) BindDeleteRequest(g *gin.Context) (bson.ObjectID, error) {
 	var qID JobReqDelReqType
 	if err := g.ShouldBindUri(&qID); err != nil {
-		return nil, err
+		return bson.ObjectID{}, err
 	}
 	idObj, err := bson.ObjectIDFromHex(qID.ID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid id: %w", err)
+		return bson.ObjectID{}, fmt.Errorf("invalid id: %w", err)
 	}
-	q := query.Id(idObj)
-	return q, nil
-}
-func (h *JobReqHandler) MarshalListResponse(g *gin.Context, v []*types.JobReqDoc) (any, error) {
-	res := make([]*types.JobReqDoc, len(v))
-	for i, doc := range v {
-		_v := types.JobReqDoc(*doc)
-		res[i] = &_v
-	}
-	return JobReqListResType(res), nil
+	return idObj, nil
 }
 
 // =====

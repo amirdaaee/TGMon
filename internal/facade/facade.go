@@ -2,18 +2,20 @@ package facade
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	mngo "github.com/amirdaaee/TGMon/internal/db/mongo"
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/repository"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.uber.org/zap"
 )
 
 // BaseFacade provides a generic implementation of IFacade for type T.
 type BaseFacade[T any] struct {
-	crd ftypes.ICrud[T]
+	store repository.Store[T]
+	crd   ftypes.ICrud[T]
 }
 
 var _ ftypes.IFacade[any] = (*BaseFacade[any])(nil)
@@ -28,7 +30,7 @@ func (f *BaseFacade[T]) CreateOne(ctx context.Context, doc *T) (*T, error) {
 	if err := f.crd.PreCreate(ctx, doc); err != nil {
 		return nil, fmt.Errorf("error pre-creating hook: %w", err)
 	}
-	if _, err := f.GetCollection().Creator().InsertOne(ctx, doc); err != nil {
+	if err := f.store.Insert(ctx, doc); err != nil {
 		return nil, fmt.Errorf("error creating document: %w", err)
 	}
 	// PostCreate runs in a goroutine; errors are logged but not returned.
@@ -43,31 +45,23 @@ func (f *BaseFacade[T]) CreateOne(ctx context.Context, doc *T) (*T, error) {
 	return doc, nil
 }
 
-// DeleteOne deletes a single document matching the filter after running pre-delete hooks. Post-delete hooks run in a goroutine; errors are logged but not returned.
-func (f *BaseFacade[T]) DeleteOne(ctx context.Context, filter bson.D) (*T, error) {
-	ll := f.getLogger("DeleteOne")
+// DeleteByID deletes a document by ID after running pre-delete hooks. Post-delete hooks run in a goroutine; errors are logged but not returned.
+func (f *BaseFacade[T]) DeleteByID(ctx context.Context, id bson.ObjectID) (*T, error) {
+	ll := f.getLogger("DeleteByID")
 	ll.Info("Deleting document")
-	fnd := f.GetCollection().Finder().Filter(filter)
-	c, err := fnd.Count(ctx)
+	doc, err := f.store.FindByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("error counting existing documents: %w", err)
-	}
-	if c == 0 {
-		return nil, ftypes.ErrNoDocumentsFound
-	} else if c > 1 {
-		return nil, ftypes.ErrMultipleDocumentsFound
-	}
-	doc, err := fnd.FindOne(ctx)
-	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ftypes.ErrNoDocumentsFound
+		}
 		return nil, fmt.Errorf("error finding document to delete: %w", err)
 	}
 	if err := f.crd.PreDelete(ctx, doc); err != nil {
 		return nil, fmt.Errorf("error pre-deleting hook: %w", err)
 	}
-	if _, err = f.GetCollection().Deleter().Filter(filter).DeleteOne(ctx); err != nil {
+	if err := f.store.DeleteByID(ctx, id); err != nil {
 		return nil, fmt.Errorf("error deleting document: %w", err)
 	}
-	// PostDelete runs in a goroutine; errors are logged but not returned.
 	postCtx := context.Background()
 	go func() {
 		if err := f.crd.PostDelete(postCtx, doc); err != nil {
@@ -79,22 +73,28 @@ func (f *BaseFacade[T]) DeleteOne(ctx context.Context, filter bson.D) (*T, error
 	return doc, nil
 }
 
+// FindByID returns the document with the given ID.
+func (f *BaseFacade[T]) FindByID(ctx context.Context, id bson.ObjectID) (*T, error) {
+	doc, err := f.store.FindByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ftypes.ErrNoDocumentsFound
+		}
+		return nil, err
+	}
+	return doc, nil
+}
+
 // GetCRD returns the underlying CRUD implementation for type T.
 func (f *BaseFacade[T]) GetCRD() ftypes.ICrud[T] {
 	return f.crd
 }
 
-// GetCollection returns the collection for type T from the underlying CRUD implementation.
-func (f *BaseFacade[T]) GetCollection() mngo.ICollection[T] {
-	return f.crd.GetCollection()
-}
-
-// getLogger returns a logrus.Entry for the given function name, tagged with the struct type.
 func (f *BaseFacade[T]) getLogger(fn string) *zap.Logger {
 	return log.Named(log.FacadeModule, fmt.Sprintf("%T.%s", f, fn))
 }
 
-// NewFacade returns a new BaseFacade for the given CRD implementation.
-func NewFacade[T any](crd ftypes.ICrud[T]) ftypes.IFacade[T] {
-	return &BaseFacade[T]{crd: crd}
+// NewFacade returns a new BaseFacade for the given store and CRD implementation.
+func NewFacade[T any](store repository.Store[T], crd ftypes.ICrud[T]) ftypes.IFacade[T] {
+	return &BaseFacade[T]{store: store, crd: crd}
 }

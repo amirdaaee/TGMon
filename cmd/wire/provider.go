@@ -7,14 +7,14 @@ import (
 
 	"github.com/amirdaaee/TGMon/internal/bot"
 	"github.com/amirdaaee/TGMon/internal/config"
-	"github.com/amirdaaee/TGMon/internal/db"
-	"github.com/amirdaaee/TGMon/internal/db/minio"
-	"github.com/amirdaaee/TGMon/internal/db/mongo"
 	"github.com/amirdaaee/TGMon/internal/facade"
 	"github.com/amirdaaee/TGMon/internal/facade/crd"
 	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/filesystem/cache"
 	fsSrc "github.com/amirdaaee/TGMon/internal/filesystem/src"
+	"github.com/amirdaaee/TGMon/internal/repository"
+	repominio "github.com/amirdaaee/TGMon/internal/repository/minio"
+	repomongo "github.com/amirdaaee/TGMon/internal/repository/mongo"
 	"github.com/amirdaaee/TGMon/internal/stash"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/tlg"
@@ -31,15 +31,14 @@ import (
 	"github.com/gin-gonic/gin"
 	realMinio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func ProvideConfig() *config.ConfigType {
 	return config.Config()
 }
-func ProvideFuzeCache(dbC db.IDbContainer) *cache.DBCache[string, *types.MediaFileDoc] {
+func ProvideFuzeCache(media repository.MediaFileRepository) *cache.DBCache[string, *types.MediaFileDoc] {
 	return cache.NewDBCacher(func(ctx context.Context) (map[string]*types.MediaFileDoc, error) {
-		docs, err := dbC.GetMongoContainer().GetMediaFileCollection().Finder().Sort(bson.D{{Key: "_id", Value: 1}}).Find(ctx)
+		docs, err := media.ListByID(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -50,13 +49,13 @@ func ProvideFuzeCache(dbC db.IDbContainer) *cache.DBCache[string, *types.MediaFi
 		return docsMap, nil
 	})
 }
-func ProvideFuseSrcs(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.MediaFileDoc], wp worker.IWorkerPool, dbC db.IDbContainer, fsCache *cache.DBCache[string, *types.MediaFileDoc]) []fsSrc.ISrc {
+func ProvideFuseSrcs(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.MediaFileDoc], wp worker.IWorkerPool, media repository.MediaFileRepository, objects repository.ObjectStore, fsCache *cache.DBCache[string, *types.MediaFileDoc]) []fsSrc.ISrc {
 	return []fsSrc.ISrc{fsSrc.NewMediaFileSrc(mediafacade, wp, fsCache, &stream.StreamConfig{
 		StreamBufferCount: cfg.StreamConfig.StreamBufferCount,
 		StreamConcurrency: cfg.StreamConfig.StreamConcurrency,
 		StreamMaxRetries:  cfg.StreamConfig.StreamMaxRetries,
 		StreamTimeoutSec:  cfg.StreamConfig.StreamTimeoutSec,
-	}), fsSrc.NewSrtSrc(mediafacade, dbC.GetMinioContainer().GetMinioClient(), fsCache)}
+	}), fsSrc.NewSrtSrc(media, objects, fsCache)}
 }
 
 // ... Web
@@ -82,21 +81,21 @@ func ProvideGinEngine(cfg *config.ConfigType, hndlr []wtypes.Registereable) *gin
 	return g
 }
 
-func ProvideWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacade ftypes.IFacade[types.MediaFileDoc], jobReqFacade ftypes.IFacade[types.JobReqDoc], jobResFacade ftypes.IFacade[types.JobResDoc], wp worker.IWorkerPool, stshCl *stash.StashQlClient) []wtypes.Registereable {
+func ProvideWebHandler(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.MediaFileDoc], jobReqFacade ftypes.IFacade[types.JobReqDoc], jobResFacade ftypes.IFacade[types.JobResDoc], media repository.MediaFileRepository, jobReqs repository.JobReqRepository, wp worker.IWorkerPool, stshCl *stash.StashQlClient) []wtypes.Registereable {
 	hCfg := cfg.HttpConfig
 	stshCfg := cfg.StashRedirectorConfig
 	strmConfig := cfg.StreamConfig
-	streamHandler := wStream.NewStreamHandler(dbCnt, mediafacade, wp, &stream.StreamConfig{
+	streamHandler := wStream.NewStreamHandler(mediafacade, wp, &stream.StreamConfig{
 		StreamBufferCount: strmConfig.StreamBufferCount,
 		StreamConcurrency: strmConfig.StreamConcurrency,
 		StreamMaxRetries:  strmConfig.StreamMaxRetries,
 		StreamTimeoutSec:  strmConfig.StreamTimeoutSec,
 	})
-	mediaHandler := wrCrd.NewMediaHandler(dbCnt)
-	jobReqHandler := &wrCrd.JobReqHandler{}
+	mediaHandler := wrCrd.NewMediaHandler(media)
+	jobReqHandler := wrCrd.NewJobReqHandler(jobReqs)
 	jobResHandler := &wrCrd.JobResHandler{}
 	infoHandler := &waHndlr.MediaInfoApiHandler{
-		MediaFacade: mediafacade,
+		Media: media,
 	}
 	loginHandler := &waHndlr.LoginApiHandler{
 		UserName: hCfg.UserName,
@@ -106,7 +105,7 @@ func ProvideWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacad
 	sessionHandler := &waHndlr.SessionApiHandler{
 		Token: hCfg.ApiToken,
 	}
-	randomMediaHandler := waHndlr.NewRandomMediaApiHandler(mediafacade)
+	randomMediaHandler := waHndlr.NewRandomMediaApiHandler(media)
 	result := []wtypes.Registereable{
 		streamHandler,
 		wRest.NewCRDApiHandler(mediaHandler, mediafacade, "media"),
@@ -119,9 +118,9 @@ func ProvideWebHandler(cfg *config.ConfigType, dbCnt db.IDbContainer, mediafacad
 	}
 	if stshCfg.Enabled {
 		stashVTTRedirectorHandler := waHndlr.StashVTTRedirectorApiHandler{
-			MinioUrl:    stshCfg.MinioUrl,
-			StashCl:     stshCl,
-			MediaFacade: mediafacade,
+			MinioUrl: stshCfg.MinioUrl,
+			StashCl:  stshCl,
+			Media:    media,
 		}
 		stashCoverRedirectorHandler := waHndlr.StashCoverRedirectorApiHandler{
 			StashVTTRedirectorApiHandler: stashVTTRedirectorHandler,
@@ -138,13 +137,16 @@ func ProvideStashQlClient(cfg *config.ConfigType) *stash.StashQlClient {
 }
 
 // ... Database
-func ProvideDbContainer(cfg *config.ConfigType) (db.IDbContainer, error) {
-	ctx := context.TODO()
-	mongoContainer, err := mongo.NewMongoContainer(ctx, mongo.MongoContainerConfig{Endpoint: cfg.MongoDBConfig.Uri, DbName: cfg.MongoDBConfig.DBName}, true)
+func ProvideMongoClient(cfg *config.ConfigType) (*repomongo.Client, error) {
+	cl, err := repomongo.Connect(context.TODO(), repomongo.Config{Endpoint: cfg.MongoDBConfig.Uri, DBName: cfg.MongoDBConfig.DBName}, true)
 	if err != nil {
-		return nil, fmt.Errorf("can not create mongo container: %w", err)
+		return nil, fmt.Errorf("can not connect to mongo: %w", err)
 	}
-	minioContainer, err := minio.NewMinioContainer(ctx, minio.MinioContainerConfig{
+	return cl, nil
+}
+
+func ProvideObjectStore(cfg *config.ConfigType) (repository.ObjectStore, error) {
+	st, err := repominio.Connect(context.TODO(), repominio.Config{
 		Endpoint: cfg.MinioConfig.Endpoint,
 		Opts: &realMinio.Options{
 			Creds:  credentials.NewStaticV4(cfg.MinioConfig.AccessKey, cfg.MinioConfig.SecretKey, ""),
@@ -153,24 +155,39 @@ func ProvideDbContainer(cfg *config.ConfigType) (db.IDbContainer, error) {
 		Bucket: cfg.MinioConfig.Bucket,
 	}, true)
 	if err != nil {
-		return nil, fmt.Errorf("can not create minio container: %w", err)
+		return nil, fmt.Errorf("can not connect to minio: %w", err)
 	}
-	dbContainer := db.NewDbContainer(mongoContainer, minioContainer)
-	return dbContainer, nil
+	return st, nil
+}
+
+func ProvideMediaFileRepo(cl *repomongo.Client) repository.MediaFileRepository {
+	return repomongo.NewMediaFileRepo(cl)
+}
+
+func ProvideJobReqRepo(cl *repomongo.Client) repository.JobReqRepository {
+	return repomongo.NewJobReqRepo(cl)
+}
+
+func ProvideJobResRepo(cl *repomongo.Client) repository.JobResRepository {
+	return repomongo.NewJobResRepo(cl)
+}
+
+func ProvideFuseStateRepo(cl *repomongo.Client) repository.FuseStateRepository {
+	return repomongo.NewFuseStateRepo(cl)
 }
 
 // ... Facades
-func ProvideMediaFacade(dbContainer db.IDbContainer, workerContainer worker.IWorkerPool, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.IFacade[types.MediaFileDoc] {
+func ProvideMediaFacade(media repository.MediaFileRepository, objects repository.ObjectStore, jobReqs repository.JobReqRepository, workerContainer worker.IWorkerPool, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.IFacade[types.MediaFileDoc] {
 	cfg := config.Config()
-	return facade.NewFacade(crd.NewMediaCrud(dbContainer, workerContainer, cfg.RuntimeConfig.KeepDupFiles, jobReqFacade, fsCache))
+	return facade.NewFacade(media, crd.NewMediaCrud(media, objects, jobReqs, workerContainer, cfg.RuntimeConfig.KeepDupFiles, jobReqFacade, fsCache))
 }
 
-func ProvideJobReqFacade(dbContainer db.IDbContainer) ftypes.IFacade[types.JobReqDoc] {
-	return facade.NewFacade(crd.NewJobReqCrud(dbContainer))
+func ProvideJobReqFacade(jobReqs repository.JobReqRepository) ftypes.IFacade[types.JobReqDoc] {
+	return facade.NewFacade(jobReqs, crd.NewJobReqCrud())
 }
 
-func ProvideJobResFacade(dbContainer db.IDbContainer, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.IFacade[types.JobResDoc] {
-	return facade.NewFacade(crd.NewJobResCrud(dbContainer, jobReqFacade, fsCache))
+func ProvideJobResFacade(jobRes repository.JobResRepository, jobReqs repository.JobReqRepository, media repository.MediaFileRepository, objects repository.ObjectStore, jobReqFacade ftypes.IFacade[types.JobReqDoc], fsCache *cache.DBCache[string, *types.MediaFileDoc]) ftypes.IFacade[types.JobResDoc] {
+	return facade.NewFacade(jobRes, crd.NewJobResCrud(jobReqs, media, objects, jobReqFacade, fsCache))
 }
 
 // ... Telegram

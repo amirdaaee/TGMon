@@ -6,9 +6,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/amirdaaee/TGMon/internal/db"
 	"github.com/amirdaaee/TGMon/internal/filesystem/src"
 	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/repository"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"go.uber.org/zap"
@@ -26,7 +26,7 @@ type MountOptions struct {
 }
 
 // MountWithOptions mounts the filesystem with custom options
-func MountWithOptions(mountPoint string, srcs []src.ISrc, dbContainer db.IDbContainer, opts *MountOptions) (*fuse.Server, error) {
+func MountWithOptions(mountPoint string, srcs []src.ISrc, fuseState repository.FuseStateRepository, opts *MountOptions) (*fuse.Server, error) {
 	ll := log.Named(log.FuseModule, "MountWithOptions")
 	ll.Sugar().Debugf("Mounting filesystem at: %s", mountPoint)
 
@@ -65,7 +65,7 @@ func MountWithOptions(mountPoint string, srcs []src.ISrc, dbContainer db.IDbCont
 	}
 
 	// Create root filesystem
-	root := NewMediaFS(srcs, dbContainer)
+	root := NewMediaFS(srcs, fuseState)
 	// Create FUSE server
 	fuseOpts := &fs.Options{}
 	fuseOpts.Debug = opts.Debug

@@ -8,26 +8,22 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/amirdaaee/TGMon/internal/db/minio"
-	ftypes "github.com/amirdaaee/TGMon/internal/facade/types"
 	"github.com/amirdaaee/TGMon/internal/filesystem/cache"
 	"github.com/amirdaaee/TGMon/internal/log"
+	"github.com/amirdaaee/TGMon/internal/repository"
 	"github.com/amirdaaee/TGMon/internal/types"
-	"github.com/chenmingyong0423/go-mongox/v2/bsonx"
-	"github.com/chenmingyong0423/go-mongox/v2/builder/update"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	mnio "github.com/minio/minio-go/v7"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.uber.org/zap"
 )
 
 // SrtFileSrc is a source implementation that provides access to SRT subtitle files
-// stored in MinIO and referenced in the database.
+// stored in object storage and referenced in the database.
 type SrtFileSrc struct {
-	facade      ftypes.IFacade[types.MediaFileDoc]
-	minioClient minio.IMinioClient
-	cache       *cache.DBCache[string, *types.MediaFileDoc]
+	media   repository.MediaFileRepository
+	objects repository.ObjectStore
+	cache   *cache.DBCache[string, *types.MediaFileDoc]
 }
 
 var _ ISrc = (*SrtFileSrc)(nil)
@@ -43,7 +39,7 @@ func (mfs *SrtFileSrc) List(ctx context.Context) ([]IFile, error) {
 		if doc.Srt == "" {
 			continue
 		}
-		files = append(files, &SrtFile{orgMedia: doc, minioClient: mfs.minioClient})
+		files = append(files, &SrtFile{orgMedia: doc, objects: mfs.objects})
 	}
 	return files, nil
 }
@@ -58,7 +54,7 @@ func (mfs *SrtFileSrc) Lookup(ctx context.Context, uid string) (IFile, error) {
 	if doc.Srt == "" {
 		return nil, fmt.Errorf("media doesn't have srt")
 	}
-	return &SrtFile{orgMedia: doc, minioClient: mfs.minioClient}, nil
+	return &SrtFile{orgMedia: doc, objects: mfs.objects}, nil
 }
 
 // UID returns the unique identifier for this source type.
@@ -68,33 +64,23 @@ func (mfs *SrtFileSrc) UID() string {
 
 // Delete removes the SRT file reference from the database by clearing the SRT field. cache get invalidated in facade machinary
 func (mfs *SrtFileSrc) Delete(ctx context.Context, uid string) error {
-	qID, err := mfs.getIdQ(uid)
+	oid, err := bson.ObjectIDFromHex(strings.TrimPrefix(uid, "srt-"))
 	if err != nil {
-		return fmt.Errorf("failed to get id query: %w", err)
+		return fmt.Errorf("failed to convert uid to object id: %w", err)
 	}
-	if _, err := mfs.facade.GetCollection().Updater().Filter(qID).Updates([]bson.D{update.Set(types.MediaFileDoc__SrtField, "")}).UpdateOne(ctx); err != nil {
+	if err := mfs.media.SetSrt(ctx, oid, ""); err != nil {
 		return fmt.Errorf("failed to delete srt file refference in db: %w", err)
 	}
 	mfs.cache.Invalidate(ctx)
 	return nil
 }
 
-// getIdQ converts a UID string to a MongoDB query filter.
-// The UID should be in the format "srt-{mediaFileID}".
-func (mfs *SrtFileSrc) getIdQ(uid string) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(strings.TrimPrefix(uid, "srt-"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert uid to object id: %w", err)
-	}
-	return bsonx.Id(oid), nil
-}
-
 // NewSrtSrc creates a new SrtFileSrc instance.
-func NewSrtSrc(facade ftypes.IFacade[types.MediaFileDoc], minioClient minio.IMinioClient, cache *cache.DBCache[string, *types.MediaFileDoc]) *SrtFileSrc {
+func NewSrtSrc(media repository.MediaFileRepository, objects repository.ObjectStore, cache *cache.DBCache[string, *types.MediaFileDoc]) *SrtFileSrc {
 	return &SrtFileSrc{
-		facade:      facade,
-		minioClient: minioClient,
-		cache:       cache,
+		media:   media,
+		objects: objects,
+		cache:   cache,
 	}
 }
 
@@ -103,10 +89,10 @@ func NewSrtSrc(facade ftypes.IFacade[types.MediaFileDoc], minioClient minio.IMin
 // SrtFile represents a single SRT subtitle file in the filesystem.
 type SrtFile struct {
 	fs.Inode
-	orgMedia    *types.MediaFileDoc
-	minioClient minio.IMinioClient
-	_info       *mnio.ObjectInfo
-	mu          sync.Mutex
+	orgMedia *types.MediaFileDoc
+	objects  repository.ObjectStore
+	_info    *repository.ObjectInfo
+	mu       sync.Mutex
 }
 
 var _ IFile = (*SrtFile)(nil)
@@ -136,7 +122,7 @@ func (mf *SrtFile) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint3
 		return nil, 0, syscall.EACCES
 	}
 
-	obj, err := mf.minioClient.FileGet(ctx, mf.orgMedia.Srt)
+	obj, err := mf.objects.Get(ctx, mf.orgMedia.Srt)
 	if err != nil {
 		ll.With(zap.Error(err)).Error("failed to get file object")
 		return nil, 0, syscall.EIO
@@ -206,11 +192,11 @@ func (mf *SrtFile) Ext() string {
 }
 
 // info retrieves the object information from MinIO, caching it for subsequent calls.
-func (mf *SrtFile) info(ctx context.Context) (*mnio.ObjectInfo, error) {
+func (mf *SrtFile) info(ctx context.Context) (*repository.ObjectInfo, error) {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	if mf._info == nil {
-		info, err := mf.minioClient.FileInfo(ctx, mf.orgMedia.Srt)
+		info, err := mf.objects.Stat(ctx, mf.orgMedia.Srt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get file info: %w", err)
 		}
@@ -227,8 +213,8 @@ func (mf *SrtFile) getLogger(fn string) *zap.Logger {
 // SrtFileHandle handles read operations on an SRT file.
 type SrtFileHandle struct {
 	orgMedia *types.MediaFileDoc
-	obj      *mnio.Object
-	info     *mnio.ObjectInfo
+	obj      io.ReadSeekCloser
+	info     *repository.ObjectInfo
 	ctx      context.Context
 	cancel   context.CancelFunc
 }
@@ -262,6 +248,11 @@ func (mfh *SrtFileHandle) Read(ctx context.Context, dest []byte, off int64) (fus
 func (mfh *SrtFileHandle) Release(ctx context.Context) syscall.Errno {
 	ll := mfh.getLogger("Release")
 	ll.Debug("File handle released, canceling context")
+	if mfh.obj != nil {
+		if err := mfh.obj.Close(); err != nil {
+			ll.With(zap.Error(err)).Warn("failed to close object")
+		}
+	}
 	if mfh.cancel != nil {
 		mfh.cancel()
 	}

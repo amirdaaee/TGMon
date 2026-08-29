@@ -1,4 +1,4 @@
-package db_test
+package minio_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestDb(t *testing.T) {
+func TestMinio(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Db Suite")
+	RunSpecs(t, "Minio Suite")
 }
