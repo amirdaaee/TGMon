@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/amirdaaee/TGMon/internal/repository"
@@ -23,7 +24,11 @@ var _ ITGDocCache = (*tgDocCache)(nil)
 func (c *tgDocCache) GetOrSet(ctx context.Context, WorkerID int64, messageID int, fn func() (*tg.Document, error)) (*tg.Document, error) {
 	doc, err := c.workerRepo.GetTelegramDoc(ctx, WorkerID, messageID)
 	if err != nil {
-		c.ll.With(zap.Error(err)).Error("error getting telegram doc from db")
+		if errors.Is(err, repository.ErrNotFound) {
+			c.ll.Info("doc cache miss")
+		} else {
+			c.ll.With(zap.Error(err)).Error("error getting telegram doc from db")
+		}
 	} else {
 		return doc, nil
 	}
