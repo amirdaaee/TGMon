@@ -1,15 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
 import { ApiError, deleteMedia, readMedia } from "@/lib/api";
 import { downloadUrl } from "@/lib/config";
 import { asId, formatDuration, mediaTitle } from "@/lib/format";
 import type { MediaReadRes } from "@/lib/types";
+import Link from "next/link";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { MediaLike } from "./MediaLike";
 import { MediaRating } from "./MediaRating";
 import { VideoPlayer } from "./VideoPlayer";
+import { WatchPlaylist } from "./WatchPlaylist";
 
 export function WatchView() {
   const params = useParams<{ id: string }>();
@@ -118,9 +119,18 @@ function WatchInner({ id, from }: { id: string; from: string | null }) {
 
   if (loading) {
     return (
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
-        <div className="aspect-video animate-pulse rounded-xl bg-zinc-800" />
-        <div className="mt-4 h-5 w-1/3 animate-pulse rounded bg-zinc-800" />
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6">
+          <div>
+            <div className="aspect-video animate-pulse rounded-xl bg-zinc-800" />
+            <div className="mt-4 h-5 w-1/3 animate-pulse rounded bg-zinc-800" />
+          </div>
+          <div className="mt-6 hidden space-y-2 lg:mt-0 lg:block">
+            <div className="h-4 w-20 animate-pulse rounded bg-zinc-800" />
+            <div className="h-16 animate-pulse rounded-lg bg-zinc-800" />
+            <div className="h-16 animate-pulse rounded-lg bg-zinc-800" />
+          </div>
+        </div>
       </main>
     );
   }
@@ -128,7 +138,7 @@ function WatchInner({ id, from }: { id: string; from: string | null }) {
   if (error || !data) {
     const notFound = error && (error.status === 400 || error.status === 404);
     return (
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-16 sm:px-6">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-16 sm:px-6">
         <h1 className="text-lg font-semibold">
           {notFound ? "Video not found" : "Could not load video"}
         </h1>
@@ -147,59 +157,68 @@ function WatchInner({ id, from }: { id: string; from: string | null }) {
   const duration = data.Media.Meta?.Duration ?? 0;
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
       <Link
         href={backHref}
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
       >
         ← Library
       </Link>
-      <VideoPlayer
-        key={data.Media.ID}
-        media={data.Media}
-        checkpoint={data.Meta?.Checkpoint ?? 0}
-        prevId={prevId}
-        nextId={nextId}
-        onPrev={goPrev}
-        onNext={goNext}
-      />
-      <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
-        {duration > 0 ? (
-          <p className="font-mono text-sm text-muted">{formatDuration(duration)}</p>
-        ) : null}
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-4">
-        <MediaRating mediaId={data.Media.ID} score={data.Meta?.Score ?? 0} />
-        <MediaLike mediaId={data.Media.ID} likes={data.Meta?.Likes ?? 0} />
-        <div className="ml-auto flex items-center gap-1">
-          <a
-            href={downloadUrl(data.Media.ID)}
-            download
-            aria-label="Download video"
-            title="Download"
-            className="inline-flex h-8 w-8 items-center justify-center rounded text-zinc-500 outline-none hover:text-accent focus-visible:text-accent focus-visible:ring-2 focus-visible:ring-accent motion-safe:transition-colors"
-          >
-            <DownloadIcon />
-          </a>
-          <button
-            type="button"
-            disabled={deleting}
-            onClick={() => void handleDelete()}
-            aria-label="Delete video"
-            title="Delete"
-            className="inline-flex h-8 w-8 items-center justify-center rounded text-zinc-500 outline-none hover:text-danger focus-visible:text-danger focus-visible:ring-2 focus-visible:ring-danger disabled:opacity-60 motion-safe:transition-colors"
-          >
-            <TrashIcon />
-          </button>
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-6">
+        <div>
+          <VideoPlayer
+            key={data.Media.ID}
+            media={data.Media}
+            checkpoint={data.Meta?.Checkpoint ?? 0}
+            prevId={prevId}
+            nextId={nextId}
+            onPrev={goPrev}
+            onNext={goNext}
+          />
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+            {duration > 0 ? (
+              <p className="font-mono text-sm text-muted">
+                {formatDuration(duration)}
+              </p>
+            ) : null}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            <MediaRating mediaId={data.Media.ID} score={data.Meta?.Score ?? 0} />
+            <MediaLike mediaId={data.Media.ID} likes={data.Meta?.Likes ?? 0} />
+            <div className="ml-auto flex items-center gap-1">
+              <a
+                href={downloadUrl(data.Media.ID)}
+                download
+                aria-label="Download video"
+                title="Download"
+                className="inline-flex h-8 w-8 items-center justify-center rounded text-zinc-500 outline-none hover:text-accent focus-visible:text-accent focus-visible:ring-2 focus-visible:ring-accent motion-safe:transition-colors"
+              >
+                <DownloadIcon />
+              </a>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void handleDelete()}
+                aria-label="Delete video"
+                title="Delete"
+                className="inline-flex h-8 w-8 items-center justify-center rounded text-zinc-500 outline-none hover:text-danger focus-visible:text-danger focus-visible:ring-2 focus-visible:ring-danger disabled:opacity-60 motion-safe:transition-colors"
+              >
+                <TrashIcon />
+              </button>
+            </div>
+          </div>
+          {actionError ? (
+            <p className="mt-2 text-sm text-danger">{actionError}</p>
+          ) : null}
         </div>
+        <WatchPlaylist
+          currentId={id}
+          current={data}
+          fromQs={fromQs}
+          className="mt-8 lg:mt-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto"
+        />
       </div>
-      {actionError ? (
-        <p className="mt-2 text-sm text-danger">{actionError}</p>
-      ) : null}
-      <p className="mt-6 text-xs text-zinc-600">
-        Double-tap sides to seek · Swipe to scrub · N/P prev/next video
-      </p>
     </main>
   );
 }
