@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, readMedia } from "@/lib/api";
+import { ApiError, deleteMedia, readMedia } from "@/lib/api";
+import { downloadUrl } from "@/lib/config";
 import { asId, formatDuration, mediaTitle } from "@/lib/format";
 import type { MediaReadRes } from "@/lib/types";
 import { MediaLike } from "./MediaLike";
@@ -36,6 +37,8 @@ function WatchInner({ id, from }: { id: string; from: string | null }) {
     null,
   );
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +90,31 @@ function WatchInner({ id, from }: { id: string; from: string | null }) {
       router.push(`/watch/${encodeURIComponent(nextId)}${fromQs}`);
     }
   }, [nextId, fromQs, router]);
+
+  const handleDelete = useCallback(async () => {
+    if (
+      !window.confirm(
+        "Delete this video? This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setActionError(null);
+    try {
+      await deleteMedia(id);
+      router.push(backHref);
+    } catch (err: unknown) {
+      setActionError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not delete video",
+      );
+      setDeleting(false);
+    }
+  }, [id, router, backHref]);
 
   if (loading) {
     return (
@@ -144,10 +172,64 @@ function WatchInner({ id, from }: { id: string; from: string | null }) {
       <div className="mt-3 flex flex-wrap items-center gap-4">
         <MediaRating mediaId={data.Media.ID} score={data.Meta?.Score ?? 0} />
         <MediaLike mediaId={data.Media.ID} likes={data.Meta?.Likes ?? 0} />
+        <div className="ml-auto flex items-center gap-1">
+          <a
+            href={downloadUrl(data.Media.ID)}
+            download
+            aria-label="Download video"
+            title="Download"
+            className="inline-flex h-8 w-8 items-center justify-center rounded text-zinc-500 outline-none hover:text-accent focus-visible:text-accent focus-visible:ring-2 focus-visible:ring-accent motion-safe:transition-colors"
+          >
+            <DownloadIcon />
+          </a>
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={() => void handleDelete()}
+            aria-label="Delete video"
+            title="Delete"
+            className="inline-flex h-8 w-8 items-center justify-center rounded text-zinc-500 outline-none hover:text-danger focus-visible:text-danger focus-visible:ring-2 focus-visible:ring-danger disabled:opacity-60 motion-safe:transition-colors"
+          >
+            <TrashIcon />
+          </button>
+        </div>
       </div>
+      {actionError ? (
+        <p className="mt-2 text-sm text-danger">{actionError}</p>
+      ) : null}
       <p className="mt-6 text-xs text-zinc-600">
         Double-tap sides to seek · Swipe to scrub · N/P prev/next video
       </p>
     </main>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden
+    >
+      <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden
+    >
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
   );
 }

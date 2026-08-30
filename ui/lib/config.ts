@@ -28,3 +28,7 @@ export function assetUrl(key: string | null | undefined): string | null {
 export function streamUrl(id: string): string {
   return `${API_URL}/stream/${id}`;
 }
+
+export function downloadUrl(id: string): string {
+  return `${streamUrl(id)}?d=true`;
+}

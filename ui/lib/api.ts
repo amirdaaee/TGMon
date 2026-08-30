@@ -128,3 +128,9 @@ export function patchMediaMeta(
     body: patch,
   }).then(() => undefined);
 }
+
+export function deleteMedia(id: string): Promise<void> {
+  return request(`/api/media/${encodeURIComponent(id)}/`, {
+    method: "DELETE",
+  }).then(() => undefined);
+}
