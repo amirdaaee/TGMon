@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, readMedia } from "@/lib/api";
 import { asId, formatDuration, mediaTitle } from "@/lib/format";
 import type { MediaReadRes } from "@/lib/types";
+import { MediaLike } from "./MediaLike";
+import { MediaRating } from "./MediaRating";
 import { VideoPlayer } from "./VideoPlayer";
 
 export function WatchView() {
@@ -139,8 +141,12 @@ function WatchInner({ id, from }: { id: string; from: string | null }) {
           <p className="font-mono text-sm text-muted">{formatDuration(duration)}</p>
         ) : null}
       </div>
+      <div className="mt-3 flex flex-wrap items-center gap-4">
+        <MediaRating mediaId={data.Media.ID} score={data.Meta?.Score ?? 0} />
+        <MediaLike mediaId={data.Media.ID} likes={data.Meta?.Likes ?? 0} />
+      </div>
       <p className="mt-6 text-xs text-zinc-600">
-        Space play/pause · ← → seek · Shift+arrows 15s · F fullscreen · N/P next/prev
+        Double-tap sides to seek · Swipe to scrub · N/P prev/next video
       </p>
     </main>
   );

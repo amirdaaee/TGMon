@@ -49,8 +49,10 @@ export function parseSpriteVtt(text: string): SpriteCue[] {
       continue;
     }
     const [startRaw, endRaw] = timingLine.split("-->");
-    const start = parseVttTime(startRaw.replace(/[^\d:.]/g, ""));
-    const end = parseVttTime((endRaw ?? "").split(/\s/)[0].replace(/[^\d:.]/g, ""));
+    const start = parseVttTime(startRaw.trim().replace(/[^\d:.]/g, ""));
+    const end = parseVttTime(
+      (endRaw ?? "").trim().split(/\s+/)[0]?.replace(/[^\d:.]/g, "") ?? "",
+    );
     if (!Number.isFinite(start) || !Number.isFinite(end)) {
       continue;
     }
@@ -82,4 +84,24 @@ export function findSpriteCue(
     return cues[0];
   }
   return cues[cues.length - 1];
+}
+
+/** Rewrites sprite VTT image paths to a loadable asset URL (e.g. /minio/…). */
+export function rewriteSpriteVttPaths(
+  text: string,
+  spriteAssetUrl: string | null,
+): string {
+  if (!spriteAssetUrl) {
+    return text;
+  }
+  return text
+    .split("\n")
+    .map((line) => {
+      if (!line.includes("#xywh=")) {
+        return line;
+      }
+      const hashIdx = line.indexOf("#xywh=");
+      return `${spriteAssetUrl}${line.slice(hashIdx)}`;
+    })
+    .join("\n");
 }

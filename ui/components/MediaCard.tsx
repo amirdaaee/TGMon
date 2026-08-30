@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { assetUrl } from "@/lib/config";
 import {
   formatDuration,
@@ -7,6 +6,7 @@ import {
   mediaTitle,
 } from "@/lib/format";
 import type { MediaWithMeta } from "@/lib/types";
+import Link from "next/link";
 import { PlaceholderThumb } from "./PlaceholderThumb";
 
 export function MediaCard({
@@ -23,6 +23,7 @@ export function MediaCard({
   const duration = media.Meta?.Duration ?? 0;
   const fileSize = formatFileSize(media.Meta?.FileSize ?? 0);
   const score = meta?.Score ?? 0;
+  const likes = meta?.Likes ?? 0;
   const isFavorite = Boolean(meta?.IsFavorite);
   const checkpoint = meta?.Checkpoint ?? 0;
   const thumb = assetUrl(media.Thumbnail);
@@ -75,26 +76,28 @@ export function MediaCard({
         ) : null}
       </div>
       <div className="px-3 py-2.5">
-        <h2 className="line-clamp-2 text-sm font-medium leading-snug text-zinc-100">
+        <h2 className="truncate text-sm font-medium text-zinc-100" title={title}>
           {title}
         </h2>
-        <div className="mt-1.5 flex items-center gap-2 text-xs text-muted">
-          {fileSize ? <span>{fileSize}</span> : null}
-          {fileSize && score > 0 ? (
-            <span className="text-zinc-600" aria-hidden>
-              ·
-            </span>
-          ) : null}
-          {score > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-accent">
-              <StarIcon />
-              <span className="font-mono tabular-nums">{score}</span>
+        <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-muted">
+          <span className="truncate">{fileSize}</span>
+          {score > 0 || likes > 0 ? (
+            <span className="inline-flex shrink-0 items-center gap-2">
+              {score > 0 ? (
+                <span className="inline-flex items-center gap-0.5 text-accent">
+                  <StarIcon />
+                  <span className="font-mono tabular-nums">{score}</span>
+                </span>
+              ) : null}
+              {likes > 0 ? (
+                <span className="inline-flex items-center gap-0.5">
+                  <HeartIcon filled />
+                  <span className="font-mono tabular-nums">{likes}</span>
+                </span>
+              ) : null}
             </span>
           ) : null}
         </div>
-        {resumable ? (
-          <p className="mt-1 text-xs text-accent">Continue watching</p>
-        ) : null}
       </div>
     </Link>
   );
