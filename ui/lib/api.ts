@@ -2,6 +2,7 @@ import { getToken } from "./auth";
 import { API_URL } from "./config";
 import type {
   ApiErrorBody,
+  JobReqDoc,
   LoginPostRes,
   MediaListRes,
   MediaMetaPatchReq,
@@ -133,4 +134,8 @@ export function deleteMedia(id: string): Promise<void> {
   return request(`/api/media/${encodeURIComponent(id)}/`, {
     method: "DELETE",
   }).then(() => undefined);
+}
+
+export function listJobReqs(): Promise<JobReqDoc[]> {
+  return request<JobReqDoc[]>("/api/jobReq/");
 }

@@ -5,19 +5,22 @@ import {
   isResumable,
   mediaTitle,
 } from "@/lib/format";
-import type { MediaWithMeta } from "@/lib/types";
+import type { JobTypeEnum, MediaWithMeta } from "@/lib/types";
 import Link from "next/link";
+import { JobStatusBadges } from "./JobStatusBadges";
 import { PlaceholderThumb } from "./PlaceholderThumb";
 
 export function MediaCard({
   item,
   page,
   selected,
+  pendingJobs = [],
   onToggleSelect,
 }: {
   item: MediaWithMeta;
   page: number;
   selected: boolean;
+  pendingJobs?: JobTypeEnum[];
   onToggleSelect: (id: string) => void;
 }) {
   const media = item.Media;
@@ -87,6 +90,7 @@ export function MediaCard({
               <HeartIcon filled />
             </span>
           ) : null}
+          <JobStatusBadges jobs={pendingJobs} />
           {duration > 0 ? (
             <span className="absolute right-2 bottom-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] text-zinc-100">
               {formatDuration(duration)}

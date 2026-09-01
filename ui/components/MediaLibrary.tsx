@@ -2,10 +2,11 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { deleteMedia, listMedia } from "@/lib/api";
+import { deleteMedia, listJobReqs, listMedia } from "@/lib/api";
 import { PAGE_SIZE } from "@/lib/config";
 import { asId } from "@/lib/format";
-import type { MediaListRes } from "@/lib/types";
+import { jobsByMediaId } from "@/lib/jobs";
+import type { JobTypeEnum, MediaListRes } from "@/lib/types";
 import { MediaCard } from "./MediaCard";
 import { Pagination } from "./Pagination";
 
@@ -24,6 +25,9 @@ function MediaLibraryPage({ page }: { page: number }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [jobsByMedia, setJobsByMedia] = useState<Map<string, JobTypeEnum[]>>(
+    () => new Map(),
+  );
 
   const applyList = useCallback((res: MediaListRes) => {
     setData({
@@ -37,23 +41,40 @@ function MediaLibraryPage({ page }: { page: number }) {
 
   useEffect(() => {
     let cancelled = false;
-    listMedia(page)
-      .then((res) => {
+    setLoading(true);
+    void (async () => {
+      try {
+        const res = await listMedia(page);
         if (cancelled) {
           return;
         }
         applyList(res);
         setError("");
         setLoading(false);
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (cancelled) {
           return;
         }
         setData(null);
+        setJobsByMedia(new Map());
         setError(err instanceof Error ? err.message : "Could not load media");
         setLoading(false);
-      });
+        return;
+      }
+
+      try {
+        const jobs = await listJobReqs();
+        if (cancelled) {
+          return;
+        }
+        setJobsByMedia(jobsByMediaId(jobs));
+      } catch {
+        if (cancelled) {
+          return;
+        }
+        setJobsByMedia(new Map());
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -62,16 +83,26 @@ function MediaLibraryPage({ page }: { page: number }) {
   function retry() {
     setLoading(true);
     setError("");
-    listMedia(page)
-      .then((res) => {
+    void (async () => {
+      try {
+        const res = await listMedia(page);
         applyList(res);
         setLoading(false);
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         setData(null);
+        setJobsByMedia(new Map());
         setError(err instanceof Error ? err.message : "Could not load media");
         setLoading(false);
-      });
+        return;
+      }
+
+      try {
+        const jobs = await listJobReqs();
+        setJobsByMedia(jobsByMediaId(jobs));
+      } catch {
+        setJobsByMedia(new Map());
+      }
+    })();
   }
 
   function goToPage(next: number) {
@@ -279,6 +310,7 @@ function MediaLibraryPage({ page }: { page: number }) {
                   item={item}
                   page={page}
                   selected={selected.has(id)}
+                  pendingJobs={jobsByMedia.get(id) ?? []}
                   onToggleSelect={toggleSelect}
                 />
               );

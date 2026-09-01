@@ -71,3 +71,17 @@ export type ApiErrorBody = {
   msg?: string;
   message?: string;
 };
+
+export type JobTypeEnum =
+  | "THUMBNAIL"
+  | "SPRITE"
+  | "EMBEDDING"
+  | "TRANSCRIPTION";
+
+export type JobReqDoc = {
+  ID: string;
+  MediaID: string;
+  Type: JobTypeEnum;
+  CreatedAt?: string;
+  UpdatedAt?: string;
+};
