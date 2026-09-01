@@ -1,5 +1,5 @@
 import { getToken } from "./auth";
-import { API_URL } from "./config";
+import { getApiUrl } from "./config";
 import type {
   ApiErrorBody,
   JobReqDoc,
@@ -76,7 +76,7 @@ async function request<T>(path: string, opts: FetchOpts = {}): Promise<T> {
 
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    res = await fetch(`${getApiUrl()}${path}`, {
       method: opts.method ?? "GET",
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
