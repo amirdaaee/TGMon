@@ -1,8 +1,13 @@
 "use client";
 
-import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
+import "@vidstack/react/player/styles/default/theme.css";
 
+import { patchMediaMeta } from "@/lib/api";
+import { assetUrl, streamUrl } from "@/lib/config";
+import { checkpointToSave, isResumable } from "@/lib/format";
+import type { MediaFileDoc } from "@/lib/types";
+import { rewriteSpriteVttPaths } from "@/lib/vtt";
 import {
   MediaPlayer,
   MediaProvider,
@@ -14,11 +19,6 @@ import {
   defaultLayoutIcons,
 } from "@vidstack/react/player/layouts/default";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { patchMediaMeta } from "@/lib/api";
-import { assetUrl, streamUrl } from "@/lib/config";
-import { checkpointToSave, isResumable } from "@/lib/format";
-import type { MediaFileDoc } from "@/lib/types";
-import { rewriteSpriteVttPaths } from "@/lib/vtt";
 
 const CHECKPOINT_DEBOUNCE_MS = 5000;
 
@@ -54,7 +54,10 @@ export function VideoPlayer({
   const poster = assetUrl(media.Thumbnail);
   const spriteUrl = assetUrl(media.Sprite);
   const srtUrl = assetUrl(media.Srt);
-  const src = streamUrl(id);
+  const src = {
+    src: streamUrl(id),
+    type: playbackType(media.Meta?.MimeType),
+  };
 
   const persistCheckpoint = useCallback(() => {
     if (!dirtyRef.current) {
@@ -250,6 +253,16 @@ export function VideoPlayer({
       </MediaPlayer>
     </div>
   );
+}
+
+function playbackType(mime: string | undefined): string {
+  switch (mime) {
+    case "video/webm":
+    case "video/ogg":
+      return mime;
+    default:
+      return "video/mp4";
+  }
 }
 
 function NavBtn({
