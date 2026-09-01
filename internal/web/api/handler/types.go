@@ -36,6 +36,7 @@ type MediaMetaPutReqType struct {
 
 type MediaMetaPatchReqType struct {
 	LastPlayedAt *time.Time
+	PlayCount    *int
 	Checkpoint   *uint64
 	Score        *int
 	Likes        *int

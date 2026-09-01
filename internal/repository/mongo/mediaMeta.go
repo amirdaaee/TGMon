@@ -56,6 +56,9 @@ func (r *MediaExtendedMetaRepo) PatchByMediaFileID(ctx context.Context, mediaFil
 	if patch.IsFavorite != nil {
 		b.Set(types.MediaExtendedMeta__IsFavoriteField, *patch.IsFavorite)
 	}
+	if patch.PlayCount != nil {
+		b.Set(types.MediaExtendedMeta__PlayCountField, *patch.PlayCount)
+	}
 	return r.upsertAndFind(ctx, mediaFileID, b.Build())
 }
 

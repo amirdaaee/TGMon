@@ -25,6 +25,7 @@ const (
 	MediaExtendedMeta__MediaFileIDField  = "MediaFileID"
 	MediaExtendedMeta__LastPlayedAtField = "LastPlayedAt"
 	MediaExtendedMeta__CheckpointField   = "Checkpoint"
+	MediaExtendedMeta__PlayCountField    = "PlayCount"
 	MediaExtendedMeta__ScoreField        = "Score"
 	MediaExtendedMeta__LikesField        = "Likes"
 	MediaExtendedMeta__IsFavoriteField   = "IsFavorite"
@@ -91,6 +92,7 @@ type MediaExtendedMeta struct {
 	MediaFileID  bson.ObjectID `bson:"MediaFileID"`
 	LastPlayedAt time.Time     `bson:"LastPlayedAt"`
 	Checkpoint   uint64        `bson:"Checkpoint"`
+	PlayCount    int           `bson:"PlayCount"`
 	Score        int           `bson:"Score"`
 	Likes        int           `bson:"Likes"`
 	IsFavorite   bool          `bson:"IsFavorite"`
@@ -99,7 +101,8 @@ type MediaExtendedMeta struct {
 // MediaExtendedMetaPatch holds optional fields for a partial update. Nil means leave unchanged.
 type MediaExtendedMetaPatch struct {
 	LastPlayedAt *time.Time
-	Checkpoint   *uint64
+	PlayCount    *int
+	Checkpoint   *uint64 //!
 	Score        *int
 	Likes        *int
 	IsFavorite   *bool

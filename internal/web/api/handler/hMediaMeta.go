@@ -123,6 +123,7 @@ func (h *MediaMetaApiHandler) Patch(g *gin.Context) {
 	}
 	doc, err := h.meta.PatchByMediaFileID(g.Request.Context(), id, types.MediaExtendedMetaPatch{
 		LastPlayedAt: req.LastPlayedAt,
+		PlayCount:    req.PlayCount,
 		Checkpoint:   req.Checkpoint,
 		Score:        req.Score,
 		Likes:        req.Likes,
