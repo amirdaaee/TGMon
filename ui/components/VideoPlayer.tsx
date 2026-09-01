@@ -13,6 +13,7 @@ import {
   MediaProvider,
   Track,
   type MediaPlayerInstance,
+  type VideoMimeType,
 } from "@vidstack/react";
 import {
   DefaultVideoLayout,
@@ -255,7 +256,7 @@ export function VideoPlayer({
   );
 }
 
-function playbackType(mime: string | undefined): string {
+function playbackType(mime: string | undefined): VideoMimeType {
   switch (mime) {
     case "video/webm":
     case "video/ogg":
