@@ -18,7 +18,6 @@ func GetProvider() *dig.Container {
 	mustProvide(c, "WebServer", ProvideWebServer)
 	mustProvide(c, "GinEngine", ProvideGinEngine)
 	mustProvide(c, "WebHandler", ProvideWebHandler)
-	mustProvide(c, "StashQlClient", ProvideStashQlClient)
 	mustProvide(c, "MongoClient", ProvideMongoClient)
 	mustProvide(c, "ObjectStore", ProvideObjectStore)
 	mustProvide(c, "MediaFileRepo", ProvideMediaFileRepo)

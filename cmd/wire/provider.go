@@ -15,7 +15,6 @@ import (
 	"github.com/amirdaaee/TGMon/internal/repository"
 	repominio "github.com/amirdaaee/TGMon/internal/repository/minio"
 	repomongo "github.com/amirdaaee/TGMon/internal/repository/mongo"
-	"github.com/amirdaaee/TGMon/internal/stash"
 	"github.com/amirdaaee/TGMon/internal/stream"
 	"github.com/amirdaaee/TGMon/internal/tlg"
 	"github.com/amirdaaee/TGMon/internal/types"
@@ -81,9 +80,8 @@ func ProvideGinEngine(cfg *config.ConfigType, hndlr []wtypes.Registereable) *gin
 	return g
 }
 
-func ProvideWebHandler(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.MediaFileDoc], jobReqFacade ftypes.IFacade[types.JobReqDoc], jobResFacade ftypes.IFacade[types.JobResDoc], media repository.MediaFileRepository, jobReqs repository.JobReqRepository, wp worker.IWorkerPool, stshCl *stash.StashQlClient, mediaMeta repository.MediaExtendedMetaRepository) []wtypes.Registereable {
+func ProvideWebHandler(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.MediaFileDoc], jobReqFacade ftypes.IFacade[types.JobReqDoc], jobResFacade ftypes.IFacade[types.JobResDoc], media repository.MediaFileRepository, jobReqs repository.JobReqRepository, wp worker.IWorkerPool, mediaMeta repository.MediaExtendedMetaRepository) []wtypes.Registereable {
 	hCfg := cfg.HttpConfig
-	stshCfg := cfg.StashRedirectorConfig
 	strmConfig := cfg.StreamConfig
 	streamHandler := wStream.NewStreamHandler(mediafacade, wp, &stream.StreamConfig{
 		StreamBufferCount: strmConfig.StreamBufferCount,
@@ -118,24 +116,7 @@ func ProvideWebHandler(cfg *config.ConfigType, mediafacade ftypes.IFacade[types.
 		wApi.NewApiHandler(randomMediaHandler, "media/random"),
 		wApi.NewApiHandler(mediaMetaHandler, "media/:id/meta"),
 	}
-	if stshCfg.Enabled {
-		stashVTTRedirectorHandler := waHndlr.StashVTTRedirectorApiHandler{
-			MinioUrl: stshCfg.MinioUrl,
-			StashCl:  stshCl,
-			Media:    media,
-		}
-		stashCoverRedirectorHandler := waHndlr.StashCoverRedirectorApiHandler{
-			StashVTTRedirectorApiHandler: stashVTTRedirectorHandler,
-		}
-		result = append(result, wApi.NewApiHandler(&stashVTTRedirectorHandler, ""))
-		result = append(result, wApi.NewApiHandler(&stashCoverRedirectorHandler, ""))
-	}
 	return result
-}
-
-// ... Stash
-func ProvideStashQlClient(cfg *config.ConfigType) *stash.StashQlClient {
-	return stash.NewStashQlClient(cfg.StashRedirectorConfig.StashEndpoint, cfg.StashRedirectorConfig.StashApiKey)
 }
 
 // ... Database

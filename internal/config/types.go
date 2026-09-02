@@ -39,12 +39,6 @@ type RuntimeConfigType struct {
 	Dev          bool   `env:"DEV" envDefault:"false"`
 	KeepDupFiles bool   `env:"KEEP_DUP_FILE"`
 }
-type StashRedirectorConfigType struct {
-	Enabled       bool   `env:"ENABLED" envDefault:"true"`
-	MinioUrl      string `env:"MINIO_URL" envDefault:""`
-	StashEndpoint string `env:"STASH_ENDPOINT" envDefault:""`
-	StashApiKey   string `env:"STASH_API_KEY" envDefault:""`
-}
 type StreamConfigType struct {
 	StreamBufferCount int `env:"BUFFER_COUNT" envDefault:"16"`
 	StreamConcurrency int `env:"CONCURRENCY" envDefault:"2"`
@@ -52,12 +46,11 @@ type StreamConfigType struct {
 	StreamTimeoutSec  int `env:"TIMEOUT_SEC" envDefault:"30"`
 }
 type ConfigType struct {
-	TelegramConfig        TelegramConfigType        `envPrefix:"TELEGRAM__"`
-	HttpConfig            HttpConfigType            `envPrefix:"HTTP__"`
-	MinioConfig           MinioConfigType           `envPrefix:"MINIO__"`
-	MongoDBConfig         MongoDBConfigType         `envPrefix:"MONGODB__"`
-	FuseConfig            FuseConfigType            `envPrefix:"FUSE__"`
-	RuntimeConfig         RuntimeConfigType         `envPrefix:"RUNTIME__"`
-	StashRedirectorConfig StashRedirectorConfigType `envPrefix:"STASH_REDIRECTOR__"`
-	StreamConfig          StreamConfigType          `envPrefix:"STREAM__"`
+	TelegramConfig TelegramConfigType `envPrefix:"TELEGRAM__"`
+	HttpConfig     HttpConfigType     `envPrefix:"HTTP__"`
+	MinioConfig    MinioConfigType    `envPrefix:"MINIO__"`
+	MongoDBConfig  MongoDBConfigType  `envPrefix:"MONGODB__"`
+	FuseConfig     FuseConfigType     `envPrefix:"FUSE__"`
+	RuntimeConfig  RuntimeConfigType  `envPrefix:"RUNTIME__"`
+	StreamConfig   StreamConfigType   `envPrefix:"STREAM__"`
 }
