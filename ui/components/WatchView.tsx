@@ -9,6 +9,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { MediaLike } from "./MediaLike";
 import { MediaRating } from "./MediaRating";
+import { RandomMediaButton } from "./RandomMediaButton";
 import { VideoPlayer } from "./VideoPlayer";
 import { WatchPlaylist } from "./WatchPlaylist";
 
@@ -187,6 +188,12 @@ function WatchInner({ id, from }: { id: string; from: string | null }) {
             <MediaRating mediaId={data.Media.ID} score={data.Meta?.Score ?? 0} />
             <MediaLike mediaId={data.Media.ID} likes={data.Meta?.Likes ?? 0} />
             <div className="ml-auto flex items-center gap-1">
+              <RandomMediaButton
+                variant="icon"
+                fromQs={fromQs}
+                currentId={id}
+                onError={(msg) => setActionError(msg || null)}
+              />
               <a
                 href={downloadUrl(data.Media.ID)}
                 download

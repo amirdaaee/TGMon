@@ -49,6 +49,10 @@ export type MediaReadRes = MediaWithMeta & {
   nextID: string | null;
 };
 
+export type RandomMediaGetRes = {
+  MediaID: unknown;
+};
+
 export type LoginPostReq = {
   Username: string;
   Password: string;

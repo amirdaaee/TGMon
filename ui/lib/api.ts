@@ -7,6 +7,7 @@ import type {
   MediaListRes,
   MediaMetaPatchReq,
   MediaReadRes,
+  RandomMediaGetRes,
 } from "./types";
 
 export class ApiError extends Error {
@@ -118,6 +119,10 @@ export function listMedia(page: number): Promise<MediaListRes> {
 
 export function readMedia(id: string): Promise<MediaReadRes> {
   return request<MediaReadRes>(`/api/media/${encodeURIComponent(id)}`);
+}
+
+export function getRandomMedia(): Promise<RandomMediaGetRes> {
+  return request<RandomMediaGetRes>("/api/media/random/");
 }
 
 export function patchMediaMeta(

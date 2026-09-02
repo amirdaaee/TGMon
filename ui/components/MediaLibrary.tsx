@@ -9,6 +9,7 @@ import { jobsByMediaId } from "@/lib/jobs";
 import type { JobTypeEnum, MediaListRes } from "@/lib/types";
 import { MediaCard } from "./MediaCard";
 import { Pagination } from "./Pagination";
+import { RandomMediaButton } from "./RandomMediaButton";
 
 export function MediaLibrary() {
   const searchParams = useSearchParams();
@@ -237,11 +238,20 @@ function MediaLibraryPage({ page }: { page: number }) {
               : `${total} ${total === 1 ? "video" : "videos"}`}
           </p>
         </div>
-        {!loading && totalPages > 1 ? (
-          <p className="text-sm text-muted">
-            Page {page + 1} of {totalPages}
-          </p>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {!error ? (
+            <RandomMediaButton
+              variant="label"
+              fromQs={`?from=${page}`}
+              disabled={loading || total === 0}
+            />
+          ) : null}
+          {!loading && totalPages > 1 ? (
+            <p className="text-sm text-muted">
+              Page {page + 1} of {totalPages}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {!loading && items.length > 0 ? (
