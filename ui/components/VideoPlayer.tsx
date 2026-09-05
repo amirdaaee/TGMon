@@ -9,6 +9,7 @@ import { checkpointToSave, isResumable } from "@/lib/format";
 import type { MediaFileDoc } from "@/lib/types";
 import { rewriteSpriteVttPaths } from "@/lib/vtt";
 import {
+  Gesture,
   MediaPlayer,
   MediaProvider,
   Track,
@@ -238,6 +239,7 @@ export function VideoPlayer({
           colorScheme="dark"
           thumbnails={thumbnails}
           seekStep={5}
+          noGestures
           slots={{
             googleCastButton: null,
             pipButton: null,
@@ -253,6 +255,20 @@ export function VideoPlayer({
             ),
           }}
         />
+        <div className="vds-gestures">
+          <Gesture
+            className="vds-gesture"
+            event="pointerup"
+            action="toggle:controls"
+          />
+          <Gesture
+            className="vds-gesture"
+            event="dblpointerup"
+            action="toggle:fullscreen"
+          />
+          <Gesture className="vds-gesture" event="dblpointerup" action="seek:-10" />
+          <Gesture className="vds-gesture" event="dblpointerup" action="seek:10" />
+        </div>
       </MediaPlayer>
     </div>
   );
