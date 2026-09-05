@@ -239,6 +239,8 @@ export function VideoPlayer({
           thumbnails={thumbnails}
           seekStep={5}
           slots={{
+            googleCastButton: null,
+            pipButton: null,
             beforeMuteButton: (
               <>
                 <NavBtn label="Previous video" disabled={!prevId} onClick={onPrev}>
