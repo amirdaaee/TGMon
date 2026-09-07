@@ -36,6 +36,8 @@ export function MediaCard({
   const thumb = assetUrl(media.Thumbnail);
   const resumable = isResumable(checkpoint, duration);
   const progress = duration > 0 ? Math.min(1, checkpoint / duration) : 0;
+  const overlayReveal =
+    "opacity-100 lg:[@media(hover:hover)_and_(pointer:fine)]:opacity-0 lg:[@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 lg:[@media(hover:hover)_and_(pointer:fine)]:focus-visible:opacity-100";
 
   return (
     <article
@@ -55,7 +57,7 @@ export function MediaCard({
         className={`absolute top-2 left-2 z-20 flex h-7 w-7 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent ${
           selected
             ? "bg-accent text-accent-fg opacity-100"
-            : "bg-black/75 text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            : `bg-black/75 text-white ${overlayReveal}`
         }`}
       >
         <CheckIcon />
@@ -65,7 +67,7 @@ export function MediaCard({
         download
         aria-label="Download video"
         title="Download"
-        className={`absolute top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-white opacity-0 outline-none group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-accent ${
+        className={`absolute top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-white outline-none focus-visible:ring-2 focus-visible:ring-accent ${overlayReveal} ${
           isFavorite ? "right-11" : "right-2"
         }`}
       >
