@@ -1,4 +1,4 @@
-import { assetUrl } from "@/lib/config";
+import { assetUrl, downloadUrl } from "@/lib/config";
 import {
   formatDuration,
   formatFileSize,
@@ -60,6 +60,17 @@ export function MediaCard({
       >
         <CheckIcon />
       </button>
+      <a
+        href={downloadUrl(id)}
+        download
+        aria-label="Download video"
+        title="Download"
+        className={`absolute top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-white opacity-0 outline-none group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-accent ${
+          isFavorite ? "right-11" : "right-2"
+        }`}
+      >
+        <DownloadIcon />
+      </a>
       <Link
         href={`/watch/${encodeURIComponent(id)}?from=${page}`}
         className="block outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
@@ -141,6 +152,21 @@ function CheckIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden>
       <path d="m9.5 16.2-3.7-3.7 1.4-1.4 2.3 2.3 5.3-5.3 1.4 1.4-6.7 6.7Z" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden
+    >
+      <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
     </svg>
   );
 }
